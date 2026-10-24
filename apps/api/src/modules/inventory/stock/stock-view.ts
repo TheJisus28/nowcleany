@@ -94,3 +94,9 @@ export function toMovementView(
     actor: movement.actor,
   };
 }
+
+export interface WarehouseView {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+}

@@ -9,8 +9,7 @@ import {
   StatusQuery,
   TransferDto,
 } from './dto/stock.dto.js';
-import type { MovementView, StockStatusView } from './stock-view.js';
-import type { Warehouse } from './stock.repository.js';
+import type { MovementView, StockStatusView, WarehouseView } from './stock-view.js';
 import { type OperationResult, StockService } from './stock.service.js';
 
 @ApiTags('inventory')
@@ -44,7 +43,7 @@ export class StockController {
 
   @Permission('inventory:read')
   @Get('warehouses')
-  warehouses(): Promise<Warehouse[]> {
+  warehouses(): Promise<WarehouseView[]> {
     return this.stock.warehouses();
   }
 
