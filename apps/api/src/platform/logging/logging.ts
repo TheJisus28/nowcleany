@@ -27,7 +27,7 @@ export const REDACTED_PATHS = [
 ];
 
 /** JSON logs with requestId, actorId and module; never request bodies. */
-export function loggingModule(): DynamicModule {
+export function loggingModule(service: string): DynamicModule {
   return LoggerModule.forRootAsync({
     inject: [AppConfig],
     useFactory: (config: AppConfig) => ({
@@ -36,7 +36,7 @@ export function loggingModule(): DynamicModule {
       pinoHttp: {
         level: config.logLevel,
         timestamp: pino.stdTimeFunctions.isoTime,
-        base: { service: 'nowcleanny-api' },
+        base: { service: `nowcleanny-${service}` },
         genReqId: (req) => requestIdFor(req),
         // genReqId above always returns a string.
         customProps: (req) => ({ requestId: req.id as string }),

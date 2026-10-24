@@ -15,6 +15,8 @@ allowBuilds:
   ssh2: false
   # Postinstall only prints a version-compatibility warning.
   protobufjs: false
+  # Ships N-API prebuilds (win32-x64, linux-x64 glibc/musl, ...) loaded at runtime; never compile.
+  argon2: false
 # Refuse versions published less than 24 h ago (pnpm's default, made explicit).
 minimumReleaseAge: 1440
 # Fail when a new version has weaker publishing trust evidence than earlier ones.
