@@ -32,6 +32,8 @@ Cada punto tiene el default que se está usando mientras no haya respuesta. Las 
 | T9  | Rate limiting con varias instancias                        | Almacenamiento en memoria por instancia (degrada bien). Compartido solo si hace falta.                                    |
 | T10 | Sesiones: el access token dura 15 min (brief)              | Refresh token rotativo de 12 h (guardado como hash) para no pedir login cada 15 min; va en el cuerpo, no en cookie.       |
 | T11 | Scripts de instalación de dependencias                     | Ninguno se ejecuta: argon2 usa sus binarios precompilados; scarf (telemetría), ssh2, cpu-features y protobufjs denegados. |
+| T12 | Frontend y API en el mismo origen                          | En desarrollo, proxy de Vite hacia la API; en producción, un proxy inverso sirve ambos (sin CORS).                        |
+| T13 | Prueba e2e con API y worker en el mismo proceso            | El worker se prueba al final: comparte el registro estático de transacciones. En producción son procesos separados.       |
 
 ## Resueltas
 
