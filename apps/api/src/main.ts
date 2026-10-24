@@ -1,11 +1,11 @@
 import 'reflect-metadata';
-import helmet from '@fastify/helmet';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import { AppConfig } from './platform/config/app-config.js';
+import { configureHttp } from './platform/http/configure-http.js';
 import { requestIdFor } from './platform/logging/logging.js';
 
 const app = await NestFactory.create<NestFastifyApplication>(
@@ -19,18 +19,10 @@ const app = await NestFactory.create<NestFastifyApplication>(
   { bufferLogs: true },
 );
 app.useLogger(app.get(Logger));
-app
-  .getHttpAdapter()
-  .getInstance()
-  .addHook('onRequest', async (request, reply) => {
-    void reply.header('x-request-id', request.id);
-  });
 app.enableShutdownHooks();
+await configureHttp(app);
 
 const config = app.get(AppConfig);
-// Swagger UI needs inline scripts; it only exists outside production.
-await app.register(helmet, config.isProduction ? {} : { contentSecurityPolicy: false });
-
 if (!config.isProduction) {
   const document = new DocumentBuilder()
     .setTitle('SCIP — NOW CLEANY')

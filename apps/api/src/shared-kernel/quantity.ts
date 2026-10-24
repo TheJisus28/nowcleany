@@ -131,3 +131,14 @@ export class Quantity {
     }
   }
 }
+
+/** A quantity as exposed by the API: a decimal string in a given unit, e.g. { quantity: "147.5", unit: "L" }. */
+export interface QuantityDto {
+  readonly quantity: string;
+  readonly unit: UnitCode;
+}
+
+export function toQuantityDto(base: bigint, unitCode: UnitCode): QuantityDto {
+  const target = unit(unitCode);
+  return { quantity: Quantity.ofBase(base, target.dimension).format(unitCode), unit: unitCode };
+}
