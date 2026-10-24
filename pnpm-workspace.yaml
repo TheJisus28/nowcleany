@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+
+# Supply-chain policy. In pnpm 11+ these settings live here; .npmrc only holds registry/auth keys.
+saveExact: true
+engineStrict: true
+# Dependency lifecycle scripts are blocked; any package that ships one must be decided explicitly below
+# (true = may run its build script, false = never). An undecided package fails the install.
+strictDepBuilds: true
+allowBuilds: {}
+# Refuse versions published less than 24 h ago (pnpm's default, made explicit).
+minimumReleaseAge: 1440
+# Fail when a new version has weaker publishing trust evidence than earlier ones.
+trustPolicy: no-downgrade
+# Transitive dependencies may only come from the registry (no git/tarball URLs).
+blockExoticSubdeps: true

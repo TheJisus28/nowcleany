@@ -1,0 +1,32 @@
+{
+  "name": "nowcleanny",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Inventario, planeación de producción y compras para una manufacturera de productos de limpieza.",
+  "engines": {
+    "node": ">=24.16.0 <25"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --recursive --if-present typecheck",
+    "test": "vitest run",
+    "depcruise": "depcruise --config tests/architecture/dependency-cruiser.cjs apps/api/src",
+    "audit": "pnpm audit --audit-level high",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm depcruise && pnpm test"
+  },
+  "packageManager": "pnpm@12.15.0+sha512.b3951d6d6ff4a9f13dc7cf56cd28d2b8eb37dbcc9c68e52e1e1191873ea9f82a017287ab50baadc5ccc494f036c67c0e47eb13608c2fa36f47711b61ea128e61",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "^24.19.2",
+    "dependency-cruiser": "18.7.0",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "vitest": "5.0.5"
+  }
+}
