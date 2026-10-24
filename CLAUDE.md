@@ -1,42 +1,46 @@
-# CLAUDE.md — nowcleanny
+# CLAUDE.md — nowcleanny (SCIP)
 
-Sistema de inventario y planeación para una manufacturera de productos de limpieza (cloro y similares) en
-Montería, Colombia. MVP con la arquitectura final correcta: pequeño, pero el núcleo crecerá (posible ERP o
-integración con un ERP externo). Se despliega como **un** monolito modular.
+Sistema de control de inventario, producción y reporte de sobreventa para NOW CLEANY S.A.S., manufacturera de
+productos de limpieza (cloro y similares) en Montería, Colombia. MVP con la arquitectura final correcta:
+pequeño, pero el núcleo crecerá (posible ERP o integración con un ERP externo). Se despliega como **un**
+monolito modular. Alcance funcional detallado: `docs/alcance-scip.md`.
 
 ## Problema y reglas de negocio
 
-- Problema: "teléfono roto" entre ventas y planta. Siempre faltan insumos y compras sale a comprar a última hora.
-- Objetivo: desde que se confirma un pedido, estimar qué falta fabricar y qué falta comprar, para no
-  sobreinventariar materias primas y mejorar márgenes.
-- **La sobreventa es válida**: ventas nunca se bloquea por falta de stock; el disponible puede quedar negativo.
-- **Nunca sobreinventario**: la sugerencia de compra es exactamente el faltante (sin stock de seguridad ni punto
-  de reorden).
-- Paneles por equipo: **Ventas** (sus pedidos), **Planta** (qué fabricar según los pedidos), **Compras** (qué
-  comprar según lo que falta), **Inventario/Bodega** (existencias y movimientos).
-- El frontend es el entregable que verá el cliente: debe ser profesional, pulido y responsive.
+- Problema: las preventas no se cruzan con las materias primas disponibles ("teléfono roto" entre ventas y
+  planta). Planta se queda sin insumos y compras compra de urgencia.
+- Objetivo: desde que se confirma una preventa, saber qué hay que producir, envasar y comprar.
+- **La sobreventa es válida**: ventas nunca se bloquea; el disponible y el **físico** pueden quedar negativos.
+- **Nunca sobreinventario**: la sugerencia de compra es exactamente el faltante neto (sin stock de seguridad ni
+  punto de reorden). Prefieren salir a comprar que tener inventario quieto.
+- Paneles por equipo: Ventas, Planta, Compras, Inventario/Bodega y Gerencia.
+- El frontend es el entregable que verá el cliente: profesional, pulido y responsive.
+- Sin edge cases rebuscados: la solución más simple que resuelva el flujo real.
 
 ## Idioma
 
-- Código en inglés: identificadores, tablas, columnas, enums, permisos, rutas, comentarios, commits.
+- Código en inglés: identificadores, tablas, columnas, enums, permisos, roles, rutas HTTP, campos JSON,
+  comentarios, commits.
 - Salidas en español: mensajes de error de la API (`title`/`detail`), mensajes de validación, textos de la
-  interfaz, nombres visibles de roles y bodegas, mensajes de log y de scripts, documentación.
-- Glosario (español → código):
+  interfaz, nombres visibles, mensajes de log y de scripts, documentación.
 
-| Español                               | Código                                                     |
-| ------------------------------------- | ---------------------------------------------------------- |
-| producto / materia prima / terminado  | product / `RAW_MATERIAL` / `FINISHED_GOOD`                 |
-| fórmula, línea, rinde, merma          | formula, formula line, `batchYield`, `wasteBps`            |
-| borrador / vigente / retirada         | `DRAFT` / `ACTIVE` / `RETIRED`                             |
-| requerimientos                        | requirements                                               |
-| movimiento / saldo / reserva          | stock movement / stock balance / reservation               |
-| físico / reservado / disponible       | `onHand` / `reserved` / `available`                        |
-| entrada / ajuste / despacho           | receipt / adjustment / dispatch                            |
-| reporte de producción                 | production report                                          |
-| bodega                                | warehouse (código de datos `PRINCIPAL`)                    |
-| pedido (borrador/confirmado/...)      | sales order (`DRAFT`/`CONFIRMED`/`DISPATCHED`/`CANCELLED`) |
-| necesidades de producción / de compra | production needs / purchase needs                          |
-| faltante                              | shortage                                                   |
+| Español                                  | Código                                                   |
+| ---------------------------------------- | -------------------------------------------------------- |
+| materia prima / granel / terminado       | `RAW_MATERIAL` / `BULK` / `FINISHED_GOOD`                |
+| fórmula, línea, rinde (bache), merma     | formula, formula line, `batchYield`, `wasteBps`          |
+| borrador / vigente / retirada            | `DRAFT` / `ACTIVE` / `RETIRED`                           |
+| requerimientos                           | requirements                                             |
+| bodega (PLANTA, DESPACHO)                | warehouse (códigos de datos `PLANTA`, `DESPACHO`)        |
+| movimiento / saldo / reserva / kardex    | stock movement / stock balance / reservation / kardex    |
+| físico / reservado / disponible          | `onHand` / `reserved` / `available`                      |
+| recepción / traslado / despacho / ajuste | receipt / transfer / dispatch / adjustment               |
+| carga inicial                            | initial load                                             |
+| preventa (pedido), cliente, vendedor     | sales order, customer, seller                            |
+| fecha estimada de entrega                | `estimatedDeliveryDate`                                  |
+| orden de producción / envasado           | production order (granel) / production order (terminado) |
+| orden de compra, en tránsito             | purchase order, on order                                 |
+| reporte de sobreventa, sin cobertura     | oversell report, uncovered                               |
+| necesidades de producción / de compra    | production needs / purchase needs                        |
 
 ## Stack (fijo; no cambiarlo sin preguntar)
 
@@ -78,11 +82,11 @@ apps/api/src/
   shared-kernel/   Quantity, errores base, tipos mínimos
 apps/web/          React + Vite + Tailwind (paneles)
 tests/architecture/  reglas de dependency-cruiser + pruebas con fixtures
-docs/adr/  docs/preguntas-abiertas.md
+docs/adr/  docs/alcance-scip.md  docs/preguntas-abiertas.md
 ops/       compose, Dockerfile, scripts
 ```
 
-Módulos: `identity`, `product`, `inventory`, `sales`, `planning`.
+Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing`, `planning`.
 
 ## Reglas de arquitectura (se verifican en CI)
 
@@ -111,47 +115,59 @@ Módulos: `identity`, `product`, `inventory`, `sales`, `planning`.
 
 **product**
 
-- Producto: `RAW_MATERIAL` | `FINISHED_GOOD`, código único en mayúsculas, unidad de stock inmutable
-  (kg, g, mg, L, mL, un), se desactiva en vez de borrarse.
-- Fórmula (solo de terminado), versionada `DRAFT → ACTIVE → RETIRED`, inmutable al publicar. Un lote rinde X
-  unidades; líneas = materia prima + cantidad por lote + merma en puntos básicos (100 = 1 %). Un solo borrador
-  y una sola vigente por producto (índices únicos parciales). Triggers impiden tocar una fórmula publicada.
-  Cuatro ojos: quien define no publica, salvo permiso `product:publish-own`.
-- `requirements(qty) = line * qty * (1 + waste) / yield`, redondeado hacia arriba en unidad base.
+- Producto: `RAW_MATERIAL` | `BULK` | `FINISHED_GOOD`; código único en mayúsculas (puede ser numérico, p. ej.
+  `00224`); unidad de stock inmutable (kg, g, mg, L, mL, un); se desactiva en vez de borrarse.
+- Fórmula de `BULK` (química, por bache: rinde X L, con capacidad máxima de bache) y de `FINISHED_GOOD`
+  (envasado: litros de granel + envases, tapas, etiquetas, cajas). Líneas de `BULK` solo usan `RAW_MATERIAL`;
+  líneas de `FINISHED_GOOD` usan `BULK` o `RAW_MATERIAL` (sin ciclos).
+- Versionada `DRAFT → ACTIVE → RETIRED`, inmutable al publicar; un borrador y una vigente por producto
+  (índices únicos parciales); triggers impiden tocar una publicada. Cuatro ojos: quien define no publica,
+  salvo permiso `product:publish-own`.
+- `requirements(qty) = line * qty * (1 + waste) / yield`, redondeado hacia arriba en unidad base; explosión
+  multinivel para planeación. Importación de productos por CSV.
 
 **inventory** (único que escribe stock)
 
-- Movimientos: libro inmutable, solo `INSERT`, cantidad con signo. Saldos por producto y bodega (`onHand`,
-  `reserved`) actualizados en la misma transacción que el movimiento, con `SELECT ... FOR UPDATE` en orden fijo.
-- Sobreventa: no hay `CHECK` de disponible ≥ 0; `available = onHand - reserved` puede ser negativo.
-- Reservas de producto terminado por pedido con `UNIQUE (order_id, product_id)` (idempotencia).
-- Operaciones: entradas (compras recibidas), reporte de producción (entra terminado y salen materias primas
-  según la fórmula vigente), despacho (consume la reserva), ajustes (permiso restringido y auditado).
-- Estado: físico, reservado, disponible y "producible" (máximo fabricable con materia prima libre y la que limita).
-
-**planning** (solo lectura; compone las API públicas de inventory, product y sales)
-
-- Producción: por terminado, `toManufacture = max(0, reserved - onHand)`, con los pedidos que lo originan.
-- Compras: por materia prima, `required = Σ requirements(fórmula vigente, toManufacture)`;
-  `toBuy = max(0, required - onHand)`. Exactamente el faltante.
+- Bodegas `PLANTA` y `DESPACHO` (`warehouse_id` en todo el modelo). Movimientos: libro inmutable (solo
+  `INSERT`), cantidad con signo y saldo resultante (kardex). Saldos (`onHand`, `reserved`) actualizados en la
+  misma transacción, con `SELECT ... FOR UPDATE` en orden fijo. Sin `CHECK` de no negativos.
+- Reservas de terminado por pedido, `UNIQUE (order_id, product_id)` (idempotencia).
+- Operaciones con clave de idempotencia: recepción, consumo/producción (desde `production`), traslado
+  PLANTA → DESPACHO, despacho, ajuste (permiso restringido y auditado), carga inicial por CSV.
+- Estado: físico, reservado, disponible y "producible".
 
 **sales**
 
-- Pedido `DRAFT → CONFIRMED → DISPATCHED | CANCELLED`. Confirmar = `inventory.reserve` (su transacción, nunca
-  falla por stock) y luego marcar el pedido (su transacción); reintentar es seguro. Job en el worker libera
-  reservas de pedidos que sigan en `DRAFT` tras 30 min. Anular publica `SalesOrderCancelled`; inventory lo
-  consume (inbox) y libera reservas. Despachar crea el movimiento de despacho y consume la reserva.
+- Cliente mínimo (nombre, NIT opcional). Preventa con cliente, vendedor (usuario que la registra), fecha
+  estimada de entrega, notas y líneas de terminado. Sin precios en esta fase.
+- `DRAFT → CONFIRMED → DISPATCHED | CANCELLED`. Confirmar = `inventory.reserve` (su transacción, nunca falla
+  por stock) y luego marcar el pedido (su transacción); reintentar es seguro. Job en el worker libera reservas
+  de pedidos que sigan en `DRAFT` tras 30 min. Anular publica `SalesOrderCancelled`; inventory lo consume
+  (inbox) y libera reservas. Despachar crea el movimiento de despacho y consume la reserva.
+
+**production**
+
+- Orden de producción `PLANNED → COMPLETED | CANCELLED` para un `BULK` (producción por litros o baches) o un
+  `FINISHED_GOOD` (envasado). Al completarla con la cantidad real, inventory registra la entrada del producto
+  y el consumo de la fórmula vigente (un nivel), en una operación idempotente.
+
+**purchasing**
+
+- Orden de compra simple: proveedor (texto), fecha esperada, líneas de materia prima. `OPEN → RECEIVED |
+CANCELLED`. Recibir registra la recepción en inventory con las cantidades reales y cierra la orden.
+
+**planning** (solo lectura; compone las API públicas, sin tablas)
+
+- Necesidades netas multinivel: terminado `toPack = max(0, reserved - onHand)`; granel requerido por envasado
+  menos físico y producción planeada; materias primas requeridas menos físico y en tránsito → `toBuy`.
+- Reporte de sobreventa: vendido por vendedor, capacidad con lo disponible, sin cobertura y compras necesarias.
 
 **identity**
 
-- Tablas users, roles, permissions, role_permissions, user_roles. Cada módulo declara permisos en
-  `permissions.ts`; la plataforma los sincroniza al arrancar. Roles semilla: `admin`, `formulator`,
+- users, roles, permissions, role_permissions, user_roles. Cada módulo declara permisos en `permissions.ts`;
+  la plataforma los sincroniza al arrancar. Roles semilla: `admin`, `manager`, `formulator`,
   `technical_lead`, `sales`, `plant`, `purchasing`, `warehouse`. Login Argon2id, JWT de acceso de 15 min.
   Admin inicial desde variables de entorno.
-
-Fuera del MVP (extensiones): órdenes de producción, órdenes de compra/proveedores, varias bodegas (se usa
-`PRINCIPAL` pero con `warehouse_id` en el modelo), lotes y vencimientos, facturación electrónica, WhatsApp,
-modo offline.
 
 ## Comandos
 
