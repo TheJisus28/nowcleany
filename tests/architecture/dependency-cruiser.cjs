@@ -32,7 +32,7 @@ module.exports = {
       name: 'no-undeclared-packages',
       comment: 'Paquete no declarado en package.json (o declarado en la raíz en vez de en la app).',
       severity: 'error',
-      from: {},
+      from: { pathNot: TEST_FILES },
       to: { dependencyTypes: ['npm-no-pkg', 'npm-unknown'] },
     },
     {
@@ -57,14 +57,14 @@ module.exports = {
       comment:
         'domain/ solo depende de su propio domain/ y de shared-kernel/: nada de Nest, Kysely ni otras capas.',
       severity: 'error',
-      from: { path: `${MODULE}domain/` },
+      from: { path: `${MODULE}domain/`, pathNot: TEST_FILES },
       to: { pathNot: [`${SRC}modules/$1/domain/`, `${SRC}shared-kernel/`] },
     },
     {
       name: 'shared-kernel-is-pure',
       comment: 'shared-kernel/ no depende de plataforma, módulos ni paquetes externos.',
       severity: 'error',
-      from: { path: `${SRC}shared-kernel/` },
+      from: { path: `${SRC}shared-kernel/`, pathNot: TEST_FILES },
       to: { pathNot: [`${SRC}shared-kernel/`] },
     },
     {

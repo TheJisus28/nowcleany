@@ -4,6 +4,39 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json && node ../../ops/scripts/copy-assets.mjs src dist",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "start:worker": "node --env-file-if-exists=../../.env dist/worker.js",
+    "migrate": "node --env-file-if-exists=../../.env dist/migrate.js"
+  },
+  "dependencies": {
+    "@fastify/helmet": "13.2.0",
+    "@fastify/static": "10.1.7",
+    "@nestjs-cls/transactional": "4.0.1",
+    "@nestjs-cls/transactional-adapter-kysely": "2.0.1",
+    "@nestjs/common": "12.2.0",
+    "@nestjs/config": "12.0.1",
+    "@nestjs/core": "12.2.0",
+    "@nestjs/platform-fastify": "12.2.0",
+    "@nestjs/swagger": "12.0.3",
+    "@nestjs/throttler": "6.7.1",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
+    "fastify": "5.12.7",
+    "kysely": "0.29.7",
+    "nestjs-cls": "7.0.1",
+    "nestjs-pino": "5.3.1",
+    "pg": "8.23.1",
+    "pino": "10.4.0",
+    "pino-http": "11.0.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "12.2.0",
+    "@testcontainers/postgresql": "12.2.1",
+    "@types/pg": "8.23.1",
+    "testcontainers": "12.2.1"
   }
 }

@@ -180,8 +180,12 @@ pnpm test | pnpm lint | pnpm typecheck | pnpm depcruise | pnpm audit
 
 ## Forma de trabajar
 
-- Hitos en orden; cada uno termina con pruebas y dependency-cruiser en verde, commit convencional (en inglés)
-  y resumen de máximo 10 líneas. Antes de cada hito, plan de máximo 15 líneas.
+- Funcional primero. Bloque A: backend funcional (plataforma + identidad → productos → inventario →
+  preventa, producción y compras → planeación y datos de demo). Bloque B: frontend. Bloque C: endurecimiento.
+- Pruebas donde un error sale caro: cálculos de negocio (requerimientos, necesidades, sobreventa) y una prueba
+  de punta a punta del flujo completo contra PostgreSQL real; dependency-cruiser y lint siempre en verde. La
+  suite completa (concurrencia, variantes de rutas, permisos exhaustivos, aceptación) va en el bloque C.
+- Cada hito: commit convencional (en inglés) y resumen de máximo 10 líneas; antes, plan de máximo 15 líneas.
 - Pedir confirmación solo si una decisión cambia el stack o el modelo.
 - Verificar APIs de librerías en los paquetes instalados (`node_modules`, `.d.ts`, CHANGELOG), no de memoria:
   NestJS 12, nestjs-cls 7, Kysely 0.29 y pnpm 12 cambiaron respecto a versiones anteriores.

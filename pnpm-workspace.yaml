@@ -7,7 +7,14 @@ engineStrict: true
 # Dependency lifecycle scripts are blocked; any package that ships one must be decided explicitly below
 # (true = may run its build script, false = never). An undecided package fails the install.
 strictDepBuilds: true
-allowBuilds: {}
+allowBuilds:
+  # Usage-telemetry postinstall pulled in by swagger-ui-dist (@nestjs/swagger): never run it.
+  '@scarf/scarf': false
+  # Testcontainers (docker-modem → ssh2): optional native speed-ups with pure-JS fallbacks.
+  cpu-features: false
+  ssh2: false
+  # Postinstall only prints a version-compatibility warning.
+  protobufjs: false
 # Refuse versions published less than 24 h ago (pnpm's default, made explicit).
 minimumReleaseAge: 1440
 # Fail when a new version has weaker publishing trust evidence than earlier ones.

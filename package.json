@@ -15,7 +15,11 @@
     "test": "vitest run",
     "depcruise": "depcruise --config tests/architecture/dependency-cruiser.cjs apps/api/src",
     "audit": "pnpm audit --audit-level high",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm depcruise && pnpm test"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm depcruise && pnpm test",
+    "build": "pnpm --recursive build",
+    "db:migrate": "pnpm --filter @nowcleanny/api build && pnpm --filter @nowcleanny/api migrate",
+    "api": "pnpm --filter @nowcleanny/api start",
+    "worker": "pnpm --filter @nowcleanny/api start:worker"
   },
   "packageManager": "pnpm@12.15.0+sha512.b3951d6d6ff4a9f13dc7cf56cd28d2b8eb37dbcc9c68e52e1e1191873ea9f82a017287ab50baadc5ccc494f036c67c0e47eb13608c2fa36f47711b61ea128e61",
   "devDependencies": {
