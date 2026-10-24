@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import type { MigrationSet } from './platform/db/migrator.js';
 
 /** Modules that own a schema, a role and migrations, in migration order (after "platform"). */
-export const DATABASE_MODULES: readonly string[] = ['identity', 'product', 'inventory'];
+export const DATABASE_MODULES: readonly string[] = ['identity', 'product', 'inventory', 'sales'];
 
 export function migrationSets(): MigrationSet[] {
   return [
