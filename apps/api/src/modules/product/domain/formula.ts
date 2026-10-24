@@ -155,3 +155,25 @@ export function assertCanPublish(
     );
   }
 }
+
+/**
+ * Largest quantity of the product that the available components allow, and the component that limits it.
+ * Exact inverse of `requirements`: ceil(line × q × (1 + waste) / yield) ≤ available
+ * ⇔ q ≤ available × yield / (line × (1 + waste)).
+ */
+export function maxProducible(
+  definition: FormulaDefinition,
+  available: (componentId: string) => bigint,
+): { quantity: bigint; limitingComponentId: string | null } {
+  let best: { quantity: bigint; limitingComponentId: string | null } | undefined;
+  for (const line of definition.lines) {
+    const stock = available(line.componentId);
+    const usable = stock > 0n ? stock : 0n;
+    const quantity =
+      (usable * definition.batchYield.base * BPS) /
+      (line.quantity.base * (BPS + BigInt(line.wasteBps)));
+    if (!best || quantity < best.quantity)
+      best = { quantity, limitingComponentId: line.componentId };
+  }
+  return best ?? { quantity: 0n, limitingComponentId: null };
+}

@@ -1,5 +1,6 @@
 import { IdentityModule } from './modules/identity/index.js';
 import { InventoryModule } from './modules/inventory/index.js';
+import { PlanningModule } from './modules/planning/index.js';
 import { ProductModule } from './modules/product/index.js';
 import { ProductionModule } from './modules/production/index.js';
 import { PurchasingModule } from './modules/purchasing/index.js';
@@ -13,4 +14,5 @@ export const FEATURE_MODULES = [
   SalesModule,
   ProductionModule,
   PurchasingModule,
+  PlanningModule,
 ];

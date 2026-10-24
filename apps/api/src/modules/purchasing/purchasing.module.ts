@@ -8,6 +8,7 @@ import { PurchaseOrdersController } from './orders/purchase-orders.controller.js
 import { PurchaseOrdersRepository } from './orders/purchase-orders.repository.js';
 import { PurchaseOrdersService } from './orders/purchase-orders.service.js';
 import { PurchasingPermissions } from './permissions.js';
+import { DemoPurchasesSeeder } from './seeds/demo-purchases.seeder.js';
 
 @Module({
   imports: [DatabaseModule.forModule('purchasing'), ProductModule, InventoryModule],
@@ -16,6 +17,7 @@ import { PurchasingPermissions } from './permissions.js';
     PurchasingPermissions,
     PurchaseOrdersService,
     PurchasingBook,
+    DemoPurchasesSeeder,
     { provide: PurchaseOrdersRepository, useClass: KyselyPurchaseOrdersRepository },
   ],
   exports: [PurchasingBook],

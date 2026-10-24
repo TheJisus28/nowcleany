@@ -4,6 +4,7 @@ import {
   assertCanPublish,
   type FormulaDefinition,
   type FormulaProduct,
+  maxProducible,
   requirements,
   validateFormula,
 } from '../domain/formula.js';
@@ -141,5 +142,37 @@ describe('formula validation', () => {
     expect(() => {
       assertCanPublish(draft, { id: 'luis', canPublishOwn: false });
     }).not.toThrow();
+  });
+});
+
+describe('maxProducible', () => {
+  it('is the exact inverse of requirements and reports the limiting component', () => {
+    const box: FormulaDefinition = {
+      batchYield: un('1'),
+      lines: [
+        { componentId: 'bulk', quantity: L('12'), wasteBps: 0 },
+        { componentId: 'bottle-2l', quantity: un('6'), wasteBps: 100 },
+        { componentId: 'cap', quantity: un('6'), wasteBps: 0 },
+      ],
+    };
+    const stock = new Map([
+      ['bulk', L('24000').base],
+      ['bottle-2l', 12_120n],
+      ['cap', 12_001n],
+    ]);
+    const result = maxProducible(box, (id) => stock.get(id) ?? 0n);
+    expect(result.quantity).toBe(2_000n);
+    // 2 000 boxes need exactly 12 120 bottles (6 × 1.01 each): one more box would not fit.
+    expect(requirements(box, un('2000'))[1]?.quantity.base).toBe(12_120n);
+    expect(requirements(box, un('2001'))[1]?.quantity.base).toBeGreaterThan(12_120n);
+    expect(['bulk', 'bottle-2l']).toContain(result.limitingComponentId);
+  });
+
+  it('treats negative stock as nothing available', () => {
+    const tiny: FormulaDefinition = {
+      batchYield: un('1'),
+      lines: [{ componentId: 'x', quantity: un('1'), wasteBps: 0 }],
+    };
+    expect(maxProducible(tiny, () => -5n)).toEqual({ quantity: 0n, limitingComponentId: 'x' });
   });
 });

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import { Quantity, type UnitCode } from '../../../shared-kernel/index.js';
-import { type FormulaDefinition, requirements } from '../domain/formula.js';
+import { type FormulaDefinition, maxProducible, requirements } from '../domain/formula.js';
 import { dimensionOf, type ProductType } from '../domain/product.js';
 import type { FormulaRecord } from '../formulas/formulas.repository.js';
 import { FormulasRepository } from '../formulas/formulas.repository.js';
@@ -24,6 +24,12 @@ export interface ComponentNeed {
   readonly componentId: string;
   /** Base units of the component. */
   readonly quantity: bigint;
+}
+
+export interface Capacity {
+  /** Base units of the product that can be made with the given components. */
+  readonly quantity: bigint;
+  readonly limitingComponentId: string | null;
 }
 
 export interface RequirementsResult {
@@ -101,6 +107,44 @@ export class ProductCatalog {
       needs: [...totals].map(([componentId, quantity]) => ({ componentId, quantity })),
       missingFormula: [...missing],
     };
+  }
+
+  /** Direct components of each product's active formula. */
+  @Transactional('product')
+  async componentsOf(productIds: readonly string[]): Promise<Map<string, string[]>> {
+    this.currentActor.requirePermission('products:read');
+    const formulas = await this.formulas.activeFor([...new Set(productIds)]);
+    return new Map(formulas.map((f) => [f.productId, f.lines.map((line) => line.componentId)]));
+  }
+
+  /**
+   * One level: how much of each product its active formula allows with the given component quantities
+   * (each product computed on its own). Products without an active formula are left out.
+   */
+  @Transactional('product')
+  async capacityFor(
+    productIds: readonly string[],
+    available: ReadonlyMap<string, bigint>,
+  ): Promise<Map<string, Capacity>> {
+    this.currentActor.requirePermission('products:read');
+    const formulas = await this.formulas.activeFor([...new Set(productIds)]);
+    const componentIds = formulas.flatMap((f) => f.lines.map((l) => l.componentId));
+    const products = new Map(
+      (await this.products.findByIds([...new Set([...productIds, ...componentIds])])).map((p) => [
+        p.id,
+        p,
+      ]),
+    );
+    const result = new Map<string, Capacity>();
+    for (const formula of formulas) {
+      const product = products.get(formula.productId);
+      if (!product) continue;
+      result.set(
+        formula.productId,
+        maxProducible(toDefinition(formula, product, products), (id) => available.get(id) ?? 0n),
+      );
+    }
+    return result;
   }
 }
 

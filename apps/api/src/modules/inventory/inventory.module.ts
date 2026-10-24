@@ -8,6 +8,7 @@ import { KyselyStockRepository } from './stock/kysely-stock.repository.js';
 import { StockController } from './stock/stock.controller.js';
 import { StockRepository } from './stock/stock.repository.js';
 import { StockService } from './stock/stock.service.js';
+import { DemoStockSeeder } from './seeds/demo-stock.seeder.js';
 
 @Module({
   imports: [DatabaseModule.forModule('inventory'), ProductModule],
@@ -17,6 +18,7 @@ import { StockService } from './stock/stock.service.js';
     StockService,
     InventoryLedger,
     SalesOrderCancelledConsumer,
+    DemoStockSeeder,
     { provide: StockRepository, useClass: KyselyStockRepository },
   ],
   exports: [InventoryLedger],

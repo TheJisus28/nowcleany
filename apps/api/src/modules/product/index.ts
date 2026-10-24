@@ -1,5 +1,6 @@
 // Public API of the product module.
 export {
+  type Capacity,
   type ComponentNeed,
   ProductCatalog,
   type ProductSummary,

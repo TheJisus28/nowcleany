@@ -12,7 +12,9 @@ import { KyselyPermissionCatalogRepository } from './permissions/kysely-permissi
 import { PermissionCatalogRepository } from './permissions/permission-catalog.repository.js';
 import { PermissionSyncService } from './permissions/permission-sync.service.js';
 import { AdminSeeder } from './seeds/admin.seeder.js';
+import { DemoUsersSeeder } from './seeds/demo-users.seeder.js';
 import { KyselyUsersRepository } from './users/kysely-users.repository.js';
+import { UserDirectory } from './users/user-directory.js';
 import { RolesController, UsersController } from './users/users.controller.js';
 import { UsersRepository } from './users/users.repository.js';
 import { UsersService } from './users/users.service.js';
@@ -29,10 +31,12 @@ import { UsersService } from './users/users.service.js';
     UsersService,
     PermissionSyncService,
     AdminSeeder,
+    DemoUsersSeeder,
+    UserDirectory,
     { provide: UsersRepository, useClass: KyselyUsersRepository },
     { provide: SessionsRepository, useClass: KyselySessionsRepository },
     { provide: PermissionCatalogRepository, useClass: KyselyPermissionCatalogRepository },
   ],
-  exports: [JwtTokenVerifier],
+  exports: [JwtTokenVerifier, UserDirectory],
 })
 export class IdentityModule {}

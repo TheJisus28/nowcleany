@@ -8,6 +8,7 @@ import { ProductionOrdersRepository } from './orders/production-orders.repositor
 import { ProductionOrdersService } from './orders/production-orders.service.js';
 import { ProductionPermissions } from './permissions.js';
 import { ProductionSchedule } from './schedule/production-schedule.js';
+import { DemoProductionSeeder } from './seeds/demo-production.seeder.js';
 
 @Module({
   imports: [DatabaseModule.forModule('production'), ProductModule, InventoryModule],
@@ -16,6 +17,7 @@ import { ProductionSchedule } from './schedule/production-schedule.js';
     ProductionPermissions,
     ProductionOrdersService,
     ProductionSchedule,
+    DemoProductionSeeder,
     { provide: ProductionOrdersRepository, useClass: KyselyProductionOrdersRepository },
   ],
   exports: [ProductionSchedule],

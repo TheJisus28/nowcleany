@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../platform/db/database.module.js';
+import { IdentityModule } from '../identity/index.js';
 import { InventoryModule } from '../inventory/index.js';
 import { ProductModule } from '../product/index.js';
 import { CustomersController } from './customers/customers.controller.js';
@@ -13,9 +14,10 @@ import { SalesOrdersRepository } from './orders/sales-orders.repository.js';
 import { SalesOrdersService } from './orders/sales-orders.service.js';
 import { StaleDraftsJob } from './orders/stale-drafts.job.js';
 import { SalesPermissions } from './permissions.js';
+import { DemoOrdersSeeder } from './seeds/demo-orders.seeder.js';
 
 @Module({
-  imports: [DatabaseModule.forModule('sales'), ProductModule, InventoryModule],
+  imports: [DatabaseModule.forModule('sales'), ProductModule, InventoryModule, IdentityModule],
   controllers: [CustomersController, SalesOrdersController],
   providers: [
     SalesPermissions,
@@ -23,6 +25,7 @@ import { SalesPermissions } from './permissions.js';
     SalesOrdersService,
     SalesDirectory,
     StaleDraftsJob,
+    DemoOrdersSeeder,
     { provide: CustomersRepository, useClass: KyselyCustomersRepository },
     { provide: SalesOrdersRepository, useClass: KyselySalesOrdersRepository },
   ],

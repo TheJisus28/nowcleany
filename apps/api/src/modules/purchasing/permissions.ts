@@ -8,7 +8,7 @@ export const PURCHASING_PERMISSIONS = [
   {
     code: 'purchasing:read',
     description: 'Ver órdenes de compra y lo que está en tránsito',
-    defaultRoles: ['manager', 'purchasing', 'warehouse', 'plant'],
+    defaultRoles: ['manager', 'purchasing', 'warehouse', 'plant', 'sales'],
   },
   {
     code: 'purchasing:write',

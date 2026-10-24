@@ -134,7 +134,7 @@ Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing
 - Reservas de terminado por pedido, `UNIQUE (order_id, product_id)` (idempotencia).
 - Operaciones con clave de idempotencia: recepción, consumo/producción (desde `production`), traslado
   PLANTA → DESPACHO, despacho, ajuste (permiso restringido y auditado), carga inicial por CSV.
-- Estado: físico, reservado, disponible y "producible".
+- Estado: físico, reservado y disponible (total y por bodega). La capacidad de fabricación vive en planning.
 
 **sales**
 
