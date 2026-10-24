@@ -1,0 +1,28 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/archivo/wdth.css';
+
+/* SCIP identity: mineral paper, deep tank teal, a chlorine accent used sparingly.
+   Status colors come from the dataviz reference palette and always ship with icon + label. */
+@theme {
+  --font-sans: 'Archivo Variable', system-ui, sans-serif;
+  --color-paper: #f3f6f4;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef2ef;
+  --color-ink: #12211e;
+  --color-ink-2: #4b5b57;
+  --color-ink-3: #7a8984;
+  --color-line: #dce3df;
+  --color-brand: #0d5b52;
+  --color-brand-soft: #e1eeea;
+  --color-chlorine: #d9e34f;
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-serious: #ec835a;
+  --color-critical: #d03b3b;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
