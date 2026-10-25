@@ -23,7 +23,11 @@ docker compose up -d          # PostgreSQL 18 en 127.0.0.1:5432
 pnpm db:demo                  # migraciones + semillas + datos de demo de la propuesta
 pnpm api                      # API en http://127.0.0.1:3000 (Swagger en /docs)
 pnpm worker                   # en otra terminal: outbox, consumidores y tareas programadas
+pnpm web                      # en otra terminal: paneles en http://localhost:5173
 ```
+
+El frontend (React + Vite + Tailwind) habla con la API por el proxy de Vite (`/v1` → `127.0.0.1:3000`), así
+que en desarrollo no hay CORS. En producción, un proxy inverso sirve `apps/web/dist` y la API en el mismo origen.
 
 `pnpm db:setup` hace lo mismo sin datos de demo (solo roles, permisos y el administrador de `ADMIN_*`).
 Para empezar de cero en desarrollo: `docker compose down -v` (borra la base local) y `docker compose up -d`.

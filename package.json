@@ -23,7 +23,8 @@
     "db:setup": "pnpm --filter @nowcleanny/api build && pnpm --filter @nowcleanny/api migrate -- --seed",
     "db:demo": "pnpm --filter @nowcleanny/api build && pnpm --filter @nowcleanny/api migrate -- --demo",
     "test:unit": "vitest run --project unit",
-    "test:e2e": "vitest run --project e2e"
+    "test:e2e": "vitest run --project e2e",
+    "web": "pnpm --filter @nowcleanny/web dev"
   },
   "packageManager": "pnpm@12.15.0+sha512.b3951d6d6ff4a9f13dc7cf56cd28d2b8eb37dbcc9c68e52e1e1191873ea9f82a017287ab50baadc5ccc494f036c67c0e47eb13608c2fa36f47711b61ea128e61",
   "devDependencies": {
