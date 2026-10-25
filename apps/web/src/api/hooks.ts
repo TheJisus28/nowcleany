@@ -108,6 +108,14 @@ export const useActiveFormula = (productId: string | undefined) =>
     retry: false,
   });
 
+export const useDraftFormula = (productId: string | undefined) =>
+  useQuery({
+    queryKey: ['draft-formula', productId],
+    queryFn: () => api.get<Formula>(`/v1/products/${productId ?? ''}/draft-formula`),
+    enabled: Boolean(productId),
+    retry: false,
+  });
+
 export const useFormulaHistory = (productId: string | undefined) =>
   useQuery({
     queryKey: ['formulas', productId],

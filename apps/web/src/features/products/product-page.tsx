@@ -1,7 +1,8 @@
-import { CircleCheck, Factory, Link2, ShoppingCart, Tags } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { CircleCheck, Factory, Link2, Pencil, Power, ShoppingCart, Tags } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import { useParams } from 'react-router';
 import {
+  useAction,
   useAvailability,
   useMovements,
   useOrders,
@@ -26,10 +27,12 @@ import {
   ProductionStatusChip,
   PurchaseStatusChip,
 } from '../../components/status';
-import { EmptyState, PageHeader, Panel, QueryView, Spinner } from '../../components/ui';
+import { Button, EmptyState, PageHeader, Panel, QueryView, Spinner } from '../../components/ui';
+import { api } from '../../api/client';
 import { formatDate, formatDecimal, unitLabel } from '../../lib/format';
 import { MovementTable } from '../inventory/movement-table';
 import { FormulaSection } from './formula-section';
+import { ProductFormDialog } from './product-form-dialog';
 
 /**
  * Everything about one product in one place: stock, who asked for it, how it is made, what is being
@@ -77,22 +80,76 @@ function ProductView({ product }: { product: Product }) {
             )}
           </span>
         }
+        actions={can('products:write') ? <ProductActions product={product} /> : null}
       />
 
       {can('inventory:read') ? <StockStrip product={product} /> : null}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="flex min-w-0 flex-col gap-6">
-          {sections.orders ? <OrdersSection product={product} /> : null}
-          {sections.production ? <ProductionSection product={product} /> : null}
-          {sections.purchases ? <PurchasesSection product={product} /> : null}
-          {sections.kardex ? <KardexSection product={product} /> : null}
+      {sections.orders || sections.production || sections.purchases || sections.kardex ? (
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="flex min-w-0 flex-col gap-6">
+            {sections.orders ? <OrdersSection product={product} /> : null}
+            {sections.production ? <ProductionSection product={product} /> : null}
+            {sections.purchases ? <PurchasesSection product={product} /> : null}
+            {sections.kardex ? <KardexSection product={product} /> : null}
+          </div>
+          <div className="flex flex-col gap-6">
+            {sections.formula ? <FormulaSection product={product} /> : null}
+            {sections.whereUsed ? <WhereUsedSection product={product} /> : null}
+          </div>
         </div>
-        <div className="flex flex-col gap-6">
+      ) : (
+        // Formulation only sees how the product is made: give it the full width.
+        <div className="grid max-w-4xl gap-6">
           {sections.formula ? <FormulaSection product={product} /> : null}
           {sections.whereUsed ? <WhereUsedSection product={product} /> : null}
         </div>
-      </div>
+      )}
+    </>
+  );
+}
+
+/** Edit name and batch size, or deactivate (products are never deleted: history points to them). */
+function ProductActions({ product }: { product: Product }) {
+  const [editing, setEditing] = useState(false);
+  const toggle = useAction(
+    () => api.patch<Product>(`/v1/products/${product.id}`, { active: !product.active }),
+    {
+      success: (saved) =>
+        saved.active
+          ? `${saved.code} activado`
+          : `${saved.code} desactivado: no aparece para vender ni planear`,
+    },
+  );
+  return (
+    <>
+      <Button
+        variant="secondary"
+        icon={<Pencil className="size-4" />}
+        onClick={() => {
+          setEditing(true);
+        }}
+      >
+        Editar
+      </Button>
+      <Button
+        variant="ghost"
+        icon={<Power className="size-4" />}
+        loading={toggle.isPending}
+        onClick={() => {
+          toggle.mutate(undefined);
+        }}
+      >
+        {product.active ? 'Desactivar' : 'Activar'}
+      </Button>
+      {editing ? (
+        <ProductFormDialog
+          product={product}
+          onClose={() => {
+            setEditing(false);
+          }}
+        />
+      ) : null}
     </>
   );
 }

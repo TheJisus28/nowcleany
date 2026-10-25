@@ -1,14 +1,24 @@
-import { BookOpen, FlaskConical, Search } from 'lucide-react';
+import { BookOpen, CircleDashed, FlaskConical, Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useProducts } from '../../api/hooks';
 import type { Product } from '../../api/types';
+import { useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
 import { EntityLink, pathTo } from '../../components/links';
 import { Qty } from '../../components/qty';
 import { Chip } from '../../components/status';
-import { EmptyState, Input, PageHeader, Panel, QueryView, Segmented } from '../../components/ui';
+import {
+  Button,
+  EmptyState,
+  Input,
+  PageHeader,
+  Panel,
+  QueryView,
+  Segmented,
+} from '../../components/ui';
 import { unitLabel } from '../../lib/format';
+import { ProductFormDialog } from '../products/product-form-dialog';
 
 const TYPES = [
   { value: '', label: 'Todos' },
@@ -17,22 +27,59 @@ const TYPES = [
   { value: 'RAW_MATERIAL', label: 'Materias primas' },
 ] as const;
 
+type FormulaFilter = 'all' | 'draft' | 'missing';
+
+const formulaMatches = (product: Product, filter: FormulaFilter) =>
+  filter === 'all' ||
+  (filter === 'draft' && product.hasDraftFormula) ||
+  (filter === 'missing' && product.type !== 'RAW_MATERIAL' && !product.activeFormulaVersion);
+
 export function CatalogPage() {
+  const { can } = useSession();
   const [type, setType] = useState<(typeof TYPES)[number]['value']>('');
+  const [formula, setFormula] = useState<FormulaFilter>('all');
   const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
   const products = useProducts({ type: type || undefined, q: search.trim() || undefined });
+  const all = products.data ?? [];
+  const drafts = all.filter((product) => formulaMatches(product, 'draft')).length;
+  const missing = all.filter((product) => formulaMatches(product, 'missing')).length;
 
   return (
     <>
       <PageHeader
         title="Catálogo"
-        description="Materias primas, graneles y productos terminados, con la fórmula vigente de cada uno."
+        description="Materias primas, graneles y productos terminados, con la fórmula de cada uno."
+        actions={
+          can('products:write') ? (
+            <Button
+              icon={<Plus className="size-4" />}
+              onClick={() => {
+                setCreating(true);
+              }}
+            >
+              Nuevo producto
+            </Button>
+          ) : null
+        }
       />
       <Panel flush>
-        <div className="flex flex-col gap-3 border-b border-line px-4 py-3 md:flex-row md:items-center md:justify-between">
-          <Segmented label="Tipo" value={type} onChange={setType} options={TYPES} />
-          <label className="relative block md:w-72">
+        <div className="flex flex-col gap-3 border-b border-line px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <Segmented label="Tipo" value={type} onChange={setType} options={TYPES} />
+            <Segmented
+              label="Fórmula"
+              value={formula}
+              onChange={setFormula}
+              options={[
+                { value: 'all', label: 'Todas' },
+                { value: 'draft', label: `Por publicar · ${String(drafts)}` },
+                { value: 'missing', label: `Sin fórmula · ${String(missing)}` },
+              ]}
+            />
+          </div>
+          <label className="relative block lg:w-72">
             <span className="sr-only">Buscar producto</span>
             <Search
               aria-hidden
@@ -52,7 +99,7 @@ export function CatalogPage() {
           {(rows) => (
             <DataTable<Product>
               label="Productos"
-              rows={rows}
+              rows={rows.filter((product) => formulaMatches(product, formula))}
               rowKey={(row) => row.id}
               onRowClick={(row) => {
                 void navigate(pathTo('product', row.id));
@@ -90,15 +137,23 @@ export function CatalogPage() {
                   render: (row) =>
                     row.type === 'RAW_MATERIAL' ? (
                       <span className="text-ink-3">No aplica</span>
-                    ) : row.activeFormulaVersion ? (
-                      <Chip
-                        tone="good"
-                        icon={FlaskConical}
-                      >{`Vigente v${String(row.activeFormulaVersion)}`}</Chip>
                     ) : (
-                      <Chip tone="warning" icon={FlaskConical}>
-                        Sin fórmula vigente
-                      </Chip>
+                      <span className="flex flex-wrap gap-1.5">
+                        {row.activeFormulaVersion ? (
+                          <Chip tone="good" icon={FlaskConical}>
+                            {`Vigente v${String(row.activeFormulaVersion)}`}
+                          </Chip>
+                        ) : (
+                          <Chip tone="warning" icon={FlaskConical}>
+                            Sin fórmula vigente
+                          </Chip>
+                        )}
+                        {row.hasDraftFormula ? (
+                          <Chip tone="neutral" icon={CircleDashed}>
+                            Borrador por publicar
+                          </Chip>
+                        ) : null}
+                      </span>
                     ),
                 },
                 {
@@ -113,6 +168,13 @@ export function CatalogPage() {
           )}
         </QueryView>
       </Panel>
+      {creating ? (
+        <ProductFormDialog
+          onClose={() => {
+            setCreating(false);
+          }}
+        />
+      ) : null}
     </>
   );
 }
