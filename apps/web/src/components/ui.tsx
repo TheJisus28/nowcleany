@@ -18,7 +18,7 @@ export function cn(...classes: (string | false | null | undefined)[]): string {
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-brand text-white hover:bg-[#0a4a43] disabled:bg-brand/50',
+  primary: 'bg-brand text-white hover:bg-brand-strong disabled:bg-brand/50',
   secondary: 'border border-line-strong bg-surface text-ink hover:bg-surface-2 disabled:text-ink-3',
   ghost: 'text-ink-2 hover:bg-surface-2 hover:text-ink disabled:text-ink-3',
   danger:

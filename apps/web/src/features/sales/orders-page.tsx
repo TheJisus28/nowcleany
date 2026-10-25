@@ -48,7 +48,7 @@ export function OrdersPage() {
           can('sales-orders:write') ? (
             <Link
               to="/ventas/nueva"
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-[#0a4a43]"
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-strong"
             >
               <Plus aria-hidden className="size-4" />
               Nueva preventa

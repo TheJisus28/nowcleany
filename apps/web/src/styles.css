@@ -1,21 +1,23 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/archivo/wdth.css';
 
-/* SCIP identity: mineral paper, deep tank teal, a chlorine accent used sparingly (logo, active panel).
+/* NOW CLEANY identity, from its logo (navy #003858, aqua #26dacf) and site palette.
    Status colors come from the dataviz reference palette and always ship with icon + label. */
 @theme {
   --font-sans: 'Archivo Variable', system-ui, sans-serif;
-  --color-paper: #f3f6f4;
+  --color-paper: #f2f6f8;
   --color-surface: #ffffff;
-  --color-surface-2: #eef2ef;
-  --color-ink: #12211e;
-  --color-ink-2: #4b5b57;
-  --color-ink-3: #75847f;
-  --color-line: #dce3df;
-  --color-line-strong: #c3cdc8;
-  --color-brand: #0d5b52;
-  --color-brand-soft: #e1eeea;
-  --color-chlorine: #d9e34f;
+  --color-surface-2: #ecf2f5;
+  --color-ink: #0f1f2a;
+  --color-ink-2: #475964;
+  --color-ink-3: #71838e;
+  --color-line: #dae3e8;
+  --color-line-strong: #c1cdd5;
+  --color-brand: #003858;
+  --color-brand-strong: #00273e;
+  --color-brand-soft: #e1eef4;
+  --color-aqua: #26dacf;
+  --color-aqua-soft: #dcf7f5;
   --color-good: #0ca30c;
   --color-good-soft: #e5f4e5;
   --color-warning: #fab219;
@@ -53,7 +55,7 @@
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible {
-    box-shadow: 0 0 0 3px rgb(13 91 82 / 0.18);
+    box-shadow: 0 0 0 3px rgb(0 56 88 / 0.18);
   }
 
   @media (prefers-reduced-motion: reduce) {

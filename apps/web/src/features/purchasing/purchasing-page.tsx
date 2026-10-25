@@ -134,7 +134,7 @@ export function PurchasingPage() {
                         <input
                           type="checkbox"
                           aria-label={`Incluir ${row.product.name}`}
-                          className="mt-1 size-4 accent-[#0d5b52]"
+                          className="mt-1 size-4 accent-[#003858]"
                           disabled={isZero(row.toBuy.quantity)}
                           checked={selected.has(row.product.id)}
                           onClick={(event) => {

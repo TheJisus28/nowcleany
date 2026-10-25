@@ -44,7 +44,7 @@ export function LoginPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       <section className="relative hidden overflow-hidden bg-brand px-12 py-12 text-white lg:flex lg:flex-col">
-        <BrandLockup inverted />
+        <BrandLockup inverted large />
         <div className="mt-auto max-w-lg">
           <p className="text-[40px] leading-[1.08] font-semibold tracking-[-0.02em] [font-stretch:110%]">
             Lo vendido, lo que hay y lo que falta, en una sola cuenta.
@@ -55,10 +55,10 @@ export function LoginPage() {
           </p>
         </div>
         {/* The level line of the mark, as a quiet horizon across the panel. */}
-        <div aria-hidden className="absolute inset-x-0 bottom-[38%] h-[3px] bg-chlorine/80" />
+        <div aria-hidden className="absolute inset-x-0 bottom-[38%] h-[3px] bg-aqua/80" />
         <div aria-hidden className="absolute inset-x-0 bottom-0 h-[38%] bg-white/[0.06]" />
         <p className="relative mt-16 text-[13px] text-white/60">
-          Sistema de control de inventario y producción
+          Plataforma interna de Now Cleany S.A.S. · Montería
         </p>
       </section>
 

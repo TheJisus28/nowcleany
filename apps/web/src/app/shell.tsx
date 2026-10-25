@@ -27,7 +27,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
               {isActive ? (
                 <span
                   aria-hidden
-                  className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r bg-chlorine"
+                  className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r bg-aqua"
                 />
               ) : null}
               <item.icon aria-hidden className="size-[18px]" strokeWidth={2} />

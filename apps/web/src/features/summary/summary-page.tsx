@@ -160,7 +160,7 @@ function Hero({ rows }: { rows: OversellRow[] }) {
         {can('purchasing:read') ? (
           <Link
             to="/compras"
-            className="inline-flex h-10 items-center gap-2 self-start rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-[#0a4a43] sm:self-auto"
+            className="inline-flex h-10 items-center gap-2 self-start rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-strong sm:self-auto"
           >
             Ver qué comprar
             <ArrowRight aria-hidden className="size-4" />

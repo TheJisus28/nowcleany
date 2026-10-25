@@ -213,7 +213,7 @@ function UserDialog({ user, onClose }: { user: User | null; onClose: () => void 
               >
                 <input
                   type="checkbox"
-                  className="mt-0.5 size-4 accent-[#0d5b52]"
+                  className="mt-0.5 size-4 accent-[#003858]"
                   checked={selected.includes(role.code)}
                   onChange={(event) => {
                     setSelected((current) =>
@@ -235,7 +235,7 @@ function UserDialog({ user, onClose }: { user: User | null; onClose: () => void 
           <label className="flex items-center gap-2.5 text-sm">
             <input
               type="checkbox"
-              className="size-4 accent-[#0d5b52]"
+              className="size-4 accent-[#003858]"
               checked={active}
               onChange={(event) => {
                 setActive(event.target.checked);
