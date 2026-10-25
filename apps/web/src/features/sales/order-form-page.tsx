@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, Plus, Save, Trash2, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { api } from '../../api/client';
 import { useAction, useCustomers, useOrder, useProducts, useStockStatus } from '../../api/hooks';
 import type { Customer, SalesOrder } from '../../api/types';
@@ -36,11 +36,13 @@ export function OrderFormPage() {
 
 function OrderForm({ order }: { order: SalesOrder | undefined }) {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const customers = useCustomers();
   const products = useProducts({ type: 'FINISHED_GOOD', active: true });
   const stock = useStockStatus({ type: 'FINISHED_GOOD' });
 
-  const [customerId, setCustomerId] = useState(order?.customer.id ?? '');
+  // A new order opened from a customer page starts with that customer.
+  const [customerId, setCustomerId] = useState(order?.customer.id ?? params.get('cliente') ?? '');
   const [deliveryDate, setDeliveryDate] = useState(order?.estimatedDeliveryDate ?? todayIso(7));
   const [notes, setNotes] = useState(order?.notes ?? '');
   const [lines, setLines] = useState<LineDraft[]>(

@@ -25,11 +25,23 @@ export class KyselyPurchaseOrdersRepository extends PurchaseOrdersRepository {
 
   async list(filter: {
     statuses?: readonly PurchaseStatus[];
+    productId?: string;
     limit: number;
   }): Promise<PurchaseOrderRecord[]> {
     let query = this.host.tx.selectFrom('purchase_orders').selectAll();
     if (filter.statuses && filter.statuses.length > 0)
       query = query.where('status', 'in', filter.statuses);
+    const { productId } = filter;
+    if (productId)
+      query = query.where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('purchase_order_lines as l')
+            .select('l.order_id')
+            .whereRef('l.order_id', '=', 'purchase_orders.id')
+            .where('l.product_id', '=', productId),
+        ),
+      );
     return this.withLines(await query.orderBy('number', 'desc').limit(filter.limit).execute());
   }
 

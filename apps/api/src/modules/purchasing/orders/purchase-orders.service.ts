@@ -64,11 +64,13 @@ export class PurchaseOrdersService {
   @Transactional('purchasing')
   async list(filter: {
     statuses?: PurchaseStatus[];
+    productId?: string;
     limit?: number;
   }): Promise<PurchaseOrderView[]> {
     const orders = await this.orders.list({
       limit: filter.limit ?? 100,
       ...(filter.statuses ? { statuses: filter.statuses } : {}),
+      ...(filter.productId ? { productId: filter.productId } : {}),
     });
     return orders.map(toView);
   }

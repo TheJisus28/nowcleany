@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '../components/toast';
 import { api, errorMessage } from './client';
 import type {
+  AvailabilityRow,
   BulkNeed,
   Customer,
   Formula,
@@ -19,6 +20,7 @@ import type {
   StockStatus,
   User,
   Warehouse,
+  WhereUsed,
 } from './types';
 
 const query = (params: Record<string, string | boolean | undefined>): string => {
@@ -67,6 +69,13 @@ export const usePurchaseNeeds = () =>
       api.get<{ generatedAt: string; rows: PurchaseNeed[] }>('/v1/planning/purchase-needs'),
   });
 
+export const useAvailability = () =>
+  useQuery({
+    queryKey: ['planning', 'availability'],
+    queryFn: () =>
+      api.get<{ generatedAt: string; rows: AvailabilityRow[] }>('/v1/planning/availability'),
+  });
+
 // --- catalog --------------------------------------------------------------------------------
 
 export const useProducts = (
@@ -75,6 +84,20 @@ export const useProducts = (
   useQuery({
     queryKey: ['products', filter],
     queryFn: () => api.get<Product[]>(`/v1/products${query(filter)}`),
+  });
+
+export const useProduct = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['product', id],
+    queryFn: () => api.get<Product>(`/v1/products/${id ?? ''}`),
+    enabled: Boolean(id),
+  });
+
+export const useWhereUsed = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['where-used', id],
+    queryFn: () => api.get<WhereUsed[]>(`/v1/products/${id ?? ''}/where-used`),
+    enabled: Boolean(id),
   });
 
 export const useActiveFormula = (productId: string | undefined) =>
@@ -122,17 +145,33 @@ export const useWarehouses = () =>
 // --- sales ----------------------------------------------------------------------------------
 
 export const useOrders = (
-  filter: { status?: string | undefined; mine?: boolean | undefined; q?: string | undefined } = {},
+  filter: {
+    status?: string | undefined;
+    mine?: boolean | undefined;
+    q?: string | undefined;
+    customerId?: string | undefined;
+    productId?: string | undefined;
+    limit?: string | undefined;
+  } = {},
+  enabled = true,
 ) =>
   useQuery({
     queryKey: ['orders', filter],
     queryFn: () => api.get<SalesOrder[]>(`/v1/sales-orders${query(filter)}`),
+    enabled,
   });
 
 export const useOrder = (id: string | undefined) =>
   useQuery({
     queryKey: ['order', id],
     queryFn: () => api.get<SalesOrder>(`/v1/sales-orders/${id ?? ''}`),
+    enabled: Boolean(id),
+  });
+
+export const useCustomer = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['customer', id],
+    queryFn: () => api.get<Customer>(`/v1/customers/${id ?? ''}`),
     enabled: Boolean(id),
   });
 
@@ -144,10 +183,11 @@ export const useCustomers = (q?: string) =>
 
 // --- production & purchasing ------------------------------------------------------------------
 
-export const useProductionOrders = (status?: string) =>
+export const useProductionOrders = (status?: string, productId?: string) =>
   useQuery({
-    queryKey: ['production-orders', status],
-    queryFn: () => api.get<ProductionOrder[]>(`/v1/production-orders${query({ status })}`),
+    queryKey: ['production-orders', status, productId],
+    queryFn: () =>
+      api.get<ProductionOrder[]>(`/v1/production-orders${query({ status, productId })}`),
   });
 
 export const useProductionOrder = (id: string | undefined) =>
@@ -157,10 +197,18 @@ export const useProductionOrder = (id: string | undefined) =>
     enabled: Boolean(id),
   });
 
-export const usePurchaseOrders = (status?: string) =>
+export const usePurchaseOrder = (id: string | undefined) =>
   useQuery({
-    queryKey: ['purchase-orders', status],
-    queryFn: () => api.get<PurchaseOrder[]>(`/v1/purchase-orders${query({ status })}`),
+    queryKey: ['purchase-order', id],
+    queryFn: () => api.get<PurchaseOrder>(`/v1/purchase-orders/${id ?? ''}`),
+    enabled: Boolean(id),
+  });
+
+export const usePurchaseOrders = (status?: string, productId?: string, enabled = true) =>
+  useQuery({
+    queryKey: ['purchase-orders', status, productId],
+    queryFn: () => api.get<PurchaseOrder[]>(`/v1/purchase-orders${query({ status, productId })}`),
+    enabled,
   });
 
 // --- identity -------------------------------------------------------------------------------

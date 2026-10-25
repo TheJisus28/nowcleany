@@ -26,6 +26,7 @@ export function sumBy<T>(
 export interface DemandLine {
   readonly orderId: string;
   readonly orderLabel: string;
+  readonly customerId: string;
   readonly customerName: string;
   readonly sellerId: string;
   readonly sellerName: string;

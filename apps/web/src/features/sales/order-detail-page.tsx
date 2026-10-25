@@ -1,11 +1,13 @@
-import { ArrowLeft, Ban, Check, Pencil, Truck } from 'lucide-react';
+import { Ban, Check, Pencil, Truck } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { api } from '../../api/client';
 import { useAction, useOrder, useOrderCoverage } from '../../api/hooks';
 import type { SalesOrder } from '../../api/types';
+import { useAccess } from '../../app/access';
 import { useProfile, useSession } from '../../auth/session';
 import { Dialog } from '../../components/dialog';
+import { BackLink, EntityLink, ProductCell } from '../../components/links';
 import { Qty } from '../../components/qty';
 import { CoverageChip, OrderStatusChip } from '../../components/status';
 import { Button, Field, PageHeader, Panel, QueryView, Textarea } from '../../components/ui';
@@ -20,6 +22,7 @@ export function OrderDetailPage() {
 function OrderDetail({ order }: { order: SalesOrder }) {
   const profile = useProfile();
   const { can } = useSession();
+  const { has } = useAccess();
   const coverage = useOrderCoverage(can('planning:read') && order.status === 'CONFIRMED');
   const lineCoverage = coverage.data?.find((row) => row.orderId === order.id);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -35,13 +38,10 @@ function OrderDetail({ order }: { order: SalesOrder }) {
 
   return (
     <>
-      <Link
-        to="/ventas"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-ink-2 hover:text-ink"
-      >
-        <ArrowLeft aria-hidden className="size-4" />
-        Ventas
-      </Link>
+      <BackLink
+        fallback={has('sales') ? '/ventas' : '/inventario?vista=por-despachar'}
+        label={has('sales') ? 'Preventas' : 'Inventario'}
+      />
       <PageHeader
         title={order.label}
         description={
@@ -49,7 +49,10 @@ function OrderDetail({ order }: { order: SalesOrder }) {
             <OrderStatusChip status={order.status} />
             {lineCoverage ? <CoverageChip status={lineCoverage.status} /> : null}
             <span>
-              {order.customer.name} · registrada por {order.seller.name}
+              <EntityLink to="customer" id={order.customer.id}>
+                {order.customer.name}
+              </EntityLink>{' '}
+              · registrada por {order.seller.name}
             </span>
           </span>
         }
@@ -129,8 +132,13 @@ function OrderDetail({ order }: { order: SalesOrder }) {
                 return (
                   <tr key={line.productId} className="border-b border-line last:border-0">
                     <td className="px-4 py-3">
-                      <p className="font-medium">{line.productName}</p>
-                      <p className="text-[12.5px] text-ink-3">{line.productCode}</p>
+                      <ProductCell
+                        product={{
+                          id: line.productId,
+                          code: line.productCode,
+                          name: line.productName,
+                        }}
+                      />
                       {covered ? (
                         <div className="mt-1.5 sm:hidden">
                           <CoverageChip status={covered.status} />
@@ -178,7 +186,9 @@ function OrderDetail({ order }: { order: SalesOrder }) {
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
               <dt className="text-ink-3">Cliente</dt>
               <dd>
-                {order.customer.name}
+                <EntityLink to="customer" id={order.customer.id}>
+                  {order.customer.name}
+                </EntityLink>
                 {order.customer.taxId ? (
                   <span className="block text-[12.5px] text-ink-3">NIT {order.customer.taxId}</span>
                 ) : null}

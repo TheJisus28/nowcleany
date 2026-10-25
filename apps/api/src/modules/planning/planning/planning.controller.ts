@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Permission } from '../../../platform/security/decorators.js';
 import type {
+  Availability,
   OrderCoverageView,
   OversellReport,
   PlanningSummary,
@@ -45,5 +46,12 @@ export class PlanningController {
   @Get('purchase-needs')
   purchaseNeeds(): Promise<PurchaseNeeds> {
     return this.planning.purchaseNeeds();
+  }
+
+  /** What can still be promised per finished good, so sales sees it before committing. */
+  @Permission('planning:read')
+  @Get('availability')
+  availability(): Promise<Availability> {
+    return this.planning.availability();
   }
 }

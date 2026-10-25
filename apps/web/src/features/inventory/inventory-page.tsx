@@ -1,6 +1,7 @@
 import {
   ArrowRightLeft,
   FileUp,
+  PackageCheck,
   PackagePlus,
   Plus,
   Scale,
@@ -11,22 +12,24 @@ import {
   Warehouse,
 } from 'lucide-react';
 import { type ChangeEvent, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { ApiError, api } from '../../api/client';
 import {
   useAction,
   useMovements,
   useOrders,
   useProducts,
+  usePurchaseOrders,
   useStockStatus,
   useWarehouses,
 } from '../../api/hooks';
-import type { Movement, SalesOrder, StockStatus } from '../../api/types';
+import type { PurchaseOrder, SalesOrder, StockStatus } from '../../api/types';
 import { useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
 import { Dialog } from '../../components/dialog';
+import { EntityLink, pathTo, ProductCell } from '../../components/links';
 import { Qty } from '../../components/qty';
-import { Chip } from '../../components/status';
+import { Chip, DueDate } from '../../components/status';
 import {
   Button,
   EmptyState,
@@ -37,17 +40,11 @@ import {
   QueryView,
   Segmented,
   Select,
-  Spinner,
   Textarea,
 } from '../../components/ui';
-import {
-  formatDate,
-  formatDateTime,
-  formatDecimal,
-  parseDecimalInput,
-  relativeDays,
-  unitLabel,
-} from '../../lib/format';
+import { formatDecimal, parseDecimalInput, unitLabel } from '../../lib/format';
+import { ReceiveDialog } from '../purchasing/receive-dialog';
+import { MovementTable } from './movement-table';
 
 const TYPES = [
   { value: '', label: 'Todos' },
@@ -56,40 +53,53 @@ const TYPES = [
   { value: 'FINISHED_GOOD', label: 'Terminados' },
 ] as const;
 
+type Tab = 'existencias' | 'por-recibir' | 'por-despachar' | 'movimientos';
 type DialogKind = 'receipt' | 'transfer' | 'adjust' | 'load' | null;
 
 export function InventoryPage() {
   const { can } = useSession();
-  const [tab, setTab] = useState<'stock' | 'dispatch' | 'kardex'>('stock');
+  const canReceive = can('purchasing:receive');
+  const canDispatch = can('sales-orders:dispatch');
+  const [params, setParams] = useSearchParams();
   const [dialog, setDialog] = useState<DialogKind>(null);
-  const [kardexOf, setKardexOf] = useState<StockStatus | null>(null);
   const close = () => {
     setDialog(null);
   };
+  // Counts on the tabs, so the day's warehouse work is visible from any tab.
+  const arriving = usePurchaseOrders('OPEN', undefined, canReceive);
+  const toDispatch = useOrders({ status: 'CONFIRMED' }, canDispatch);
 
-  const tabs = [
-    { value: 'stock' as const, label: 'Existencias' },
-    ...(can('sales-orders:dispatch')
-      ? [{ value: 'dispatch' as const, label: 'Despachos pendientes' }]
+  const tabs: { value: Tab; label: string }[] = [
+    { value: 'existencias', label: 'Existencias' },
+    ...(canReceive
+      ? [{ value: 'por-recibir' as const, label: withCount('Por recibir', arriving.data) }]
       : []),
-    { value: 'kardex' as const, label: 'Movimientos' },
+    ...(canDispatch
+      ? [{ value: 'por-despachar' as const, label: withCount('Por despachar', toDispatch.data) }]
+      : []),
+    { value: 'movimientos', label: 'Movimientos' },
   ];
+  const requested = params.get('vista');
+  const tab: Tab =
+    tabs.find((option) => option.value === requested)?.value ??
+    (canDispatch ? 'por-despachar' : 'existencias');
 
   return (
     <>
       <PageHeader
         title="Inventario"
-        description="Existencias por bodega, lo comprometido en preventas y cada movimiento con su saldo (kardex)."
+        description="Existencias por bodega, lo comprometido en preventas, lo que llega y lo que sale."
         actions={
           <>
             {can('inventory:receive') ? (
               <Button
+                variant={canReceive ? 'secondary' : 'primary'}
                 icon={<PackagePlus className="size-4" />}
                 onClick={() => {
                   setDialog('receipt');
                 }}
               >
-                Registrar recepción
+                Entrada sin orden
               </Button>
             ) : null}
             {can('inventory:transfer') ? (
@@ -129,20 +139,22 @@ export function InventoryPage() {
         }
       />
 
-      <div className="mb-4">
-        <Segmented label="Vista" value={tab} onChange={setTab} options={tabs} />
+      <div className="mb-4 overflow-x-auto">
+        <Segmented
+          label="Vista"
+          value={tab}
+          onChange={(value) => {
+            setParams({ vista: value }, { replace: true });
+          }}
+          options={tabs}
+        />
       </div>
 
-      {tab === 'stock' ? <StockTab onOpen={setKardexOf} /> : null}
-      {tab === 'dispatch' ? <DispatchTab /> : null}
-      {tab === 'kardex' ? <MovementsTab /> : null}
+      {tab === 'existencias' ? <StockTab /> : null}
+      {tab === 'por-recibir' ? <ReceiveTab orders={arriving} /> : null}
+      {tab === 'por-despachar' ? <DispatchTab orders={toDispatch} /> : null}
+      {tab === 'movimientos' ? <MovementsTab /> : null}
 
-      <KardexDialog
-        product={kardexOf}
-        onClose={() => {
-          setKardexOf(null);
-        }}
-      />
       {dialog === 'receipt' ? <ReceiptDialog onClose={close} /> : null}
       {dialog === 'transfer' ? <TransferDialog onClose={close} /> : null}
       {dialog === 'adjust' ? <AdjustDialog onClose={close} /> : null}
@@ -151,7 +163,12 @@ export function InventoryPage() {
   );
 }
 
-function StockTab({ onOpen }: { onOpen: (row: StockStatus) => void }) {
+function withCount(label: string, rows: readonly unknown[] | undefined): string {
+  return rows && rows.length > 0 ? `${label} · ${String(rows.length)}` : label;
+}
+
+function StockTab() {
+  const navigate = useNavigate();
   const [type, setType] = useState<(typeof TYPES)[number]['value']>('');
   const [search, setSearch] = useState('');
   const status = useStockStatus({ type: type || undefined, q: search.trim() || undefined });
@@ -182,19 +199,19 @@ function StockTab({ onOpen }: { onOpen: (row: StockStatus) => void }) {
             label="Existencias"
             rows={rows}
             rowKey={(row) => row.productId}
-            onRowClick={onOpen}
+            onRowClick={(row) => {
+              void navigate(pathTo('product', row.productId));
+            }}
             empty={<EmptyState icon={<Warehouse />} title="No hay productos con este filtro" />}
             columns={[
               {
                 key: 'product',
                 header: 'Producto',
                 render: (row) => (
-                  <span>
-                    <span className="font-medium">{row.name}</span>
-                    <span className="block text-[12.5px] text-ink-3">
-                      {row.code} · {row.typeLabel}
-                    </span>
-                  </span>
+                  <ProductCell
+                    product={{ id: row.productId, code: row.code, name: row.name }}
+                    detail={row.typeLabel}
+                  />
                 ),
               },
               ...['PLANTA', 'DESPACHO'].map((code) => ({
@@ -254,8 +271,97 @@ function StockTab({ onOpen }: { onOpen: (row: StockStatus) => void }) {
   );
 }
 
-function DispatchTab() {
-  const orders = useOrders({ status: 'CONFIRMED' });
+interface ListQuery<T> {
+  data: T[] | undefined;
+  isPending: boolean;
+  error: unknown;
+  refetch: () => unknown;
+}
+
+function ReceiveTab({ orders }: { orders: ListQuery<PurchaseOrder> }) {
+  const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
+  return (
+    <Panel
+      title="Compras por recibir"
+      description="Lo que compras pidió a proveedores. Al recibir, registra lo que llegó de verdad."
+      flush
+    >
+      <QueryView query={orders}>
+        {(rows) => (
+          <DataTable<PurchaseOrder>
+            label="Por recibir"
+            rows={[...rows].sort((a, b) =>
+              (a.expectedDate ?? '9').localeCompare(b.expectedDate ?? '9'),
+            )}
+            rowKey={(row) => row.id}
+            empty={<EmptyState icon={<PackageCheck />} title="No hay compras en camino" />}
+            columns={[
+              {
+                key: 'label',
+                header: 'Orden',
+                render: (row) => (
+                  <span>
+                    <EntityLink to="purchase-order" id={row.id} className="font-medium">
+                      {row.label}
+                    </EntityLink>
+                    <span className="block text-[12.5px] text-ink-3">{row.supplier}</span>
+                  </span>
+                ),
+              },
+              {
+                key: 'expected',
+                header: 'Llega',
+                render: (row) => <DueDate date={row.expectedDate} />,
+              },
+              {
+                key: 'lines',
+                header: 'Insumos',
+                render: (row) => (
+                  <ul className="text-[13px]">
+                    {row.lines.map((line) => (
+                      <li key={line.productId}>
+                        <EntityLink to="product" id={line.productId}>
+                          {line.productName}
+                        </EntityLink>
+                        : <Qty value={line.quantity} />
+                      </li>
+                    ))}
+                  </ul>
+                ),
+              },
+              {
+                key: 'action',
+                header: '',
+                align: 'right',
+                render: (row) => (
+                  <Button
+                    size="sm"
+                    icon={<PackageCheck className="size-3.5" />}
+                    onClick={() => {
+                      setReceiving(row);
+                    }}
+                  >
+                    Recibir
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        )}
+      </QueryView>
+      {receiving ? (
+        <ReceiveDialog
+          order={receiving}
+          onClose={() => {
+            setReceiving(null);
+          }}
+        />
+      ) : null}
+    </Panel>
+  );
+}
+
+function DispatchTab({ orders }: { orders: ListQuery<SalesOrder> }) {
   const dispatch = useAction(
     (id: string) => api.post<SalesOrder>(`/v1/sales-orders/${id}/dispatch`),
     {
@@ -265,13 +371,13 @@ function DispatchTab() {
   return (
     <Panel
       title="Preventas confirmadas por despachar"
-      description="Al despachar sale el producto de la bodega de despacho y se libera lo comprometido."
+      description="Primero la entrega más cercana. Al despachar sale el producto de la bodega de despacho."
       flush
     >
       <QueryView query={orders}>
         {(rows) => (
           <DataTable<SalesOrder>
-            label="Despachos pendientes"
+            label="Por despachar"
             rows={[...rows].sort((a, b) =>
               (a.estimatedDeliveryDate ?? '9').localeCompare(b.estimatedDeliveryDate ?? '9'),
             )}
@@ -282,20 +388,18 @@ function DispatchTab() {
                 key: 'label',
                 header: 'Preventa',
                 render: (row) => (
-                  <Link to={`/ventas/${row.id}`} className="font-medium hover:underline">
-                    {row.label}
-                  </Link>
+                  <span>
+                    <EntityLink to="order" id={row.id} className="font-medium">
+                      {row.label}
+                    </EntityLink>
+                    <span className="block text-[12.5px] text-ink-3">{row.customer.name}</span>
+                  </span>
                 ),
               },
-              { key: 'customer', header: 'Cliente', render: (row) => row.customer.name },
               {
                 key: 'delivery',
                 header: 'Entrega',
-                render: (row) => (
-                  <span title={formatDate(row.estimatedDeliveryDate)}>
-                    {relativeDays(row.estimatedDeliveryDate)}
-                  </span>
-                ),
+                render: (row) => <DueDate date={row.estimatedDeliveryDate} />,
               },
               {
                 key: 'products',
@@ -304,7 +408,10 @@ function DispatchTab() {
                   <ul className="text-[13px]">
                     {row.lines.map((line) => (
                       <li key={line.productId}>
-                        {line.productCode}: <Qty value={line.quantity} />
+                        <EntityLink to="product" id={line.productId}>
+                          {line.productCode}
+                        </EntityLink>
+                        : <Qty value={line.quantity} />
                       </li>
                     ))}
                   </ul>
@@ -362,123 +469,6 @@ function MovementsTab() {
     >
       <QueryView query={movements}>{(rows) => <MovementTable rows={rows} showProduct />}</QueryView>
     </Panel>
-  );
-}
-
-function MovementTable({ rows, showProduct }: { rows: Movement[]; showProduct: boolean }) {
-  return (
-    <DataTable<Movement>
-      label="Kardex"
-      rows={rows}
-      rowKey={(row) => row.id}
-      empty={<EmptyState title="Sin movimientos" />}
-      columns={[
-        {
-          key: 'when',
-          header: 'Fecha',
-          render: (row) => (
-            <span>
-              {formatDateTime(row.occurredAt)}
-              <span className="block text-[12.5px] text-ink-3">{row.typeLabel}</span>
-            </span>
-          ),
-        },
-        ...(showProduct
-          ? [
-              {
-                key: 'product',
-                header: 'Producto',
-                render: (row: Movement) => (
-                  <span>
-                    {row.product.name}
-                    <span className="block text-[12.5px] text-ink-3">{row.product.code}</span>
-                  </span>
-                ),
-              },
-            ]
-          : []),
-        {
-          key: 'warehouse',
-          header: 'Bodega',
-          render: (row) => row.warehouse.name,
-          hideOnMobile: true,
-        },
-        {
-          key: 'quantity',
-          header: 'Cantidad',
-          align: 'right',
-          render: (row) => (
-            <span className={row.quantity.quantity.startsWith('-') ? '' : 'text-good'}>
-              {row.quantity.quantity.startsWith('-') ? '' : '+'}
-              <Qty
-                value={row.quantity}
-                className={row.quantity.quantity.startsWith('-') ? '' : 'text-ink'}
-              />
-            </span>
-          ),
-        },
-        {
-          key: 'balance',
-          header: 'Saldo',
-          align: 'right',
-          render: (row) => <Qty value={row.balanceAfter} />,
-        },
-        {
-          key: 'reference',
-          header: 'Referencia',
-          hideOnMobile: true,
-          render: (row) => (
-            <span className="text-[13px] text-ink-2">
-              {row.reference?.label ?? row.note ?? '—'}
-              <span className="block text-ink-3">{row.actor.name}</span>
-            </span>
-          ),
-        },
-      ]}
-    />
-  );
-}
-
-function KardexDialog({ product, onClose }: { product: StockStatus | null; onClose: () => void }) {
-  const movements = useMovements({ productId: product?.productId });
-  return (
-    <Dialog
-      open={Boolean(product)}
-      onClose={onClose}
-      variant="side"
-      title={product ? product.name : 'Kardex'}
-      description={product ? `${product.code} · ${product.typeLabel}` : undefined}
-    >
-      {product ? (
-        <>
-          <dl className="mb-6 grid grid-cols-3 gap-3 rounded-lg bg-surface-2/70 p-4 text-sm">
-            <div>
-              <dt className="text-ink-3">Físico</dt>
-              <dd>
-                <Qty value={product.onHand} emphasis />
-              </dd>
-            </div>
-            <div>
-              <dt className="text-ink-3">Comprometido</dt>
-              <dd>
-                <Qty value={product.reserved} emphasis />
-              </dd>
-            </div>
-            <div>
-              <dt className="text-ink-3">Disponible</dt>
-              <dd>
-                <Qty value={product.available} emphasis />
-              </dd>
-            </div>
-          </dl>
-          {movements.isPending ? (
-            <Spinner />
-          ) : (
-            <MovementTable rows={movements.data ?? []} showProduct={false} />
-          )}
-        </>
-      ) : null}
-    </Dialog>
   );
 }
 

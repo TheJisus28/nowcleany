@@ -32,6 +32,8 @@ export interface OrderFilter {
   readonly statuses?: readonly OrderStatus[];
   readonly sellerId?: string;
   readonly customerId?: string;
+  /** Orders with at least one line of this product. */
+  readonly productId?: string;
   /** Order number ("PV-00012" or "12") or customer name. */
   readonly search?: string;
   readonly limit: number;

@@ -23,6 +23,11 @@ export class CustomersService {
   }
 
   @Transactional('sales')
+  get(id: string): Promise<CustomerView> {
+    return this.require(id);
+  }
+
+  @Transactional('sales')
   async create(command: CustomerCommand): Promise<CustomerView> {
     const id = await this.customers.insert(normalizeCustomer(command));
     return this.require(id);

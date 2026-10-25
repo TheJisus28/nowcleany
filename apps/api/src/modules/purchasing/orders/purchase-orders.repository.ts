@@ -39,6 +39,7 @@ export interface NewPurchaseOrder {
 export abstract class PurchaseOrdersRepository {
   abstract list(filter: {
     statuses?: readonly PurchaseStatus[];
+    productId?: string;
     limit: number;
   }): Promise<PurchaseOrderRecord[]>;
   abstract findById(id: string): Promise<PurchaseOrderRecord | undefined>;

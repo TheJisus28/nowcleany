@@ -5,9 +5,10 @@ import { useOrderCoverage, useOrders } from '../../api/hooks';
 import type { SalesOrder } from '../../api/types';
 import { useProfile, useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
-import { CoverageChip, OrderStatusChip } from '../../components/status';
+import { EntityLink } from '../../components/links';
+import { CoverageChip, DueDate, OrderStatusChip } from '../../components/status';
 import { EmptyState, Input, PageHeader, Panel, QueryView, Segmented } from '../../components/ui';
-import { formatDate, formatDecimal, relativeDays, unitLabel } from '../../lib/format';
+import { formatDate, formatDecimal, unitLabel } from '../../lib/format';
 
 const STATUS_FILTERS = [
   { value: 'open', label: 'Abiertas', status: 'DRAFT,CONFIRMED' },
@@ -119,14 +120,24 @@ export function OrdersPage() {
                   header: 'Preventa',
                   render: (row) => (
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{row.label}</span>
+                      <EntityLink to="order" id={row.id} className="font-medium">
+                        {row.label}
+                      </EntityLink>
                       <span className="md:hidden">
                         <OrderStatusChip status={row.status} />
                       </span>
                     </span>
                   ),
                 },
-                { key: 'customer', header: 'Cliente', render: (row) => row.customer.name },
+                {
+                  key: 'customer',
+                  header: 'Cliente',
+                  render: (row) => (
+                    <EntityLink to="customer" id={row.customer.id}>
+                      {row.customer.name}
+                    </EntityLink>
+                  ),
+                },
                 {
                   key: 'seller',
                   header: 'Vendedor',
@@ -136,13 +147,12 @@ export function OrdersPage() {
                 {
                   key: 'delivery',
                   header: 'Entrega',
-                  render: (row) => (
-                    <span title={formatDate(row.estimatedDeliveryDate)}>
-                      {row.status === 'DRAFT' || row.status === 'CONFIRMED'
-                        ? relativeDays(row.estimatedDeliveryDate)
-                        : formatDate(row.estimatedDeliveryDate)}
-                    </span>
-                  ),
+                  render: (row) =>
+                    row.status === 'DRAFT' || row.status === 'CONFIRMED' ? (
+                      <DueDate date={row.estimatedDeliveryDate} />
+                    ) : (
+                      formatDate(row.dispatchedAt ?? row.estimatedDeliveryDate)
+                    ),
                 },
                 {
                   key: 'products',

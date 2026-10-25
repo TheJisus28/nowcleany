@@ -6,10 +6,15 @@ export interface Actor {
   readonly system: boolean;
 }
 
-export function systemActor(name: string, permissions: Iterable<string>): Actor {
+/** An actor for work nobody clicked (jobs, consumers, seeds); `displayName` is what people read. */
+export function systemActor(
+  name: string,
+  permissions: Iterable<string>,
+  displayName = 'Sistema',
+): Actor {
   return {
     id: `system:${name}`,
-    displayName: name,
+    displayName,
     permissions: new Set(permissions),
     system: true,
   };

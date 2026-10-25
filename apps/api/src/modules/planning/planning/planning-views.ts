@@ -52,6 +52,7 @@ export interface CoverageLineView {
 export interface OrderCoverageView {
   readonly orderId: string;
   readonly label: string;
+  readonly customerId: string;
   readonly customerName: string;
   readonly seller: { id: string; name: string };
   readonly estimatedDeliveryDate: string | null;
@@ -66,6 +67,7 @@ export interface OrderCoverageView {
 export interface DrivingOrder {
   readonly orderId: string;
   readonly label: string;
+  readonly customerId: string;
   readonly customerName: string;
   readonly sellerName: string;
   readonly estimatedDeliveryDate: string | null;
@@ -140,4 +142,22 @@ export interface PlanningSummary {
   readonly purchaseOrdersInTransit: number;
   /** Products with demand but no active formula: their needs cannot be computed. */
   readonly missingFormulas: readonly ProductRef[];
+}
+
+export interface AvailabilityRow {
+  readonly product: ProductRef;
+  /** Physical stock (may be negative). */
+  readonly onHand: QuantityDto;
+  /** Confirmed demand not yet dispatched. */
+  readonly committed: QuantityDto;
+  /** What can still be made with the materials available now (product computed on its own). */
+  readonly producible: QuantityDto;
+  /** Stock plus what can be made, minus what is already committed; never below zero. */
+  readonly promisable: QuantityDto;
+  readonly limitingMaterial: ProductRef | null;
+}
+
+export interface Availability {
+  readonly generatedAt: string;
+  readonly rows: readonly AvailabilityRow[];
 }

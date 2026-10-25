@@ -103,6 +103,45 @@ describe('SCIP end to end (demo data of the proposal)', () => {
     expect(byCode(rows, 'MP-GALON').toBuy.quantity).toBe('0');
   });
 
+  it('follows every record: what can be promised, where a material goes, who asked for it', async () => {
+    const availability = (
+      await manager.get<{ rows: { product: Ref; promisable: Q }[] }>('/v1/planning/availability')
+    ).body.rows;
+    expect(
+      Object.fromEntries(availability.map((row) => [row.product.code, row.promisable.quantity])),
+    ).toEqual({ '00224': '0', '00225': '795', '00310': '650' });
+
+    const caps = await status('MP-TAPA-28');
+    const usedBy = (await manager.get<Ref[]>(`/v1/products/${caps.productId}/where-used`)).body;
+    expect(usedBy.map((product) => product.code)).toEqual(['00224', '00225']);
+
+    const box = await status('00224');
+    const orders = (
+      await manager.get<(Order & { customer: { id: string } })[]>(
+        `/v1/sales-orders?productId=${box.productId}&status=CONFIRMED`,
+      )
+    ).body;
+    expect(orders.map((order) => order.label).sort()).toEqual(['PV-00001', 'PV-00002', 'PV-00003']);
+    const customer = await manager.get<{ name: string }>(
+      `/v1/customers/${orders[0]?.customer.id ?? ''}`,
+    );
+    expect(customer.status).toBe(200);
+
+    const boxes = await status('MP-CAJA-6');
+    const purchases = await manager.get<Order[]>(
+      `/v1/purchase-orders?productId=${boxes.productId}`,
+    );
+    expect(purchases.body.map((order) => order.label)).toEqual(['OC-00001']);
+    const none = await manager.get<Order[]>(`/v1/purchase-orders?productId=${box.productId}`);
+    expect(none.body).toEqual([]);
+
+    const gallon = await status('00310');
+    const production = await manager.get<Order[]>(
+      `/v1/production-orders?productId=${gallon.productId}`,
+    );
+    expect(production.body.map((order) => order.label)).toEqual(['OP-00001']);
+  });
+
   it('closes the loop: receipt, production, packaging, transfer and dispatch', async () => {
     const warehouse = await login(app, 'bodega@nowcleany.local');
     const plant = await login(app, 'planta@nowcleany.local');

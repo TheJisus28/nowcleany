@@ -1,13 +1,15 @@
 import { CircleCheck, PackageCheck, Plus, ShoppingCart, Trash2, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useAction, useProducts, usePurchaseNeeds, usePurchaseOrders } from '../../api/hooks';
 import type { PurchaseNeed, PurchaseOrder } from '../../api/types';
 import { useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
 import { Dialog } from '../../components/dialog';
+import { EntityLink, pathTo, ProductCell } from '../../components/links';
 import { Qty } from '../../components/qty';
-import { PurchaseStatusChip } from '../../components/status';
+import { DueDate, PurchaseStatusChip } from '../../components/status';
 import {
   Button,
   cn,
@@ -26,10 +28,10 @@ import {
   formatDecimal,
   isZero,
   parseDecimalInput,
-  relativeDays,
   todayIso,
   unitLabel,
 } from '../../lib/format';
+import { ReceiveDialog } from './receive-dialog';
 
 interface DraftLine {
   key: number;
@@ -148,10 +150,7 @@ export function PurchasingPage() {
                           }}
                         />
                       ) : null}
-                      <span>
-                        <span className="font-medium">{row.product.name}</span>
-                        <span className="block text-[12.5px] text-ink-3">{row.product.code}</span>
-                      </span>
+                      <ProductCell product={row.product} />
                     </span>
                   ),
                 },
@@ -172,8 +171,15 @@ export function PurchasingPage() {
                   header: 'En tránsito',
                   align: 'right',
                   render: (row) => (
-                    <span title={row.inTransit.map((t) => `${t.label} · ${t.supplier}`).join('\n')}>
+                    <span>
                       <Qty value={row.onOrder} dimZero />
+                      {row.inTransit.map((transit) => (
+                        <span key={transit.orderId} className="block text-[12px] text-ink-3">
+                          <EntityLink to="purchase-order" id={transit.orderId}>
+                            {transit.label}
+                          </EntityLink>
+                        </span>
+                      ))}
                     </span>
                   ),
                 },
@@ -194,11 +200,18 @@ export function PurchasingPage() {
                   key: 'usedBy',
                   header: 'Para',
                   hideOnMobile: true,
-                  render: (row) => (
-                    <span className="text-[13px] text-ink-3">
-                      {row.usedBy.map((product) => product.code).join(', ') || '—'}
-                    </span>
-                  ),
+                  render: (row) =>
+                    row.usedBy.length === 0 ? (
+                      <span className="text-ink-3">—</span>
+                    ) : (
+                      <span className="flex flex-wrap gap-x-2 text-[13px] text-ink-2">
+                        {row.usedBy.map((product) => (
+                          <EntityLink key={product.id} to="product" id={product.id}>
+                            <span title={product.name}>{product.code}</span>
+                          </EntityLink>
+                        ))}
+                      </span>
+                    ),
                 },
               ]}
             />
@@ -232,6 +245,7 @@ const FILTERS = [
 
 function PurchaseOrders() {
   const { can } = useSession();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['value']>('OPEN');
   const orders = usePurchaseOrders(filter === 'ALL' ? undefined : filter);
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
@@ -255,6 +269,9 @@ function PurchaseOrders() {
             label="Órdenes de compra"
             rows={rows}
             rowKey={(row) => row.id}
+            onRowClick={(row) => {
+              void navigate(pathTo('purchase-order', row.id));
+            }}
             empty={<EmptyState icon={<Truck />} title="No hay órdenes con este estado" />}
             columns={[
               {
@@ -262,7 +279,9 @@ function PurchaseOrders() {
                 header: 'Orden',
                 render: (row) => (
                   <span>
-                    <span className="font-medium">{row.label}</span>
+                    <EntityLink to="purchase-order" id={row.id} className="font-medium">
+                      {row.label}
+                    </EntityLink>
                     <span className="block text-[12.5px] text-ink-3">{row.supplier}</span>
                   </span>
                 ),
@@ -274,7 +293,10 @@ function PurchaseOrders() {
                   <ul className="text-[13px]">
                     {row.lines.map((line) => (
                       <li key={line.productId}>
-                        {line.productName}: <Qty value={line.receivedQuantity ?? line.quantity} />
+                        <EntityLink to="product" id={line.productId}>
+                          {line.productName}
+                        </EntityLink>
+                        : <Qty value={line.receivedQuantity ?? line.quantity} />
                       </li>
                     ))}
                   </ul>
@@ -285,9 +307,7 @@ function PurchaseOrders() {
                 header: 'Llega',
                 render: (row) =>
                   row.status === 'OPEN' ? (
-                    <span title={formatDate(row.expectedDate)}>
-                      {relativeDays(row.expectedDate)}
-                    </span>
+                    <DueDate date={row.expectedDate} />
                   ) : (
                     formatDate(row.receivedAt ?? row.expectedDate)
                   ),
@@ -303,7 +323,12 @@ function PurchaseOrders() {
                 align: 'right',
                 render: (row) =>
                   row.status === 'OPEN' ? (
-                    <span className="inline-flex gap-2">
+                    <span
+                      className="inline-flex gap-2"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                    >
                       {can('purchasing:write') ? (
                         <Button
                           variant="ghost"
@@ -511,92 +536,6 @@ function PurchaseOrderDialog({
             maxLength={500}
             onChange={(event) => {
               setNotes(event.target.value);
-            }}
-          />
-        )}
-      </Field>
-    </Dialog>
-  );
-}
-
-function ReceiveDialog({ order, onClose }: { order: PurchaseOrder; onClose: () => void }) {
-  const [document, setDocument] = useState('');
-  const [quantities, setQuantities] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      order.lines.map((line) => [line.productId, formatDecimal(line.quantity.quantity)]),
-    ),
-  );
-  const parsed = Object.fromEntries(
-    Object.entries(quantities).map(([productId, value]) => [productId, parseDecimalInput(value)]),
-  );
-  const valid = Object.values(parsed).every((value) => value !== null);
-
-  const receive = useAction(
-    () =>
-      api.post<PurchaseOrder>(`/v1/purchase-orders/${order.id}/receive`, {
-        ...(document.trim() ? { document: document.trim() } : {}),
-        lines: order.lines.map((line) => ({
-          productId: line.productId,
-          quantity: parsed[line.productId] ?? '0',
-        })),
-      }),
-    { success: (result) => `${result.label} recibida: existencias actualizadas` },
-  );
-
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      title={`Recibir ${order.label}`}
-      description={`${order.supplier}. Corrige las cantidades si llegó menos de lo pedido.`}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            icon={<PackageCheck className="size-4" />}
-            loading={receive.isPending}
-            disabled={!valid}
-            onClick={() => {
-              receive.mutate(undefined, { onSuccess: onClose });
-            }}
-          >
-            Registrar recepción
-          </Button>
-        </>
-      }
-    >
-      <ul className="flex flex-col gap-3">
-        {order.lines.map((line) => (
-          <li key={line.productId}>
-            <Field
-              label={`${line.productName} (${unitLabel(line.quantity.unit)})`}
-              hint={`Pedido: ${formatDecimal(line.quantity.quantity)} ${unitLabel(line.quantity.unit)}`}
-              error={parsed[line.productId] === null ? 'Escribe una cantidad válida.' : undefined}
-            >
-              {(props) => (
-                <Input
-                  {...props}
-                  inputMode="decimal"
-                  value={quantities[line.productId] ?? ''}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setQuantities((current) => ({ ...current, [line.productId]: value }));
-                  }}
-                />
-              )}
-            </Field>
-          </li>
-        ))}
-      </ul>
-      <Field label="Factura o remisión del proveedor (opcional)" className="mt-5">
-        {(props) => (
-          <Input
-            {...props}
-            value={document}
-            onChange={(event) => {
-              setDocument(event.target.value);
             }}
           />
         )}

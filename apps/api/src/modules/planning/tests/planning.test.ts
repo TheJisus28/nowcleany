@@ -9,6 +9,7 @@ const line = (
 ): DemandLine => ({
   orderId: orderLabel,
   orderLabel,
+  customerId: 'c1',
   customerName: 'Cliente',
   sellerId: sellerName,
   sellerName,

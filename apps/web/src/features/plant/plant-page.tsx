@@ -7,19 +7,16 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
-import {
-  useAction,
-  useProductionNeeds,
-  useProductionOrder,
-  useProductionOrders,
-} from '../../api/hooks';
+import { useAction, useProductionNeeds, useProductionOrders } from '../../api/hooks';
 import type { BulkNeed, PackagingNeed, ProductionOrder, Q, Ref } from '../../api/types';
 import { useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
 import { Dialog } from '../../components/dialog';
+import { EntityLink, pathTo, ProductCell } from '../../components/links';
 import { Qty } from '../../components/qty';
-import { ProductionStatusChip } from '../../components/status';
+import { DueDate, ProductionStatusChip } from '../../components/status';
 import {
   Button,
   EmptyState,
@@ -29,7 +26,6 @@ import {
   Panel,
   QueryView,
   Segmented,
-  Spinner,
   Textarea,
 } from '../../components/ui';
 import {
@@ -51,7 +47,6 @@ interface ScheduleTarget {
 export function PlantPage() {
   const needs = useProductionNeeds();
   const [schedule, setSchedule] = useState<ScheduleTarget | null>(null);
-  const [detailId, setDetailId] = useState<string | null>(null);
 
   return (
     <>
@@ -131,18 +126,12 @@ export function PlantPage() {
         }}
       </QueryView>
 
-      <ProductionOrders onOpen={setDetailId} />
+      <ProductionOrders />
 
       <ScheduleDialog
         target={schedule}
         onClose={() => {
           setSchedule(null);
-        }}
-      />
-      <ProductionOrderDialog
-        id={detailId}
-        onClose={() => {
-          setDetailId(null);
         }}
       />
     </>
@@ -170,7 +159,9 @@ function PackagingCard({ need, onSchedule }: { need: PackagingNeed; onSchedule: 
         <div>
           <p className="flex items-center gap-2 font-semibold">
             <PackageOpen aria-hidden className="size-4 text-ink-3" />
-            {need.product.name}
+            <EntityLink to="product" id={need.product.id}>
+              {need.product.name}
+            </EntityLink>
           </p>
           <p className="text-[12.5px] text-ink-3">{need.product.code}</p>
         </div>
@@ -205,7 +196,13 @@ function PackagingCard({ need, onSchedule }: { need: PackagingNeed; onSchedule: 
                 className="flex flex-wrap items-baseline justify-between gap-2 py-2"
               >
                 <span>
-                  <span className="font-medium">{order.label}</span> · {order.customerName}
+                  <EntityLink to="order" id={order.orderId} className="font-medium">
+                    {order.label}
+                  </EntityLink>{' '}
+                  ·{' '}
+                  <EntityLink to="customer" id={order.customerId}>
+                    {order.customerName}
+                  </EntityLink>
                   <span className="block text-[12.5px] text-ink-3">
                     {order.sellerName} · entrega{' '}
                     {relativeDays(order.estimatedDeliveryDate).toLowerCase()}
@@ -238,7 +235,9 @@ function BulkCard({ need, onSchedule }: { need: BulkNeed; onSchedule: () => void
         <div>
           <p className="flex items-center gap-2 font-semibold">
             <Droplets aria-hidden className="size-4 text-ink-3" />
-            {need.product.name}
+            <EntityLink to="product" id={need.product.id}>
+              {need.product.name}
+            </EntityLink>
           </p>
           <p className="text-[12.5px] text-ink-3">
             {need.product.code}
@@ -277,8 +276,13 @@ function BulkCard({ need, onSchedule }: { need: BulkNeed; onSchedule: () => void
         </p>
       ) : null}
       {need.usedBy.length > 0 ? (
-        <p className="mt-3 text-[13px] text-ink-3">
-          Para: {need.usedBy.map((product) => product.name).join(', ')}
+        <p className="mt-3 flex flex-wrap gap-x-2 text-[13px] text-ink-3">
+          Para:
+          {need.usedBy.map((product) => (
+            <EntityLink key={product.id} to="product" id={product.id} className="text-ink-2">
+              {product.name}
+            </EntityLink>
+          ))}
         </p>
       ) : null}
     </li>
@@ -291,7 +295,8 @@ const ORDER_FILTERS = [
   { value: 'ALL', label: 'Todas' },
 ] as const;
 
-function ProductionOrders({ onOpen }: { onOpen: (id: string) => void }) {
+function ProductionOrders() {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<(typeof ORDER_FILTERS)[number]['value']>('PLANNED');
   const orders = useProductionOrders(filter === 'ALL' ? undefined : filter);
   return (
@@ -310,25 +315,24 @@ function ProductionOrders({ onOpen }: { onOpen: (id: string) => void }) {
             rows={rows}
             rowKey={(row) => row.id}
             onRowClick={(row) => {
-              onOpen(row.id);
+              void navigate(pathTo('production-order', row.id));
             }}
             empty={<EmptyState icon={<Factory />} title="No hay órdenes con este estado" />}
             columns={[
               {
                 key: 'label',
                 header: 'Orden',
-                render: (row) => <span className="font-medium">{row.label}</span>,
+                render: (row) => (
+                  <EntityLink to="production-order" id={row.id} className="font-medium">
+                    {row.label}
+                  </EntityLink>
+                ),
               },
               { key: 'kind', header: 'Tipo', render: (row) => row.kind, hideOnMobile: true },
               {
                 key: 'product',
                 header: 'Producto',
-                render: (row) => (
-                  <span>
-                    {row.product.name}
-                    <span className="block text-[12.5px] text-ink-3">{row.product.code}</span>
-                  </span>
-                ),
+                render: (row) => <ProductCell product={row.product} />,
               },
               {
                 key: 'quantity',
@@ -345,7 +349,16 @@ function ProductionOrders({ onOpen }: { onOpen: (id: string) => void }) {
                   </span>
                 ),
               },
-              { key: 'date', header: 'Programada', render: (row) => formatDate(row.scheduledDate) },
+              {
+                key: 'date',
+                header: 'Programada',
+                render: (row) =>
+                  row.status === 'PLANNED' ? (
+                    <DueDate date={row.scheduledDate} />
+                  ) : (
+                    formatDate(row.scheduledDate)
+                  ),
+              },
               {
                 key: 'status',
                 header: 'Estado',
@@ -448,185 +461,6 @@ function ScheduleForm({ target, onClose }: { target: ScheduleTarget; onClose: ()
           )}
         </Field>
       </div>
-    </Dialog>
-  );
-}
-
-function ProductionOrderDialog({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const order = useProductionOrder(id ?? undefined);
-  const { can } = useSession();
-  const [produced, setProduced] = useState('');
-  const data = order.data;
-  const parsed = parseDecimalInput(produced);
-
-  const complete = useAction(
-    () =>
-      api.post<ProductionOrder>(
-        `/v1/production-orders/${id ?? ''}/complete`,
-        parsed ? { producedQuantity: parsed } : {},
-      ),
-    { success: (result) => `${result.label} terminada: inventario actualizado` },
-  );
-  const cancel = useAction(
-    () => api.post<ProductionOrder>(`/v1/production-orders/${id ?? ''}/cancel`),
-    {
-      success: (result) => `${result.label} anulada`,
-    },
-  );
-
-  return (
-    <Dialog
-      open={Boolean(id)}
-      onClose={() => {
-        setProduced('');
-        onClose();
-      }}
-      variant="side"
-      title={data ? `${data.label} · ${data.kind}` : 'Orden de producción'}
-      description={data ? `${data.product.code} · ${data.product.name}` : undefined}
-      footer={
-        data?.status === 'PLANNED' && can('production:write') ? (
-          <>
-            <Button
-              variant="danger"
-              loading={cancel.isPending}
-              onClick={() => {
-                cancel.mutate(undefined, { onSuccess: onClose });
-              }}
-            >
-              Anular
-            </Button>
-            <Button
-              icon={<CircleCheck className="size-4" />}
-              loading={complete.isPending}
-              disabled={produced !== '' && (!parsed || Number(parsed) <= 0)}
-              onClick={() => {
-                complete.mutate(undefined, {
-                  onSuccess: () => {
-                    setProduced('');
-                    onClose();
-                  },
-                });
-              }}
-            >
-              Registrar producción
-            </Button>
-          </>
-        ) : undefined
-      }
-    >
-      {order.isPending || !data ? (
-        <Spinner />
-      ) : (
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <ProductionStatusChip status={data.status} />
-            <span className="text-sm text-ink-2">
-              Programada para {formatDate(data.scheduledDate)} · por {data.createdBy}
-            </span>
-          </div>
-          <dl className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="text-ink-3">Planeado</dt>
-              <dd>
-                <Qty value={data.plannedQuantity} emphasis />
-              </dd>
-            </div>
-            {data.producedQuantity ? (
-              <div>
-                <dt className="text-ink-3">Producido</dt>
-                <dd>
-                  <Qty value={data.producedQuantity} emphasis />
-                </dd>
-              </div>
-            ) : null}
-            {data.batches ? (
-              <div>
-                <dt className="text-ink-3">Baches</dt>
-                <dd>
-                  {data.batches}
-                  {data.batchCapacity ? (
-                    <span className="text-ink-3">
-                      {' '}
-                      de {formatDecimal(data.batchCapacity.quantity)}{' '}
-                      {unitLabel(data.batchCapacity.unit)}
-                    </span>
-                  ) : null}
-                </dd>
-              </div>
-            ) : null}
-          </dl>
-
-          {data.materials ? (
-            <div>
-              <h3 className="mb-2 text-sm font-semibold">Insumos según la fórmula vigente</h3>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-[12.5px] text-ink-2">
-                    <th className="py-2 font-medium">Insumo</th>
-                    <th className="py-2 text-right font-medium">Requiere</th>
-                    <th className="py-2 text-right font-medium">Hay</th>
-                    <th className="py-2 text-right font-medium">Falta</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.materials.map((material) => (
-                    <tr key={material.productId} className="border-b border-line last:border-0">
-                      <td className="py-2 pr-2">
-                        {material.name}
-                        <span className="block text-[12px] text-ink-3">{material.code}</span>
-                      </td>
-                      <td className="py-2 text-right">
-                        <Qty value={material.required} />
-                      </td>
-                      <td className="py-2 text-right">
-                        <Qty value={material.onHand} />
-                      </td>
-                      <td className="py-2 text-right">
-                        <Qty
-                          value={material.shortage}
-                          dimZero
-                          className={isZero(material.shortage.quantity) ? '' : 'text-critical'}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {data.materials.some((material) => !isZero(material.shortage.quantity)) ? (
-                <p className="mt-2 text-[13px] text-ink-3">
-                  Se puede registrar igual: el inventario queda en negativo hasta que llegue la
-                  compra.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {data.status === 'PLANNED' && can('production:write') ? (
-            <Field
-              label={`Cantidad producida real (${unitLabel(data.plannedQuantity.unit)})`}
-              hint={`Déjala vacía si se produjo lo planeado (${formatDecimal(data.plannedQuantity.quantity)}).`}
-            >
-              {(props) => (
-                <Input
-                  {...props}
-                  inputMode="decimal"
-                  value={produced}
-                  placeholder={formatDecimal(data.plannedQuantity.quantity)}
-                  onChange={(event) => {
-                    setProduced(event.target.value);
-                  }}
-                />
-              )}
-            </Field>
-          ) : null}
-          {data.completedAt ? (
-            <p className="text-sm text-ink-2">
-              Terminada el {formatDate(data.completedAt)} por {data.completedBy}.
-            </p>
-          ) : null}
-        </div>
-      )}
     </Dialog>
   );
 }

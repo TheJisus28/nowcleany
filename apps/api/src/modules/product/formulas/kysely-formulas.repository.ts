@@ -64,6 +64,18 @@ export class KyselyFormulasRepository extends FormulasRepository {
     return this.withLines(rows);
   }
 
+  async productsUsing(componentId: string): Promise<string[]> {
+    const rows = await this.host.tx
+      .selectFrom('formulas as f')
+      .innerJoin('formula_lines as l', 'l.formula_id', 'f.id')
+      .select('f.product_id')
+      .distinct()
+      .where('f.status', '=', 'ACTIVE')
+      .where('l.component_id', '=', componentId)
+      .execute();
+    return rows.map((row) => row.product_id);
+  }
+
   async nextVersion(productId: string): Promise<number> {
     const row = await this.host.tx
       .selectFrom('formulas')

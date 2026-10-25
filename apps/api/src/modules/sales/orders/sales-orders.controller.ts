@@ -28,6 +28,7 @@ export class SalesOrdersController {
       ...(query.status ? { statuses: query.status } : {}),
       ...(query.mine === undefined ? {} : { mine: query.mine }),
       ...(query.customerId ? { customerId: query.customerId } : {}),
+      ...(query.productId ? { productId: query.productId } : {}),
       ...(query.q ? { search: query.q } : {}),
       ...(query.limit ? { limit: query.limit } : {}),
     });

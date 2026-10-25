@@ -16,6 +16,12 @@ export class CustomersController {
     return this.customers.list(query.q);
   }
 
+  @Permission('customers:read')
+  @Get(':id')
+  get(@Param('id', ParseUUIDPipe) id: string): Promise<CustomerView> {
+    return this.customers.get(id);
+  }
+
   @Permission('customers:write')
   @Post()
   create(@Body() body: CustomerDto): Promise<CustomerView> {

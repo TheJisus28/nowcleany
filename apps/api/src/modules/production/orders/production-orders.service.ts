@@ -71,11 +71,13 @@ export class ProductionOrdersService {
   @Transactional('production')
   async list(filter: {
     statuses?: ProductionStatus[];
+    productId?: string;
     limit?: number;
   }): Promise<ProductionOrderView[]> {
     const orders = await this.orders.list({
       limit: filter.limit ?? 100,
       ...(filter.statuses ? { statuses: filter.statuses } : {}),
+      ...(filter.productId ? { productId: filter.productId } : {}),
     });
     return orders.map(toView);
   }

@@ -1,16 +1,18 @@
-import { LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useProfile, useSession } from '../auth/session';
 import { BrandLockup } from '../components/brand';
+import { SearchPalette } from '../components/search-palette';
 import { cn } from '../components/ui';
+import { useAccess } from './access';
 import { NAV, ROLE_LABELS } from './nav';
 
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
-  const { can } = useSession();
+  const { has } = useAccess();
   return (
     <nav aria-label="Paneles" className="flex flex-col gap-0.5">
-      {NAV.filter((item) => can(item.permission)).map((item) => (
+      {NAV.filter((item) => has(item.panel)).map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
@@ -75,19 +77,53 @@ function UserCard() {
   );
 }
 
+function SearchButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex h-10 w-full items-center gap-2.5 rounded-md border border-line bg-surface-2/60 px-3 text-left text-[14px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2"
+    >
+      <Search aria-hidden className="size-4" />
+      <span className="flex-1">Buscar…</span>
+      <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 text-[11px]">Ctrl K</kbd>
+    </button>
+  );
+}
+
 export function Shell() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
+
+  const openSearch = () => {
+    setMenuOpen(false);
+    setSearchOpen(true);
+  };
+
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
       <aside className="sticky top-0 hidden h-screen flex-col gap-6 border-r border-line bg-surface px-4 py-5 lg:flex">
         <BrandLockup />
-        <div className="flex-1 overflow-y-auto">
+        <SearchButton onOpen={openSearch} />
+        <div className="-mt-2 flex-1 overflow-y-auto">
           <Navigation />
         </div>
         <UserCard />
@@ -95,17 +131,27 @@ export function Shell() {
 
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden">
         <BrandLockup />
-        <button
-          type="button"
-          onClick={() => {
-            setMenuOpen(true);
-          }}
-          className="rounded-md p-2 text-ink-2 hover:bg-surface-2"
-          aria-label="Abrir menú"
-          aria-expanded={menuOpen}
-        >
-          <Menu className="size-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={openSearch}
+            className="rounded-md p-2 text-ink-2 hover:bg-surface-2"
+            aria-label="Buscar"
+          >
+            <Search className="size-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(true);
+            }}
+            className="rounded-md p-2 text-ink-2 hover:bg-surface-2"
+            aria-label="Abrir menú"
+            aria-expanded={menuOpen}
+          >
+            <Menu className="size-5" />
+          </button>
+        </div>
       </header>
 
       {menuOpen ? (
@@ -154,6 +200,13 @@ export function Shell() {
           <Outlet />
         </div>
       </main>
+
+      <SearchPalette
+        open={searchOpen}
+        onClose={() => {
+          setSearchOpen(false);
+        }}
+      />
     </div>
   );
 }

@@ -75,6 +75,11 @@ export class ListPurchaseOrdersQuery {
   @IsIn(PURCHASE_STATUSES, { each: true })
   status?: PurchaseStatus[];
 
+  /** Only orders with a line of this material. */
+  @IsOptional()
+  @IsUUID()
+  productId?: string;
+
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? Number(value) : value))
   @IsInt()

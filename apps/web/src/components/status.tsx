@@ -1,5 +1,6 @@
 import {
   CalendarClock,
+  Clock,
   Check,
   CircleCheck,
   CircleDashed,
@@ -11,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import type { CoverageStatus, OrderStatus } from '../api/types';
+import { daysUntil, formatDate, relativeDays } from '../lib/format';
 import { cn } from './ui';
 
 export type Tone = 'good' | 'warning' | 'critical' | 'brand' | 'neutral';
@@ -122,5 +124,33 @@ export function PurchaseStatusChip({ status }: { status: 'OPEN' | 'RECEIVED' | '
     <Chip tone="neutral" icon={X}>
       Anulada
     </Chip>
+  );
+}
+
+/**
+ * A due date for something still pending ("En 3 días"). Past dates are late: flagged with an icon and
+ * a label, not only color.
+ */
+export function DueDate({
+  date,
+  lateLabel = 'Atrasada',
+}: {
+  date: string | null;
+  lateLabel?: string;
+}) {
+  const days = daysUntil(date);
+  if (days !== null && days < 0) {
+    return (
+      <span title={formatDate(date)} className="inline-flex items-center gap-1 text-critical">
+        <Clock aria-hidden className="size-3.5" strokeWidth={2.25} />
+        <span className="font-medium">{lateLabel}</span>
+        <span className="text-critical/80">· {relativeDays(date).toLowerCase()}</span>
+      </span>
+    );
+  }
+  return (
+    <span title={formatDate(date)} className={cn(days !== null && days <= 2 && 'font-medium')}>
+      {relativeDays(date)}
+    </span>
   );
 }

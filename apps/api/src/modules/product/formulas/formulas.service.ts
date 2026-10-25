@@ -38,6 +38,14 @@ export interface RequirementLineView {
   readonly quantity: QuantityDto;
 }
 
+export interface WhereUsedView {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly type: ProductType;
+  readonly typeLabel: string;
+}
+
 export interface RequirementsView {
   readonly product: { id: string; code: string; name: string };
   readonly quantity: QuantityDto;
@@ -167,6 +175,22 @@ export class FormulasService {
     if (active) await this.formulas.retire(active.id);
     await this.formulas.publish(formula.id, { id: actor.id, name: actor.displayName });
     return this.get(formula.id);
+  }
+
+  /** Which products (with an active formula) consume a component, to follow it up the chain. */
+  @Transactional('product')
+  async whereUsed(productId: string): Promise<WhereUsedView[]> {
+    await this.requireProduct(productId);
+    const users = await this.products.findByIds(await this.formulas.productsUsing(productId));
+    return users
+      .sort((a, b) => a.code.localeCompare(b.code))
+      .map((product) => ({
+        id: product.id,
+        code: product.code,
+        name: product.name,
+        type: product.type,
+        typeLabel: PRODUCT_TYPE_LABELS[product.type],
+      }));
   }
 
   @Transactional('product')

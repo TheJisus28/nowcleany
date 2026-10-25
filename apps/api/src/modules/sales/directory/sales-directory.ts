@@ -8,6 +8,7 @@ export interface OpenOrder {
   readonly id: string;
   readonly label: string;
   readonly status: 'DRAFT' | 'CONFIRMED';
+  readonly customerId: string;
   readonly customerName: string;
   readonly seller: { id: string; name: string };
   readonly estimatedDeliveryDate: string | null;
@@ -35,6 +36,7 @@ export class SalesDirectory {
         id: order.id,
         label: orderLabel(order.number),
         status: order.status as 'DRAFT' | 'CONFIRMED',
+        customerId: order.customer.id,
         customerName: order.customer.name,
         seller: order.seller,
         estimatedDeliveryDate: order.estimatedDeliveryDate,

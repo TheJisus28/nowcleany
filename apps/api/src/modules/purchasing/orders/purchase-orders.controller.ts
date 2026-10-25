@@ -19,6 +19,7 @@ export class PurchaseOrdersController {
   list(@Query() query: ListPurchaseOrdersQuery): Promise<PurchaseOrderView[]> {
     return this.orders.list({
       ...(query.status ? { statuses: query.status } : {}),
+      ...(query.productId ? { productId: query.productId } : {}),
       ...(query.limit ? { limit: query.limit } : {}),
     });
   }

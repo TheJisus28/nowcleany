@@ -246,6 +246,7 @@ export interface CoverageLine {
 export interface OrderCoverage {
   orderId: string;
   label: string;
+  customerId: string;
   customerName: string;
   seller: { id: string; name: string };
   estimatedDeliveryDate: string | null;
@@ -268,6 +269,7 @@ export interface PackagingNeed {
   orders: {
     orderId: string;
     label: string;
+    customerId: string;
     customerName: string;
     sellerName: string;
     estimatedDeliveryDate: string | null;
@@ -320,4 +322,18 @@ export interface Role {
   name: string;
   description: string;
   permissions: string[];
+}
+
+export interface AvailabilityRow {
+  product: Ref;
+  onHand: Q;
+  committed: Q;
+  producible: Q;
+  promisable: Q;
+  limitingMaterial: Ref | null;
+}
+
+export interface WhereUsed extends Ref {
+  type: ProductType;
+  typeLabel: string;
 }

@@ -1,8 +1,7 @@
 import { LogIn } from 'lucide-react';
 import { useState } from 'react';
-import { Navigate } from 'react-router';
+import { Navigate, useLocation } from 'react-router';
 import { errorMessage } from '../../api/client';
-import { homeFor } from '../../app/nav';
 import { useSession } from '../../auth/session';
 import { BrandLockup } from '../../components/brand';
 import { Button, Field, Input } from '../../components/ui';
@@ -19,13 +18,16 @@ const DEMO_ACCOUNTS = [
 
 export function LoginPage() {
   const session = useSession();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (session.status === 'authenticated' && session.profile) {
-    return <Navigate to={homeFor(session.profile.roles, session.can)} replace />;
+    // Back to the page that asked for the session (a shared link), or to the role's home.
+    const from = (location.state as { from?: string } | null)?.from;
+    return <Navigate to={from && from !== '/login' ? from : '/'} replace />;
   }
 
   const submit = async (event: { preventDefault(): void }) => {

@@ -22,11 +22,13 @@ export class KyselyProductionOrdersRepository extends ProductionOrdersRepository
 
   async list(filter: {
     statuses?: readonly ProductionStatus[];
+    productId?: string;
     limit: number;
   }): Promise<ProductionOrderRecord[]> {
     let query = this.host.tx.selectFrom('production_orders').selectAll();
     if (filter.statuses && filter.statuses.length > 0)
       query = query.where('status', 'in', filter.statuses);
+    if (filter.productId) query = query.where('product_id', '=', filter.productId);
     const rows = await query.orderBy('number', 'desc').limit(filter.limit).execute();
     return rows.map(toRecord);
   }

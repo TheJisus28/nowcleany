@@ -55,6 +55,7 @@ export class SalesOrdersService {
     statuses?: OrderStatus[];
     mine?: boolean;
     customerId?: string;
+    productId?: string;
     search?: string;
     limit?: number;
   }): Promise<SalesOrderView[]> {
@@ -64,6 +65,7 @@ export class SalesOrdersService {
       ...(filter.statuses ? { statuses: filter.statuses } : {}),
       ...(filter.mine ? { sellerId: actor.id } : {}),
       ...(filter.customerId ? { customerId: filter.customerId } : {}),
+      ...(filter.productId ? { productId: filter.productId } : {}),
       ...(filter.search ? { search: filter.search } : {}),
     });
     return orders.map(toOrderView);

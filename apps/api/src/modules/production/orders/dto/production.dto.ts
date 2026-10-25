@@ -57,6 +57,10 @@ export class ListProductionOrdersQuery {
   status?: ProductionStatus[];
 
   @IsOptional()
+  @IsUUID()
+  productId?: string;
+
+  @IsOptional()
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? Number(value) : value))
   @IsInt()
   @Min(1)

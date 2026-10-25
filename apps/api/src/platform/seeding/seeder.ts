@@ -34,6 +34,7 @@ export class SeedRunner {
     const actor = systemActor(
       'seed',
       this.permissions.all().map((permission) => permission.code),
+      'Carga inicial',
     );
     for (const seeder of seeders) {
       await this.currentActor.runAs(actor, () => seeder.invoke());

@@ -41,6 +41,8 @@ export abstract class FormulasRepository {
   ): Promise<FormulaRecord | undefined>;
   abstract history(productId: string): Promise<FormulaRecord[]>;
   abstract activeFor(productIds: readonly string[]): Promise<FormulaRecord[]>;
+  /** Products whose active formula consumes this component. */
+  abstract productsUsing(componentId: string): Promise<string[]>;
   abstract nextVersion(productId: string): Promise<number>;
   abstract insertDraft(productId: string, version: number, content: DraftContent): Promise<string>;
   abstract replaceDraft(formulaId: string, content: DraftContent): Promise<void>;

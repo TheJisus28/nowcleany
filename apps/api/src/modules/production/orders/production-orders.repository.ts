@@ -37,6 +37,7 @@ export interface NewProductionOrder {
 export abstract class ProductionOrdersRepository {
   abstract list(filter: {
     statuses?: readonly ProductionStatus[];
+    productId?: string;
     limit: number;
   }): Promise<ProductionOrderRecord[]>;
   abstract findById(id: string): Promise<ProductionOrderRecord | undefined>;

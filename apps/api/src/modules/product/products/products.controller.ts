@@ -16,7 +16,11 @@ import { Permission } from '../../../platform/security/decorators.js';
 import { ValidationError } from '../../../shared-kernel/index.js';
 import { RequirementsDto, SaveDraftFormulaDto } from '../formulas/dto/formulas.dto.js';
 import type { FormulaView } from '../formulas/formula-view.js';
-import { FormulasService, type RequirementsView } from '../formulas/formulas.service.js';
+import {
+  FormulasService,
+  type RequirementsView,
+  type WhereUsedView,
+} from '../formulas/formulas.service.js';
 import { CreateProductDto, ListProductsQuery, UpdateProductDto } from './dto/products.dto.js';
 import type { ProductView } from './product-view.js';
 import { type ImportResult, ProductsService } from './products.service.js';
@@ -112,6 +116,12 @@ export class ProductsController {
   @HttpCode(204)
   async discardDraft(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.formulas.discardDraft(id);
+  }
+
+  @Permission('products:read')
+  @Get(':id/where-used')
+  whereUsed(@Param('id', ParseUUIDPipe) id: string): Promise<WhereUsedView[]> {
+    return this.formulas.whereUsed(id);
   }
 
   @Permission('products:read')

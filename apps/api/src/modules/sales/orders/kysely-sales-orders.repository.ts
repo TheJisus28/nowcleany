@@ -46,6 +46,17 @@ export class KyselySalesOrdersRepository extends SalesOrdersRepository {
       query = query.where('o.status', 'in', filter.statuses);
     if (filter.sellerId) query = query.where('o.seller_id', '=', filter.sellerId);
     if (filter.customerId) query = query.where('o.customer_id', '=', filter.customerId);
+    const { productId } = filter;
+    if (productId)
+      query = query.where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('sales_order_lines as l')
+            .select('l.order_id')
+            .whereRef('l.order_id', '=', 'o.id')
+            .where('l.product_id', '=', productId),
+        ),
+      );
     if (filter.search) {
       const number = /^(?:PV-)?0*(\d{1,12})$/i.exec(filter.search.trim())?.[1];
       const pattern = `%${filter.search.replace(/[%_\\]/g, '\\$&')}%`;

@@ -79,6 +79,11 @@ export class ListOrdersQuery {
   @IsUUID()
   customerId?: string;
 
+  /** Only orders with a line of this product. */
+  @IsOptional()
+  @IsUUID()
+  productId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(80)

@@ -23,6 +23,7 @@ import {
   worstStatus,
 } from '../domain/planning.js';
 import type {
+  Availability,
   BulkNeed,
   MaterialLine,
   OrderCoverageView,
@@ -188,6 +189,7 @@ export class PlanningService {
       return {
         orderId: first.orderId,
         label: first.orderLabel,
+        customerId: first.customerId,
         customerName: first.customerName,
         seller: { id: first.sellerId, name: first.sellerName },
         estimatedDeliveryDate: first.estimatedDeliveryDate,
@@ -231,6 +233,7 @@ export class PlanningService {
           return {
             orderId: line.orderId,
             label: line.orderLabel,
+            customerId: line.customerId,
             customerName: line.customerName,
             sellerName: line.sellerName,
             estimatedDeliveryDate: line.estimatedDeliveryDate,
@@ -339,6 +342,33 @@ export class PlanningService {
     };
   }
 
+  /** Sales: how much of each finished good can still be promised with stock and materials on hand. */
+  async availability(): Promise<Availability> {
+    const snapshot = await this.snapshot();
+    const plan = await this.plan(snapshot);
+    const rows = [...snapshot.products.values()]
+      .filter((product) => product.type === 'FINISHED_GOOD' && product.active)
+      .sort((a, b) => a.code.localeCompare(b.code))
+      .map((product) => {
+        const unit = product.stockUnit;
+        const onHand = snapshot.onHand.get(product.id) ?? 0n;
+        const committed = plan.demand.get(product.id) ?? 0n;
+        const capacity = plan.finishedCapacity.get(product.id);
+        const producible = capacity?.quantity ?? 0n;
+        return {
+          product: this.ref(snapshot, product.id),
+          onHand: toQuantityDto(onHand, unit),
+          committed: toQuantityDto(committed, unit),
+          producible: toQuantityDto(producible, unit),
+          promisable: toQuantityDto(max0(max0(onHand) + producible - committed), unit),
+          limitingMaterial: capacity?.limitingComponentId
+            ? this.ref(snapshot, capacity.limitingComponentId)
+            : null,
+        };
+      });
+    return { generatedAt: new Date().toISOString(), rows };
+  }
+
   // --- computation ---------------------------------------------------------------------------
 
   private async snapshot(): Promise<Snapshot> {
@@ -355,6 +385,7 @@ export class PlanningService {
         order.lines.map((line) => ({
           orderId: order.id,
           orderLabel: order.label,
+          customerId: order.customerId,
           customerName: order.customerName,
           sellerId: order.seller.id,
           sellerName: order.seller.name,
