@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { allocateCoverage, type DemandLine, net, worstStatus } from '../domain/planning.js';
+import {
+  allocateCoverage,
+  type DemandLine,
+  net,
+  splitStock,
+  worstStatus,
+} from '../domain/planning.js';
 
 const line = (
   orderLabel: string,
@@ -59,5 +65,22 @@ describe('coverage of the proposal example (illustrative figures)', () => {
     expect([second?.fromStock, second?.fromProduction, second?.uncovered]).toEqual([10n, 10n, 10n]);
     expect(worstStatus(['COVERED', 'NEEDS_PRODUCTION'])).toBe('NEEDS_PRODUCTION');
     expect(worstStatus(['COVERED', 'SHORT', 'NEEDS_PRODUCTION'])).toBe('SHORT');
+  });
+});
+
+describe('stock split', () => {
+  it('sets stock aside for scheduled production first, then orders; the rest is idle', () => {
+    expect(splitStock(1000n, 700n, 300n)).toEqual({
+      forProduction: 300n,
+      forOrders: 400n,
+      idle: 300n,
+      missing: 0n,
+    });
+    expect(splitStock(-50n, 400n, 100n)).toEqual({
+      forProduction: 0n,
+      forOrders: 0n,
+      idle: 0n,
+      missing: 400n,
+    });
   });
 });

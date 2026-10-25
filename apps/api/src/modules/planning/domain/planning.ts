@@ -105,3 +105,31 @@ export function batches(quantity: bigint, capacity: bigint | null): number | nul
 }
 
 const min = (a: bigint, b: bigint): bigint => (a < b ? a : b);
+
+export interface StockSplit {
+  /** Set aside for production orders already scheduled. */
+  readonly forProduction: bigint;
+  /** Needed by confirmed orders and not scheduled yet. */
+  readonly forOrders: bigint;
+  /** Nothing asks for it: idle stock. */
+  readonly idle: bigint;
+  /** Needed and not in stock (before what is on its way). */
+  readonly missing: bigint;
+}
+
+/**
+ * Splits the physical stock of one product by what it is for. Computed, never stored: scheduled
+ * production takes first, then the rest of the confirmed demand, and whatever is left is idle.
+ * `required` is the net need of the confirmed orders; `scheduled` is what planned orders will consume.
+ */
+export function splitStock(onHand: bigint, required: bigint, scheduled: bigint): StockSplit {
+  const stock = max0(onHand);
+  const forProduction = min(stock, min(scheduled, required));
+  const forOrders = min(stock - forProduction, max0(required - forProduction));
+  return {
+    forProduction,
+    forOrders,
+    idle: stock - forProduction - forOrders,
+    missing: max0(required - stock),
+  };
+}

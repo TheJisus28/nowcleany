@@ -19,6 +19,7 @@ import {
   type LineCoverage,
   max0,
   net,
+  splitStock,
   sumBy,
   worstStatus,
 } from '../domain/planning.js';
@@ -34,6 +35,7 @@ import type {
   ProductRef,
   PurchaseNeed,
   PurchaseNeeds,
+  StockAllocation,
 } from './planning-views.js';
 
 interface Snapshot {
@@ -364,6 +366,63 @@ export class PlanningService {
           limitingMaterial: capacity?.limitingComponentId
             ? this.ref(snapshot, capacity.limitingComponentId)
             : null,
+        };
+      });
+    return { generatedAt: new Date().toISOString(), rows };
+  }
+
+  /**
+   * What each product's stock is for: set aside for scheduled production, needed by confirmed orders,
+   * idle, or missing. Computed from the same plan as the other views (nothing is reserved here).
+   */
+  async stockAllocation(): Promise<StockAllocation> {
+    const snapshot = await this.snapshot();
+    const plan = await this.plan(snapshot);
+    // What the scheduled orders will consume (one level, like recording the production would).
+    const scheduled = sumBy(
+      (
+        await this.catalog.requirementsFor(
+          snapshot.planned.map((order) => ({
+            productId: order.productId,
+            quantity: order.quantity,
+          })),
+        )
+      ).needs,
+      (need) => need.componentId,
+      (need) => need.quantity,
+    );
+    const rows = [...snapshot.products.values()]
+      .filter((product) => product.active)
+      .sort((a, b) => a.code.localeCompare(b.code))
+      .map((product) => {
+        const unit = product.stockUnit;
+        const id = product.id;
+        const required =
+          product.type === 'RAW_MATERIAL'
+            ? (plan.materialsRequired.get(id) ?? 0n)
+            : product.type === 'BULK'
+              ? (plan.bulkRequired.get(id) ?? 0n)
+              : (plan.demand.get(id) ?? 0n);
+        const onHand = snapshot.onHand.get(id) ?? 0n;
+        const split = splitStock(
+          onHand,
+          required,
+          product.type === 'FINISHED_GOOD' ? 0n : (scheduled.get(id) ?? 0n),
+        );
+        const incoming =
+          product.type === 'RAW_MATERIAL'
+            ? (plan.onOrder.get(id) ?? 0n)
+            : (plan.planned.get(id) ?? 0n);
+        return {
+          product: this.ref(snapshot, id),
+          type: product.type,
+          typeLabel: PRODUCT_TYPE_LABELS[product.type],
+          onHand: toQuantityDto(onHand, unit),
+          forProduction: toQuantityDto(split.forProduction, unit),
+          forOrders: toQuantityDto(split.forOrders, unit),
+          idle: toQuantityDto(split.idle, unit),
+          missing: toQuantityDto(split.missing, unit),
+          incoming: toQuantityDto(incoming, unit),
         };
       });
     return { generatedAt: new Date().toISOString(), rows };

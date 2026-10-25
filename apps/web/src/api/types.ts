@@ -337,3 +337,15 @@ export interface WhereUsed extends Ref {
   type: ProductType;
   typeLabel: string;
 }
+
+export interface StockAllocationRow {
+  product: Ref;
+  type: ProductType;
+  typeLabel: string;
+  onHand: Q;
+  forProduction: Q;
+  forOrders: Q;
+  idle: Q;
+  missing: Q;
+  incoming: Q;
+}

@@ -17,6 +17,7 @@ import type {
   PurchaseOrder,
   Role,
   SalesOrder,
+  StockAllocationRow,
   StockStatus,
   User,
   Warehouse,
@@ -74,6 +75,13 @@ export const useAvailability = () =>
     queryKey: ['planning', 'availability'],
     queryFn: () =>
       api.get<{ generatedAt: string; rows: AvailabilityRow[] }>('/v1/planning/availability'),
+  });
+
+export const useStockAllocation = () =>
+  useQuery({
+    queryKey: ['planning', 'stock-allocation'],
+    queryFn: () =>
+      api.get<{ generatedAt: string; rows: StockAllocationRow[] }>('/v1/planning/stock-allocation'),
   });
 
 // --- catalog --------------------------------------------------------------------------------

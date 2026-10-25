@@ -18,6 +18,10 @@
   --color-brand-soft: #e1eef4;
   --color-aqua: #26dacf;
   --color-aqua-soft: #dcf7f5;
+  /* Categorical series (validated reference palette, fixed order): identity, never status. */
+  --color-series-1: #2a78d6;
+  --color-series-2: #eb6834;
+  --color-series-3: #1baf7a;
   --color-good: #0ca30c;
   --color-good-soft: #e5f4e5;
   --color-warning: #fab219;

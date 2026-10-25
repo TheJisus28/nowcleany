@@ -8,6 +8,7 @@ import type {
   PlanningSummary,
   ProductionNeeds,
   PurchaseNeeds,
+  StockAllocation,
 } from './planning-views.js';
 import { PlanningService } from './planning.service.js';
 
@@ -53,5 +54,12 @@ export class PlanningController {
   @Get('availability')
   availability(): Promise<Availability> {
     return this.planning.availability();
+  }
+
+  /** Idle stock vs. set aside for production vs. needed by orders vs. missing, per product. */
+  @Permission('planning:read')
+  @Get('stock-allocation')
+  stockAllocation(): Promise<StockAllocation> {
+    return this.planning.stockAllocation();
   }
 }

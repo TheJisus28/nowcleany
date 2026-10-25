@@ -161,3 +161,26 @@ export interface Availability {
   readonly generatedAt: string;
   readonly rows: readonly AvailabilityRow[];
 }
+
+export interface StockAllocationRow {
+  readonly product: ProductRef;
+  readonly type: 'RAW_MATERIAL' | 'BULK' | 'FINISHED_GOOD';
+  readonly typeLabel: string;
+  /** Physical stock (may be negative). */
+  readonly onHand: QuantityDto;
+  /** Set aside for production orders already scheduled (raw materials and bulk). */
+  readonly forProduction: QuantityDto;
+  /** Needed by confirmed orders and not scheduled yet (finished goods: committed to orders). */
+  readonly forOrders: QuantityDto;
+  /** Nothing asks for it: idle stock. */
+  readonly idle: QuantityDto;
+  /** Needed and not in stock. */
+  readonly missing: QuantityDto;
+  /** Coming: purchases in transit (raw materials) or scheduled production (bulk, finished goods). */
+  readonly incoming: QuantityDto;
+}
+
+export interface StockAllocation {
+  readonly generatedAt: string;
+  readonly rows: readonly StockAllocationRow[];
+}
