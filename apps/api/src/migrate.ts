@@ -12,11 +12,13 @@ import { SeedModule } from './seed.module.js';
 //   node dist/migrate.js           migrations
 //   node dist/migrate.js --seed    + reference data and initial administrator
 //   node dist/migrate.js --demo    + illustrative demo data (implies --seed)
+//   node dist/migrate.js --showcase  + extra volume on top of the demo (implies --demo)
 const logger = pino({
   base: { service: 'nowcleanny-migrate' },
   timestamp: pino.stdTimeFunctions.isoTime,
 });
-const demo = process.argv.includes('--demo');
+const showcase = process.argv.includes('--showcase');
+const demo = showcase || process.argv.includes('--demo');
 const seed = demo || process.argv.includes('--seed');
 
 try {
@@ -47,7 +49,7 @@ try {
   if (seed) {
     const app = await NestFactory.createApplicationContext(SeedModule, { bufferLogs: true });
     app.useLogger(app.get(Logger));
-    await app.get(SeedRunner).run({ demo });
+    await app.get(SeedRunner).run({ demo, showcase });
     await app.close();
     logger.info(demo ? 'Semillas y datos de demo cargados.' : 'Semillas cargadas.');
   }

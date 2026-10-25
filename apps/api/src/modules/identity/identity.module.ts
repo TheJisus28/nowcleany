@@ -13,6 +13,7 @@ import { PermissionCatalogRepository } from './permissions/permission-catalog.re
 import { PermissionSyncService } from './permissions/permission-sync.service.js';
 import { AdminSeeder } from './seeds/admin.seeder.js';
 import { DemoUsersSeeder } from './seeds/demo-users.seeder.js';
+import { ShowcaseUsersSeeder } from './seeds/showcase-users.seeder.js';
 import { KyselyUsersRepository } from './users/kysely-users.repository.js';
 import { UserDirectory } from './users/user-directory.js';
 import { RolesController, UsersController } from './users/users.controller.js';
@@ -32,6 +33,7 @@ import { UsersService } from './users/users.service.js';
     PermissionSyncService,
     AdminSeeder,
     DemoUsersSeeder,
+    ShowcaseUsersSeeder,
     UserDirectory,
     { provide: UsersRepository, useClass: KyselyUsersRepository },
     { provide: SessionsRepository, useClass: KyselySessionsRepository },

@@ -15,6 +15,7 @@ import { SalesOrdersService } from './orders/sales-orders.service.js';
 import { StaleDraftsJob } from './orders/stale-drafts.job.js';
 import { SalesPermissions } from './permissions.js';
 import { DemoOrdersSeeder } from './seeds/demo-orders.seeder.js';
+import { ShowcaseOrdersSeeder } from './seeds/showcase-orders.seeder.js';
 
 @Module({
   imports: [DatabaseModule.forModule('sales'), ProductModule, InventoryModule, IdentityModule],
@@ -26,6 +27,7 @@ import { DemoOrdersSeeder } from './seeds/demo-orders.seeder.js';
     SalesDirectory,
     StaleDraftsJob,
     DemoOrdersSeeder,
+    ShowcaseOrdersSeeder,
     { provide: CustomersRepository, useClass: KyselyCustomersRepository },
     { provide: SalesOrdersRepository, useClass: KyselySalesOrdersRepository },
   ],

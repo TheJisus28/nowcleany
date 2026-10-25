@@ -1,26 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Seeder } from '../../../platform/seeding/seeder.js';
-import type { ProductType } from '../domain/product.js';
-import { FormulasService } from '../formulas/formulas.service.js';
-import { ProductsRepository } from '../products/products.repository.js';
-import { ProductsService } from '../products/products.service.js';
+import { CatalogLoader, type SeedFormula, type SeedProduct } from './catalog-loader.js';
 
 // DATOS DE EJEMPLO (ilustrativos): cifras inventadas para la demo, no son fórmulas reales del cliente.
-interface DemoProduct {
-  code: string;
-  name: string;
-  type: ProductType;
-  unit: string;
-  batchCapacity?: string;
-}
-
-interface DemoFormula {
-  product: string;
-  batchYield: string;
-  lines: { component: string; quantity: string; wasteBps?: number }[];
-}
-
-export const DEMO_PRODUCTS: readonly DemoProduct[] = [
+export const DEMO_PRODUCTS: readonly SeedProduct[] = [
   { code: 'MP-HIPO-15', name: 'Hipoclorito de sodio 15 %', type: 'RAW_MATERIAL', unit: 'L' },
   { code: 'MP-AGUA', name: 'Agua tratada', type: 'RAW_MATERIAL', unit: 'L' },
   { code: 'MP-SODA', name: 'Soda cáustica', type: 'RAW_MATERIAL', unit: 'kg' },
@@ -55,7 +38,7 @@ export const DEMO_PRODUCTS: readonly DemoProduct[] = [
   { code: '00310', name: 'Limpiapisos lavanda x galón', type: 'FINISHED_GOOD', unit: 'un' },
 ];
 
-export const DEMO_FORMULAS: readonly DemoFormula[] = [
+export const DEMO_FORMULAS: readonly SeedFormula[] = [
   {
     product: 'GR-CLORO',
     batchYield: '25000',
@@ -112,48 +95,11 @@ export const DEMO_FORMULAS: readonly DemoFormula[] = [
 export class DemoCatalogSeeder {
   private readonly logger = new Logger('product');
 
-  constructor(
-    private readonly products: ProductsService,
-    private readonly repository: ProductsRepository,
-    private readonly formulas: FormulasService,
-  ) {}
+  constructor(private readonly loader: CatalogLoader) {}
 
   @Seeder({ name: 'product.demo-catalog', order: 100, demo: true })
   async seed(): Promise<void> {
-    const existing = new Set(
-      (await this.repository.findByCodes(DEMO_PRODUCTS.map((p) => p.code))).map((p) => p.code),
-    );
-    for (const product of DEMO_PRODUCTS) {
-      if (existing.has(product.code)) continue;
-      await this.products.create({
-        code: product.code,
-        name: product.name,
-        type: product.type,
-        stockUnit: product.unit,
-        ...(product.batchCapacity ? { batchCapacity: product.batchCapacity } : {}),
-      });
-    }
-    const byCode = new Map(
-      (await this.repository.findByCodes(DEMO_PRODUCTS.map((p) => p.code))).map((p) => [p.code, p]),
-    );
-    const id = (code: string): string => {
-      const product = byCode.get(code);
-      if (!product) throw new Error(`Producto de demo ${code} no encontrado`);
-      return product.id;
-    };
-    for (const formula of DEMO_FORMULAS) {
-      if (byCode.get(formula.product)?.activeFormulaVersion !== null) continue;
-      const draft = await this.formulas.saveDraft(id(formula.product), {
-        batchYield: formula.batchYield,
-        notes: 'Fórmula de ejemplo (datos ilustrativos para la demo).',
-        lines: formula.lines.map((line) => ({
-          componentId: id(line.component),
-          quantity: line.quantity,
-          wasteBps: line.wasteBps ?? 0,
-        })),
-      });
-      await this.formulas.publish(draft.id);
-    }
+    await this.loader.load(DEMO_PRODUCTS, DEMO_FORMULAS);
     this.logger.log(`Catálogo de demo listo: ${String(DEMO_PRODUCTS.length)} productos`);
   }
 }

@@ -107,3 +107,21 @@ export function todayIso(offsetDays = 0): string {
 export function plural(count: number, one: string, many: string): string {
   return `${String(count)} ${count === 1 ? one : many}`;
 }
+
+/**
+ * Rounds a decimal string up (away from zero) to `digits` decimals, for display: "0.457275" → "0.46".
+ * Never rounds a requirement down, so what is shown is always enough.
+ */
+export function roundUpDecimal(value: string, digits = 2): string {
+  const negative = value.startsWith('-');
+  const [integerPart = '0', fraction = ''] = (negative ? value.slice(1) : value).split('.');
+  if (fraction.length <= digits) return value;
+  const kept = fraction.slice(0, digits);
+  const bumped = /[1-9]/.test(fraction.slice(digits));
+  const scaled = (BigInt(`${integerPart}${kept}`) + (bumped ? 1n : 0n))
+    .toString()
+    .padStart(digits + 1, '0');
+  const integer = digits > 0 ? scaled.slice(0, -digits) : scaled;
+  const decimals = (digits > 0 ? scaled.slice(-digits) : '').replace(/0+$/, '');
+  return `${negative ? '-' : ''}${integer}${decimals ? `.${decimals}` : ''}`;
+}

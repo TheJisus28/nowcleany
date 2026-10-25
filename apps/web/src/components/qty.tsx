@@ -1,8 +1,11 @@
 import type { Q } from '../api/types';
-import { formatDecimal, isNegative, isZero, unitLabel } from '../lib/format';
+import { formatDecimal, isNegative, isZero, roundUpDecimal, unitLabel } from '../lib/format';
 import { cn } from './ui';
 
-/** An exact quantity with its unit. Negative values (oversold, recorded out of order) are flagged. */
+/**
+ * A quantity with its unit, shown with at most two decimals rounded up (the API value stays exact).
+ * Negative values (oversold, recorded out of order) are flagged.
+ */
 export function Qty({
   value,
   className,
@@ -27,7 +30,7 @@ export function Qty({
         className,
       )}
     >
-      {formatDecimal(value.quantity)}
+      {formatDecimal(roundUpDecimal(value.quantity))}
       <span
         className={cn(
           'ml-1 text-[0.85em] font-normal',

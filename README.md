@@ -21,6 +21,7 @@ pnpm install --frozen-lockfile
 cp .env.example .env          # valores solo para desarrollo
 docker compose up -d          # PostgreSQL 18 en 127.0.0.1:5432
 pnpm db:demo                  # migraciones + semillas + datos de demo de la propuesta
+                              # o pnpm db:showcase: lo mismo + volumen (66 productos, 29 preventas…)
 pnpm api                      # API en http://127.0.0.1:3000 (Swagger en /docs)
 pnpm worker                   # en otra terminal: outbox, consumidores y tareas programadas
 pnpm web                      # en otra terminal: paneles en http://localhost:5173
@@ -42,6 +43,7 @@ Contraseña de todos: el valor de `DEMO_PASSWORD` en `.env` (por defecto `Demo.S
 | `vendedor.a@nowcleany.local`   | Ventas       | Preventas de Andrea Ruiz (vendedor A)         |
 | `vendedor.b@nowcleany.local`   | Ventas       | Bernardo Díaz (vendedor B)                    |
 | `vendedor.c@nowcleany.local`   | Ventas       | Camila Torres (vendedor C)                    |
+| `vendedor.d@nowcleany.local`   | Ventas       | Diego Romero (solo con `pnpm db:showcase`)    |
 | `planta@nowcleany.local`       | Planta       | Qué producir y envasar; órdenes de producción |
 | `compras@nowcleany.local`      | Compras      | Qué comprar; órdenes de compra                |
 | `bodega@nowcleany.local`       | Bodega       | Recepciones, traslados y despachos            |
@@ -67,6 +69,7 @@ vendidas por tres vendedores, capacidad para 2.000 con las materias primas dispo
 | `pnpm db:migrate`          | Compila y aplica migraciones                                     |
 | `pnpm db:setup`            | Migraciones + semillas (roles, permisos, administrador)          |
 | `pnpm db:demo`             | Migraciones + semillas + datos de demo                           |
+| `pnpm db:showcase`         | Igual que `db:demo` más volumen para presentar (base nueva)      |
 | `pnpm api` / `pnpm worker` | Ejecutan la API / el worker compilados con `.env`                |
 
 ## Producción

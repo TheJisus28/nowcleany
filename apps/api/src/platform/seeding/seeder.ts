@@ -11,6 +11,8 @@ export interface SeederOptions {
   readonly order: number;
   /** Illustrative demo data, only loaded with `migrate --demo`. */
   readonly demo?: boolean;
+  /** Extra volume on top of the demo (a plant in full swing), only with `migrate --showcase`. */
+  readonly showcase?: boolean;
 }
 
 /** Marks an idempotent provider method that loads reference or demo data. Run by migrate.ts. */
@@ -26,10 +28,12 @@ export class SeedRunner {
     private readonly permissions: PermissionRegistry,
   ) {}
 
-  async run(options: { demo: boolean }): Promise<void> {
+  async run(options: { demo: boolean; showcase?: boolean }): Promise<void> {
     const seeders = this.methods
       .find(Seeder)
-      .filter((seeder) => options.demo || seeder.options.demo !== true)
+      .filter(({ options: seeder }) =>
+        seeder.showcase === true ? options.showcase === true : seeder.demo !== true || options.demo,
+      )
       .sort((a, b) => a.options.order - b.options.order);
     const actor = systemActor(
       'seed',

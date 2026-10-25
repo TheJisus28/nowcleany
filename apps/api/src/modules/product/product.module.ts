@@ -10,7 +10,9 @@ import { KyselyProductsRepository } from './products/kysely-products.repository.
 import { ProductsController } from './products/products.controller.js';
 import { ProductsRepository } from './products/products.repository.js';
 import { ProductsService } from './products/products.service.js';
+import { CatalogLoader } from './seeds/catalog-loader.js';
 import { DemoCatalogSeeder } from './seeds/demo-catalog.seeder.js';
+import { ShowcaseCatalogSeeder } from './seeds/showcase-catalog.seeder.js';
 
 @Module({
   imports: [DatabaseModule.forModule('product')],
@@ -20,7 +22,9 @@ import { DemoCatalogSeeder } from './seeds/demo-catalog.seeder.js';
     ProductsService,
     FormulasService,
     ProductCatalog,
+    CatalogLoader,
     DemoCatalogSeeder,
+    ShowcaseCatalogSeeder,
     { provide: ProductsRepository, useClass: KyselyProductsRepository },
     { provide: FormulasRepository, useClass: KyselyFormulasRepository },
   ],

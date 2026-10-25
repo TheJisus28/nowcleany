@@ -22,6 +22,7 @@
     "worker": "pnpm --filter @nowcleanny/api start:worker",
     "db:setup": "pnpm --filter @nowcleanny/api build && pnpm --filter @nowcleanny/api migrate -- --seed",
     "db:demo": "pnpm --filter @nowcleanny/api build && pnpm --filter @nowcleanny/api migrate -- --demo",
+    "db:showcase": "pnpm --filter @nowcleanny/api build && pnpm --filter @nowcleanny/api migrate -- --showcase",
     "test:unit": "vitest run --project unit",
     "test:e2e": "vitest run --project e2e",
     "web": "pnpm --filter @nowcleanny/web dev"

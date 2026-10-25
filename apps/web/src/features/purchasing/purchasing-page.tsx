@@ -28,6 +28,7 @@ import {
   formatDecimal,
   isZero,
   parseDecimalInput,
+  roundUpDecimal,
   todayIso,
   unitLabel,
 } from '../../lib/format';
@@ -46,13 +47,15 @@ export function PurchasingPage() {
   const needs = usePurchaseNeeds();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<DraftLine[] | null>(null);
+  const [scope, setScope] = useState<'buy' | 'all'>('buy');
+  const toBuyCount = needs.data?.rows.filter((row) => !isZero(row.toBuy.quantity)).length ?? 0;
 
   const openDraft = (rows: PurchaseNeed[]) => {
     setDraft(
       rows.map((row) => ({
         key: key++,
         productId: row.product.id,
-        quantity: formatDecimal(row.toBuy.quantity),
+        quantity: formatDecimal(roundUpDecimal(row.toBuy.quantity)),
       })),
     );
   };
@@ -82,31 +85,44 @@ export function PurchasingPage() {
         description="Requerido por las preventas confirmadas, menos lo que hay en bodega y lo que ya está en tránsito."
         className="mb-6"
         actions={
-          can('purchasing:write') && needs.data ? (
+          needs.data ? (
             <>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setSelected(
-                    new Set(
-                      needs.data.rows
-                        .filter((row) => !isZero(row.toBuy.quantity))
-                        .map((row) => row.product.id),
-                    ),
-                  );
-                }}
-              >
-                Seleccionar todo lo que falta
-              </Button>
-              <Button
-                icon={<ShoppingCart className="size-4" />}
-                disabled={selected.size === 0}
-                onClick={() => {
-                  openDraft(needs.data.rows.filter((row) => selected.has(row.product.id)));
-                }}
-              >
-                Crear orden con {selected.size} insumo{selected.size === 1 ? '' : 's'}
-              </Button>
+              <Segmented
+                label="Mostrar"
+                value={scope}
+                onChange={setScope}
+                options={[
+                  { value: 'buy', label: `Por comprar · ${String(toBuyCount)}` },
+                  { value: 'all', label: `Todos · ${String(needs.data.rows.length)}` },
+                ]}
+              />
+              {can('purchasing:write') ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setSelected(
+                        new Set(
+                          needs.data.rows
+                            .filter((row) => !isZero(row.toBuy.quantity))
+                            .map((row) => row.product.id),
+                        ),
+                      );
+                    }}
+                  >
+                    Seleccionar todo lo que falta
+                  </Button>
+                  <Button
+                    icon={<ShoppingCart className="size-4" />}
+                    disabled={selected.size === 0}
+                    onClick={() => {
+                      openDraft(needs.data.rows.filter((row) => selected.has(row.product.id)));
+                    }}
+                  >
+                    Crear orden con {selected.size} insumo{selected.size === 1 ? '' : 's'}
+                  </Button>
+                </>
+              ) : null}
             </>
           ) : null
         }
@@ -116,7 +132,9 @@ export function PurchasingPage() {
           {(data) => (
             <DataTable<PurchaseNeed>
               label="Insumos por comprar"
-              rows={data.rows}
+              rows={
+                scope === 'buy' ? data.rows.filter((row) => !isZero(row.toBuy.quantity)) : data.rows
+              }
               rowKey={(row) => row.product.id}
               rowClassName={(row) => (isZero(row.toBuy.quantity) ? 'text-ink-2' : undefined)}
               empty={

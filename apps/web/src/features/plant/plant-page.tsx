@@ -1,12 +1,5 @@
-import {
-  CalendarPlus,
-  CircleCheck,
-  Droplets,
-  Factory,
-  PackageOpen,
-  TriangleAlert,
-} from 'lucide-react';
-import { useState } from 'react';
+import { CalendarPlus, CircleCheck, Factory, TriangleAlert } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
 import { useAction, useProductionNeeds, useProductionOrders } from '../../api/hooks';
@@ -33,7 +26,6 @@ import {
   formatDecimal,
   isZero,
   parseDecimalInput,
-  relativeDays,
   todayIso,
   unitLabel,
 } from '../../lib/format';
@@ -44,86 +36,49 @@ interface ScheduleTarget {
   suggested: Q;
 }
 
+type Scope = 'pending' | 'all';
+
+/** Earliest delivery among the orders that ask for it: what the plant should do first. */
+const firstDelivery = (need: PackagingNeed): string | null =>
+  need.orders
+    .map((order) => order.estimatedDeliveryDate)
+    .filter((date): date is string => Boolean(date))
+    .sort()[0] ?? null;
+
+const byDate = (a: string | null, b: string | null) => (a ?? '9999').localeCompare(b ?? '9999');
+
 export function PlantPage() {
   const needs = useProductionNeeds();
   const [schedule, setSchedule] = useState<ScheduleTarget | null>(null);
+  const [scope, setScope] = useState<Scope>('pending');
 
   return (
     <>
       <PageHeader
         title="Planta"
-        description="Qué envasar y qué granel producir para cumplir las preventas confirmadas, frente a lo que ya está programado."
+        description="Qué envasar y qué granel producir para cumplir las preventas confirmadas, primero lo que se entrega antes."
+        actions={
+          <Segmented
+            label="Mostrar"
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: 'pending', label: 'Falta programar' },
+              { value: 'all', label: 'Todo' },
+            ]}
+          />
+        }
       />
 
       <QueryView query={needs}>
-        {(data) => {
-          const packaging = data.packaging.filter(
-            (need) => !isZero(need.toPack.quantity) || !isZero(need.planned.quantity),
-          );
-          const bulk = data.bulk.filter(
-            (need) => !isZero(need.toProduce.quantity) || !isZero(need.planned.quantity),
-          );
-          return (
-            <div className="mb-8 grid items-start gap-6 xl:grid-cols-2">
-              <Panel
-                title="Por envasar"
-                description="Producto terminado que falta para las preventas."
-              >
-                {packaging.length === 0 ? (
-                  <EmptyState
-                    icon={<CircleCheck />}
-                    title="Nada por envasar"
-                    description="El stock cubre las preventas confirmadas."
-                  />
-                ) : (
-                  <ul className="flex flex-col gap-4">
-                    {packaging.map((need) => (
-                      <PackagingCard
-                        key={need.product.id}
-                        need={need}
-                        onSchedule={() => {
-                          setSchedule({
-                            product: need.product,
-                            kind: 'FINISHED_GOOD',
-                            suggested: need.pendingToSchedule,
-                          });
-                        }}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-              <Panel
-                title="Granel por producir"
-                description="Líquido necesario para envasar, en litros y baches."
-              >
-                {bulk.length === 0 ? (
-                  <EmptyState
-                    icon={<CircleCheck />}
-                    title="Nada por producir"
-                    description="El granel en planta alcanza para envasar."
-                  />
-                ) : (
-                  <ul className="flex flex-col gap-4">
-                    {bulk.map((need) => (
-                      <BulkCard
-                        key={need.product.id}
-                        need={need}
-                        onSchedule={() => {
-                          setSchedule({
-                            product: need.product,
-                            kind: 'BULK',
-                            suggested: need.pendingToSchedule,
-                          });
-                        }}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-            </div>
-          );
-        }}
+        {(data) => (
+          <NeedsTables
+            packaging={data.packaging}
+            bulk={data.bulk}
+            scope={scope}
+            onSchedule={setSchedule}
+          />
+        )}
       </QueryView>
 
       <ProductionOrders />
@@ -138,154 +93,229 @@ export function PlantPage() {
   );
 }
 
-function Metric({ label, value, strong = false }: { label: string; value: Q; strong?: boolean }) {
-  return (
-    <div>
-      <dt className="text-[12.5px] text-ink-3">{label}</dt>
-      <dd>
-        <Qty value={value} emphasis={strong} dimZero />
-      </dd>
-    </div>
-  );
-}
-
-function PackagingCard({ need, onSchedule }: { need: PackagingNeed; onSchedule: () => void }) {
+function NeedsTables({
+  packaging,
+  bulk,
+  scope,
+  onSchedule,
+}: {
+  packaging: PackagingNeed[];
+  bulk: BulkNeed[];
+  scope: Scope;
+  onSchedule: (target: ScheduleTarget) => void;
+}) {
   const { can } = useSession();
-  const pending = !isZero(need.pendingToSchedule.quantity);
-  const blocked = Number(need.canMakeNow.quantity) < Number(need.pendingToSchedule.quantity);
-  return (
-    <li className="rounded-lg border border-line p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="flex items-center gap-2 font-semibold">
-            <PackageOpen aria-hidden className="size-4 text-ink-3" />
-            <EntityLink to="product" id={need.product.id}>
-              {need.product.name}
+  const canWrite = can('production:write');
+  const visible = (need: { pendingToSchedule: Q; planned: Q }) =>
+    scope === 'all' || !isZero(need.pendingToSchedule.quantity);
+
+  const packRows = useMemo(
+    () =>
+      packaging
+        .map((need) => ({ need, first: firstDelivery(need) }))
+        .sort((a, b) => byDate(a.first, b.first)),
+    [packaging],
+  );
+  // A bulk is as urgent as the earliest finished good that needs it.
+  const firstByProduct = new Map(packRows.map((row) => [row.need.product.id, row.first]));
+  const bulkRows = bulk
+    .map((need) => ({
+      need,
+      first:
+        need.usedBy
+          .map((product) => firstByProduct.get(product.id) ?? null)
+          .filter((date): date is string => Boolean(date))
+          .sort()[0] ?? null,
+    }))
+    .sort((a, b) => byDate(a.first, b.first));
+
+  const shownPack = packRows.filter((row) => visible(row.need));
+  const shownBulk = bulkRows.filter((row) => visible(row.need));
+
+  const scheduleButton = (need: PackagingNeed | BulkNeed, kind: ScheduleTarget['kind']) =>
+    canWrite && !isZero(need.pendingToSchedule.quantity) ? (
+      <Button
+        size="sm"
+        variant="secondary"
+        icon={<CalendarPlus className="size-3.5" />}
+        onClick={() => {
+          onSchedule({ product: need.product, kind, suggested: need.pendingToSchedule });
+        }}
+      >
+        Programar
+      </Button>
+    ) : null;
+
+  const canMake = (need: PackagingNeed | BulkNeed) => {
+    const blocked =
+      !isZero(need.pendingToSchedule.quantity) &&
+      Number(need.canMakeNow.quantity) < Number(need.pendingToSchedule.quantity);
+    return (
+      <span>
+        <Qty value={need.canMakeNow} dimZero />
+        {blocked && need.limitingMaterial ? (
+          <span className="mt-0.5 block text-[12px] text-[#9a6a00]">
+            <TriangleAlert aria-hidden className="mr-1 inline size-3 align-[-2px]" />
+            <EntityLink to="product" id={need.limitingMaterial.id}>
+              {need.limitingMaterial.name}
             </EntityLink>
-          </p>
-          <p className="text-[12.5px] text-ink-3">{need.product.code}</p>
-        </div>
-        {can('production:write') && pending ? (
-          <Button size="sm" icon={<CalendarPlus className="size-3.5" />} onClick={onSchedule}>
-            Programar envasado
-          </Button>
+          </span>
         ) : null}
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Metric label="A envasar" value={need.toPack} strong />
-        <Metric label="Ya programado" value={need.planned} />
-        <Metric label="Falta programar" value={need.pendingToSchedule} strong />
-        <Metric label="Se puede hoy" value={need.canMakeNow} />
-      </dl>
-      {pending && blocked && need.limitingMaterial ? (
-        <p className="mt-3 flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2 text-[13px]">
-          <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0 text-[#b67d00]" />
-          Con los insumos de hoy alcanza para {formatDecimal(need.canMakeNow.quantity)}{' '}
-          {unitLabel(need.canMakeNow.unit)}. Limita: {need.limitingMaterial.name}.
-        </p>
-      ) : null}
-      {need.orders.length > 0 ? (
-        <details className="mt-3 text-sm">
-          <summary className="cursor-pointer text-[13px] font-medium text-ink-2">
-            Preventas que lo piden ({need.orders.length})
-          </summary>
-          <ul className="mt-2 divide-y divide-line">
-            {need.orders.map((order) => (
-              <li
-                key={order.orderId}
-                className="flex flex-wrap items-baseline justify-between gap-2 py-2"
-              >
+      </span>
+    );
+  };
+
+  return (
+    <div className="mb-8 flex flex-col gap-6">
+      <Panel
+        title="Por envasar"
+        description="Producto terminado que falta para las preventas, por fecha de la primera entrega."
+        flush
+      >
+        <DataTable
+          label="Por envasar"
+          rows={shownPack}
+          rowKey={(row) => row.need.product.id}
+          empty={
+            <EmptyState
+              icon={<CircleCheck />}
+              title="Nada por envasar"
+              description="El stock y lo programado cubren las preventas confirmadas."
+            />
+          }
+          columns={[
+            {
+              key: 'product',
+              header: 'Producto',
+              render: ({ need }) => (
+                <ProductCell
+                  product={need.product}
+                  detail={`${String(need.orders.length)} preventa${need.orders.length === 1 ? '' : 's'}`}
+                />
+              ),
+            },
+            {
+              key: 'first',
+              header: 'Primera entrega',
+              render: ({ first }) => <DueDate date={first} />,
+            },
+            {
+              key: 'toPack',
+              header: 'A envasar',
+              align: 'right',
+              hideOnMobile: true,
+              render: ({ need }) => <Qty value={need.toPack} />,
+            },
+            {
+              key: 'planned',
+              header: 'Programado',
+              align: 'right',
+              hideOnMobile: true,
+              render: ({ need }) => <Qty value={need.planned} dimZero />,
+            },
+            {
+              key: 'pending',
+              header: 'Falta programar',
+              align: 'right',
+              render: ({ need }) => <Qty value={need.pendingToSchedule} emphasis dimZero />,
+            },
+            {
+              key: 'canMake',
+              header: 'Se puede hoy',
+              align: 'right',
+              render: ({ need }) => canMake(need),
+            },
+            {
+              key: 'action',
+              header: '',
+              align: 'right',
+              render: ({ need }) => scheduleButton(need, 'FINISHED_GOOD'),
+            },
+          ]}
+        />
+      </Panel>
+
+      <Panel
+        title="Granel por producir"
+        description="Líquido que falta para envasar, en litros y baches; primero el que necesita la entrega más próxima."
+        flush
+      >
+        <DataTable
+          label="Granel por producir"
+          rows={shownBulk}
+          rowKey={(row) => row.need.product.id}
+          empty={
+            <EmptyState
+              icon={<CircleCheck />}
+              title="Nada por producir"
+              description="El granel en planta y lo programado alcanzan para envasar."
+            />
+          }
+          columns={[
+            {
+              key: 'product',
+              header: 'Granel',
+              render: ({ need }) => (
+                <ProductCell
+                  product={need.product}
+                  detail={
+                    need.batchCapacity
+                      ? `bache de ${formatDecimal(need.batchCapacity.quantity)} ${unitLabel(need.batchCapacity.unit)}`
+                      : undefined
+                  }
+                />
+              ),
+            },
+            {
+              key: 'first',
+              header: 'Primera entrega',
+              render: ({ first }) => <DueDate date={first} />,
+            },
+            {
+              key: 'toProduce',
+              header: 'A producir',
+              align: 'right',
+              hideOnMobile: true,
+              render: ({ need }) => <Qty value={need.toProduce} />,
+            },
+            {
+              key: 'planned',
+              header: 'Programado',
+              align: 'right',
+              hideOnMobile: true,
+              render: ({ need }) => <Qty value={need.planned} dimZero />,
+            },
+            {
+              key: 'pending',
+              header: 'Falta programar',
+              align: 'right',
+              render: ({ need }) => (
                 <span>
-                  <EntityLink to="order" id={order.orderId} className="font-medium">
-                    {order.label}
-                  </EntityLink>{' '}
-                  ·{' '}
-                  <EntityLink to="customer" id={order.customerId}>
-                    {order.customerName}
-                  </EntityLink>
-                  <span className="block text-[12.5px] text-ink-3">
-                    {order.sellerName} · entrega{' '}
-                    {relativeDays(order.estimatedDeliveryDate).toLowerCase()}
-                  </span>
-                </span>
-                <span className="text-right text-[13px]">
-                  <Qty value={order.quantity} />
-                  {!isZero(order.toProduce.quantity) ? (
-                    <span className="block text-ink-3">
-                      por producir <Qty value={order.toProduce} />
+                  <Qty value={need.pendingToSchedule} emphasis dimZero />
+                  {need.batchesPending ? (
+                    <span className="block text-[12px] text-ink-3">
+                      {need.batchesPending} bache{need.batchesPending === 1 ? '' : 's'}
                     </span>
                   ) : null}
                 </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-    </li>
-  );
-}
-
-function BulkCard({ need, onSchedule }: { need: BulkNeed; onSchedule: () => void }) {
-  const { can } = useSession();
-  const pending = !isZero(need.pendingToSchedule.quantity);
-  const blocked = Number(need.canMakeNow.quantity) < Number(need.pendingToSchedule.quantity);
-  return (
-    <li className="rounded-lg border border-line p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="flex items-center gap-2 font-semibold">
-            <Droplets aria-hidden className="size-4 text-ink-3" />
-            <EntityLink to="product" id={need.product.id}>
-              {need.product.name}
-            </EntityLink>
-          </p>
-          <p className="text-[12.5px] text-ink-3">
-            {need.product.code}
-            {need.batchCapacity
-              ? ` · bache de ${formatDecimal(need.batchCapacity.quantity)} ${unitLabel(need.batchCapacity.unit)}`
-              : ''}
-          </p>
-        </div>
-        {can('production:write') && pending ? (
-          <Button size="sm" icon={<CalendarPlus className="size-3.5" />} onClick={onSchedule}>
-            Programar producción
-          </Button>
-        ) : null}
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Metric label="A producir" value={need.toProduce} strong />
-        <Metric label="Ya programado" value={need.planned} />
-        <div>
-          <dt className="text-[12.5px] text-ink-3">Falta programar</dt>
-          <dd>
-            <Qty value={need.pendingToSchedule} emphasis dimZero />
-            {need.batchesPending ? (
-              <span className="block text-[12.5px] text-ink-3">
-                {need.batchesPending} bache{need.batchesPending === 1 ? '' : 's'}
-              </span>
-            ) : null}
-          </dd>
-        </div>
-        <Metric label="Se puede hoy" value={need.canMakeNow} />
-      </dl>
-      {pending && blocked && need.limitingMaterial ? (
-        <p className="mt-3 flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2 text-[13px]">
-          <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0 text-[#b67d00]" />
-          Los químicos de hoy alcanzan para {formatDecimal(need.canMakeNow.quantity)}{' '}
-          {unitLabel(need.canMakeNow.unit)}. Limita: {need.limitingMaterial.name}.
-        </p>
-      ) : null}
-      {need.usedBy.length > 0 ? (
-        <p className="mt-3 flex flex-wrap gap-x-2 text-[13px] text-ink-3">
-          Para:
-          {need.usedBy.map((product) => (
-            <EntityLink key={product.id} to="product" id={product.id} className="text-ink-2">
-              {product.name}
-            </EntityLink>
-          ))}
-        </p>
-      ) : null}
-    </li>
+              ),
+            },
+            {
+              key: 'canMake',
+              header: 'Se puede hoy',
+              align: 'right',
+              render: ({ need }) => canMake(need),
+            },
+            {
+              key: 'action',
+              header: '',
+              align: 'right',
+              render: ({ need }) => scheduleButton(need, 'BULK'),
+            },
+          ]}
+        />
+      </Panel>
+    </div>
   );
 }
 

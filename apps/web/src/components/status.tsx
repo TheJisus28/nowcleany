@@ -141,7 +141,10 @@ export function DueDate({
   const days = daysUntil(date);
   if (days !== null && days < 0) {
     return (
-      <span title={formatDate(date)} className="inline-flex items-center gap-1 text-critical">
+      <span
+        title={formatDate(date)}
+        className="inline-flex items-center gap-1 whitespace-nowrap text-critical"
+      >
         <Clock aria-hidden className="size-3.5" strokeWidth={2.25} />
         <span className="font-medium">{lateLabel}</span>
         <span className="text-critical/80">· {relativeDays(date).toLowerCase()}</span>
@@ -149,7 +152,10 @@ export function DueDate({
     );
   }
   return (
-    <span title={formatDate(date)} className={cn(days !== null && days <= 2 && 'font-medium')}>
+    <span
+      title={formatDate(date)}
+      className={cn('whitespace-nowrap', days !== null && days <= 2 && 'font-medium')}
+    >
       {relativeDays(date)}
     </span>
   );

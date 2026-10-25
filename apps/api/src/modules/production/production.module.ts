@@ -9,6 +9,7 @@ import { ProductionOrdersService } from './orders/production-orders.service.js';
 import { ProductionPermissions } from './permissions.js';
 import { ProductionSchedule } from './schedule/production-schedule.js';
 import { DemoProductionSeeder } from './seeds/demo-production.seeder.js';
+import { ShowcaseProductionSeeder } from './seeds/showcase-production.seeder.js';
 
 @Module({
   imports: [DatabaseModule.forModule('production'), ProductModule, InventoryModule],
@@ -18,6 +19,7 @@ import { DemoProductionSeeder } from './seeds/demo-production.seeder.js';
     ProductionOrdersService,
     ProductionSchedule,
     DemoProductionSeeder,
+    ShowcaseProductionSeeder,
     { provide: ProductionOrdersRepository, useClass: KyselyProductionOrdersRepository },
   ],
   exports: [ProductionSchedule],
