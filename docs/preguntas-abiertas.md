@@ -36,6 +36,10 @@ Cada punto tiene el default que se está usando mientras no haya respuesta. Las 
 | T11 | Scripts de instalación de dependencias                     | Ninguno se ejecuta: argon2 usa sus binarios precompilados; scarf (telemetría), ssh2, cpu-features y protobufjs denegados. |
 | T12 | Frontend y API en el mismo origen                          | En desarrollo, proxy de Vite hacia la API; en producción, un proxy inverso sirve ambos (sin CORS).                        |
 | T13 | Prueba e2e con API y worker en el mismo proceso            | El worker se prueba al final: comparte el registro estático de transacciones. En producción son procesos separados.       |
+| N9  | Radio para dar una visita como "en sitio"                  | 150 m desde la sucursal más la precisión del GPS (máximo 100 m extra). Ajustable con la empresa.                          |
+| N10 | Sucursal sin ubicación                                     | Se permite; la visita queda sin distancia (no se puede decir si fue en sitio) hasta ubicar la sucursal en el mapa.        |
+| N11 | Merma del envasado                                         | Se registra en litros del granel de la fórmula; si se envasa sin granel (solo empaque) no aplica.                         |
+| N12 | ¿Quién ve todas las preventas?                             | Gerencia, planta, compras y bodega (las necesitan para producir, comprar y despachar). Clientes: gerencia y bodega.       |
 
 ## Resueltas
 

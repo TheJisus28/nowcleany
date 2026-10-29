@@ -15,7 +15,7 @@ export interface SeedProduct {
 export interface SeedFormula {
   product: string;
   batchYield: string;
-  lines: { component: string; quantity: string; wasteBps?: number }[];
+  lines: { component: string; quantity: string }[];
 }
 
 /** Loads example products and publishes their formulas through the catalog's own services. */
@@ -61,7 +61,6 @@ export class CatalogLoader {
         lines: formula.lines.map((line) => ({
           componentId: id(line.component),
           quantity: line.quantity,
-          wasteBps: line.wasteBps ?? 0,
         })),
       });
       await this.formulas.publish(draft.id);

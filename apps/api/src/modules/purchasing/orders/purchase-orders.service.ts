@@ -12,7 +12,6 @@ import { InventoryLedger } from '../../inventory/index.js';
 import { ProductCatalog } from '../../product/index.js';
 import {
   assertOpen,
-  normalizeSupplier,
   PURCHASE_STATUS_LABELS,
   type PurchaseStatus,
   purchaseLabel,
@@ -22,11 +21,12 @@ import {
   type PurchaseOrderRecord,
   PurchaseOrdersRepository,
 } from './purchase-orders.repository.js';
+import { SuppliersService } from '../suppliers/suppliers.service.js';
 
 export interface PurchaseOrderView {
   readonly id: string;
   readonly label: string;
-  readonly supplier: string;
+  readonly supplier: { id: string; name: string };
   readonly expectedDate: string | null;
   readonly status: PurchaseStatus;
   readonly statusLabel: string;
@@ -56,6 +56,7 @@ interface LineInput {
 export class PurchaseOrdersService {
   constructor(
     private readonly orders: PurchaseOrdersRepository,
+    private readonly suppliers: SuppliersService,
     private readonly catalog: ProductCatalog,
     private readonly inventory: InventoryLedger,
     private readonly currentActor: CurrentActor,
@@ -82,7 +83,7 @@ export class PurchaseOrdersService {
 
   @Transactional()
   async create(command: {
-    supplier: string;
+    supplierId: string;
     expectedDate?: string;
     notes?: string;
     lines: readonly LineInput[];
@@ -102,7 +103,7 @@ export class PurchaseOrdersService {
     validatePurchaseLines(lines);
     const actor = this.currentActor.require();
     const id = await this.orders.insert({
-      supplier: normalizeSupplier(command.supplier),
+      supplier: await this.suppliers.requireActive(command.supplierId),
       expectedDate: command.expectedDate ?? null,
       notes: command.notes?.trim() ? command.notes.trim() : null,
       createdBy: { id: actor.id, name: actor.displayName },
@@ -160,7 +161,7 @@ export class PurchaseOrdersService {
         reference: {
           type: 'purchase_order',
           id: order.id,
-          label: `${purchaseLabel(order.number)} · ${order.supplier}`,
+          label: `${purchaseLabel(order.number)} · ${order.supplier.name}`,
         },
         ...(command.document ? { note: `Documento del proveedor: ${command.document}` } : {}),
       });

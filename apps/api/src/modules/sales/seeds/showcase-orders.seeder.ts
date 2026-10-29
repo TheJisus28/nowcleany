@@ -1,93 +1,157 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CurrentActor } from '../../../platform/security/current-actor.js';
-import { UserDirectory } from '../../identity/index.js';
-import { ProductCatalog } from '../../product/index.js';
-import { CustomersService } from '../customers/customers.service.js';
 import { SalesOrdersService } from '../orders/sales-orders.service.js';
+import { type SeedCustomer, type SeedOrder, PortfolioLoader } from './portfolio-loader.js';
 
-// DATOS DE EJEMPLO (nombres inventados) para ver la plataforma con un mes normal de ventas: preventas
-// cubiertas, que esperan producción, con insumos faltantes y atrasadas; borradores, anuladas y despachos.
-const CUSTOMERS = [
-  {
-    name: 'Autoservicio El Ganadero',
-    taxId: '901234567-1',
-    city: 'Montería',
-    phone: '604 781 2233',
-  },
-  { name: 'Hotel Río Sinú Plaza', taxId: '900765432-8', city: 'Montería', phone: '604 789 1010' },
-  {
-    name: 'Clínica Santa Lucía del Sinú',
-    taxId: '812004567-2',
-    city: 'Montería',
-    phone: '604 784 5600',
-  },
-  { name: 'Restaurante La Bonga', taxId: '901112223-4', city: 'Montería', phone: '300 455 1287' },
-  {
-    name: 'Distribuciones Sahagún Ltda.',
-    taxId: '900334455-6',
-    city: 'Sahagún',
-    phone: '604 777 8899',
-  },
-  { name: 'Minimercado Doña Carmen', taxId: null, city: 'Cereté', phone: '311 642 7788' },
-  {
-    name: 'Colegio Bilingüe Alamedas',
-    taxId: '812998877-0',
-    city: 'Montería',
-    phone: '604 786 4400',
-  },
-  {
-    name: 'Lavandería Costa Limpia',
-    taxId: '901556677-3',
-    city: 'Montería',
-    phone: '604 782 3311',
-  },
-  {
-    name: 'Supermercado Mi Pueblo',
-    taxId: '900887766-5',
-    city: 'Planeta Rica',
-    phone: '604 776 1200',
-  },
-  { name: 'Droguería El Sol', taxId: '901443322-9', city: 'Lorica', phone: '604 773 9090' },
-  { name: 'IPS Vida Sana', taxId: '900221100-7', city: 'Tierralta', phone: '604 772 6060' },
-  {
-    name: 'Conjunto Residencial Mocarí',
-    taxId: '901667788-2',
-    city: 'Montería',
-    phone: '604 785 7070',
-  },
-  {
-    name: 'Comercializadora Chinú Express',
-    taxId: '901998811-4',
-    city: 'Chinú',
-    phone: '604 775 3030',
-  },
-  {
-    name: 'Instituto Técnico del Caribe',
-    taxId: '812776655-1',
-    city: 'Montelíbano',
-    phone: '604 771 4545',
-  },
-] as const;
+// DATOS DE EJEMPLO (nombres y documentos inventados) para ver la plataforma con un mes normal de ventas:
+// cuatro carteras, sucursales en varios municipios de Córdoba, preventas en todos los estados y visitas.
+const branch = (
+  name: string,
+  address: string,
+  city: string,
+  latitude: number,
+  longitude: number,
+) => ({
+  name,
+  address,
+  city,
+  latitude,
+  longitude,
+});
 
-type Outcome = 'confirm' | 'draft' | 'dispatch-today' | 'cancel';
-
-interface ShowcaseOrder {
-  seller: 'a' | 'b' | 'c' | 'd';
-  customer: string;
-  /** Days from today to the estimated delivery (negative: already late). */
-  inDays: number;
-  outcome: Outcome;
-  lines: readonly (readonly [code: string, quantity: string])[];
-  cancelReason?: string;
-}
-
-/** Marks the orders that bodega dispatches today (after planta packages them). */
-const DISPATCH_TODAY = 'Despacho programado para hoy.';
-
-const ORDERS: readonly ShowcaseOrder[] = [
+const CUSTOMERS: readonly SeedCustomer[] = [
   {
     seller: 'd',
-    customer: 'Autoservicio El Ganadero',
+    documentType: 'NIT',
+    documentNumber: '901234567-1',
+    name: 'Autoservicio El Ganadero S.A.S.',
+    phone: '604 781 2233',
+    branches: [
+      branch('Principal', 'Carrera 2 # 22-14, Centro', 'Montería', 8.7495, -75.8838),
+      branch('Barrio Granada', 'Calle 51 # 14-20, Granada', 'Montería', 8.7449, -75.8678),
+    ],
+  },
+  {
+    seller: 'a',
+    documentType: 'NIT',
+    documentNumber: '900765432-8',
+    name: 'Hotel Río Sinú Plaza S.A.S.',
+    phone: '604 789 1010',
+    branches: [branch('Principal', 'Avenida Primera # 37-05', 'Montería', 8.7579, -75.8858)],
+  },
+  {
+    seller: 'b',
+    documentType: 'NIT',
+    documentNumber: '812004567-2',
+    name: 'Clínica Santa Lucía del Sinú S.A.',
+    phone: '604 784 5600',
+    branches: [
+      branch('Principal', 'Calle 22 # 9-35', 'Montería', 8.7462, -75.8781),
+      branch('Sede Norte', 'Carrera 6 # 72-40', 'Montería', 8.7874, -75.8705),
+    ],
+  },
+  {
+    seller: 'c',
+    documentType: 'NIT',
+    documentNumber: '901112223-4',
+    name: 'Restaurante La Bonga S.A.S.',
+    phone: '300 455 1287',
+    branches: [
+      branch('Principal', 'Calle 27 # 2-10, Ronda del Sinú', 'Montería', 8.7517, -75.8873),
+    ],
+  },
+  {
+    seller: 'd',
+    documentType: 'NIT',
+    documentNumber: '900334455-6',
+    name: 'Distribuciones Sahagún Ltda.',
+    phone: '604 777 8899',
+    branches: [branch('Principal', 'Calle 15 # 10-22', 'Sahagún', 8.9458, -75.4431)],
+  },
+  {
+    seller: 'a',
+    documentType: 'CC',
+    documentNumber: '50912345',
+    name: 'Carmen Elena Pérez Doria',
+    phone: '311 642 7788',
+    branches: [branch('Minimercado Doña Carmen', 'Carrera 9 # 11-18', 'Cereté', 8.8838, -75.7934)],
+  },
+  {
+    seller: 'b',
+    documentType: 'NIT',
+    documentNumber: '812998877-0',
+    name: 'Colegio Bilingüe Alamedas',
+    phone: '604 786 4400',
+    branches: [
+      branch('Principal', 'Carrera 10 # 60-45, Alamedas del Sinú', 'Montería', 8.7712, -75.8592),
+    ],
+  },
+  {
+    seller: 'c',
+    documentType: 'NIT',
+    documentNumber: '901556677-3',
+    name: 'Lavandería Costa Limpia S.A.S.',
+    phone: '604 782 3311',
+    branches: [branch('Principal', 'Calle 44 # 15-60', 'Montería', 8.7598, -75.8701)],
+  },
+  {
+    seller: 'd',
+    documentType: 'NIT',
+    documentNumber: '900887766-5',
+    name: 'Supermercado Mi Pueblo S.A.S.',
+    phone: '604 776 1200',
+    branches: [
+      branch('Principal', 'Carrera 8 # 17-30', 'Planeta Rica', 8.4106, -75.5848),
+      branch('Montelíbano', 'Calle 18 # 5-12', 'Montelíbano', 7.9794, -75.4176),
+    ],
+  },
+  {
+    seller: 'a',
+    documentType: 'CC',
+    documentNumber: '78034567',
+    name: 'Luis Alberto Sol Martínez',
+    phone: '604 773 9090',
+    branches: [branch('Droguería El Sol', 'Calle 5 # 14-08', 'Lorica', 9.2381, -75.8151)],
+  },
+  {
+    seller: 'b',
+    documentType: 'NIT',
+    documentNumber: '900221100-7',
+    name: 'IPS Vida Sana S.A.S.',
+    phone: '604 772 6060',
+    branches: [branch('Principal', 'Carrera 14 # 4-25', 'Tierralta', 8.1741, -76.0592)],
+  },
+  {
+    seller: 'c',
+    documentType: 'NIT',
+    documentNumber: '901667788-2',
+    name: 'Conjunto Residencial Mocarí',
+    phone: '604 785 7070',
+    branches: [branch('Principal', 'Calle 74 # 1-90, Mocarí', 'Montería', 8.7921, -75.8573)],
+  },
+  {
+    seller: 'd',
+    documentType: 'NIT',
+    documentNumber: '901998811-4',
+    name: 'Comercializadora Chinú Express S.A.S.',
+    phone: '604 775 3030',
+    branches: [branch('Principal', 'Carrera 7 # 9-40', 'Chinú', 9.1049, -75.3991)],
+  },
+  {
+    seller: 'a',
+    documentType: 'NIT',
+    documentNumber: '812776655-1',
+    name: 'Instituto Técnico del Caribe',
+    phone: '604 771 4545',
+    branches: [branch('Principal', 'Calle 12 # 8-60', 'Montelíbano', 7.9821, -75.4203)],
+  },
+];
+
+/** Marks the orders bodega dispatches today (after planta packages them). */
+const DISPATCH_TODAY = 'Despacho programado para hoy.';
+
+const ORDERS: readonly SeedOrder[] = [
+  {
+    customer: '901234567-1',
     inDays: -2,
     outcome: 'confirm',
     lines: [
@@ -96,8 +160,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'a',
-    customer: 'Hotel Río Sinú Plaza',
+    customer: '900765432-8',
     inDays: -1,
     outcome: 'confirm',
     lines: [
@@ -106,8 +169,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'b',
-    customer: 'Clínica Santa Lucía del Sinú',
+    customer: '812004567-2',
     inDays: 2,
     outcome: 'confirm',
     lines: [
@@ -116,8 +178,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'c',
-    customer: 'Restaurante La Bonga',
+    customer: '901112223-4',
     inDays: 3,
     outcome: 'confirm',
     lines: [
@@ -126,8 +187,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'd',
-    customer: 'Distribuciones Sahagún Ltda.',
+    customer: '900334455-6',
     inDays: 4,
     outcome: 'confirm',
     lines: [
@@ -137,8 +197,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'a',
-    customer: 'Minimercado Doña Carmen',
+    customer: '50912345',
     inDays: 5,
     outcome: 'confirm',
     lines: [
@@ -147,8 +206,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'b',
-    customer: 'Colegio Bilingüe Alamedas',
+    customer: '812998877-0',
     inDays: 6,
     outcome: 'confirm',
     lines: [
@@ -157,8 +215,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'c',
-    customer: 'Lavandería Costa Limpia',
+    customer: '901556677-3',
     inDays: 7,
     outcome: 'confirm',
     lines: [
@@ -167,8 +224,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'd',
-    customer: 'Supermercado Mi Pueblo',
+    customer: '900887766-5',
     inDays: 8,
     outcome: 'confirm',
     lines: [
@@ -178,8 +234,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'a',
-    customer: 'Droguería El Sol',
+    customer: '78034567',
     inDays: 10,
     outcome: 'confirm',
     lines: [
@@ -188,8 +243,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'b',
-    customer: 'IPS Vida Sana',
+    customer: '900221100-7',
     inDays: 12,
     outcome: 'confirm',
     lines: [
@@ -198,8 +252,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'c',
-    customer: 'Conjunto Residencial Mocarí',
+    customer: '901667788-2',
     inDays: 14,
     outcome: 'confirm',
     lines: [
@@ -208,8 +261,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'd',
-    customer: 'Comercializadora Chinú Express',
+    customer: '901998811-4',
     inDays: 18,
     outcome: 'confirm',
     lines: [
@@ -218,8 +270,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'a',
-    customer: 'Instituto Técnico del Caribe',
+    customer: '812776655-1',
     inDays: 21,
     outcome: 'confirm',
     lines: [
@@ -229,8 +280,7 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'b',
-    customer: 'Hotel Casa Grande',
+    customer: '800987654-3',
     inDays: 25,
     outcome: 'confirm',
     lines: [
@@ -239,45 +289,37 @@ const ORDERS: readonly ShowcaseOrder[] = [
     ],
   },
   {
-    seller: 'c',
-    customer: 'Autoservicio El Ganadero',
+    customer: '901234567-1',
+    branch: 'Barrio Granada',
     inDays: 0,
     outcome: 'dispatch-today',
     lines: [['00411', '120']],
   },
   {
-    seller: 'd',
-    customer: 'Hotel Río Sinú Plaza',
+    customer: '900887766-5',
+    branch: 'Montelíbano',
     inDays: 0,
     outcome: 'dispatch-today',
     lines: [['00611', '200']],
   },
+  { customer: '812998877-0', inDays: 0, outcome: 'dispatch-today', lines: [['00410', '60']] },
   {
-    seller: 'b',
-    customer: 'Minimercado Doña Carmen',
-    inDays: 0,
-    outcome: 'dispatch-today',
-    lines: [['00410', '60']],
-  },
-  {
-    seller: 'b',
-    customer: 'Comercializadora Chinú Express',
+    customer: '901998811-4',
     inDays: 9,
     outcome: 'cancel',
     lines: [['00511', '150']],
     cancelReason: 'El cliente aplazó el pedido para el próximo mes.',
   },
   {
-    seller: 'd',
-    customer: 'Restaurante La Bonga',
+    customer: '901112223-4',
     inDays: 6,
     outcome: 'cancel',
     lines: [['00810', '80']],
     cancelReason: 'Pedido duplicado.',
   },
   {
-    seller: 'a',
-    customer: 'Clínica Santa Lucía del Sinú',
+    customer: '812004567-2',
+    branch: 'Sede Norte',
     inDays: 15,
     outcome: 'draft',
     lines: [
@@ -285,16 +327,9 @@ const ORDERS: readonly ShowcaseOrder[] = [
       ['00710', '60'],
     ],
   },
+  { customer: '900334455-6', inDays: 20, outcome: 'draft', lines: [['00811', '250']] },
   {
-    seller: 'c',
-    customer: 'Distribuciones Sahagún Ltda.',
-    inDays: 20,
-    outcome: 'draft',
-    lines: [['00811', '250']],
-  },
-  {
-    seller: 'd',
-    customer: 'Supermercado Mi Pueblo',
+    customer: '900887766-5',
     inDays: 28,
     outcome: 'draft',
     lines: [
@@ -304,75 +339,20 @@ const ORDERS: readonly ShowcaseOrder[] = [
   },
 ];
 
-const SELLERS = {
-  a: 'vendedor.a@nowcleany.local',
-  b: 'vendedor.b@nowcleany.local',
-  c: 'vendedor.c@nowcleany.local',
-  d: 'vendedor.d@nowcleany.local',
-} as const;
-
 @Injectable()
 export class ShowcaseOrdersSeeder {
   private readonly logger = new Logger('sales');
 
   constructor(
-    private readonly users: UserDirectory,
-    private readonly catalog: ProductCatalog,
-    private readonly customers: CustomersService,
+    private readonly loader: PortfolioLoader,
     private readonly orders: SalesOrdersService,
-    private readonly currentActor: CurrentActor,
   ) {}
 
   async seed(): Promise<void> {
-    const known = new Map((await this.customers.list()).map((c) => [c.name, c.id]));
-    if (known.has(CUSTOMERS[0].name)) return;
-    for (const customer of CUSTOMERS) {
-      const created = await this.customers.create({
-        name: customer.name,
-        city: customer.city,
-        phone: customer.phone,
-        ...(customer.taxId ? { taxId: customer.taxId } : {}),
-      });
-      known.set(created.name, created.id);
-    }
-    const sellers = new Map(
-      (await this.users.findByEmails(Object.values(SELLERS))).map((u) => [u.email, u]),
-    );
-    const products = new Map(
-      (await this.catalog.findByCodes(ORDERS.flatMap((o) => o.lines.map(([code]) => code)))).map(
-        (p) => [p.code, p.id],
-      ),
-    );
-    for (const order of ORDERS) {
-      const seller = sellers.get(SELLERS[order.seller]);
-      const customerId = known.get(order.customer);
-      if (!seller || !customerId)
-        throw new Error(`Datos de ejemplo incompletos: ${order.customer}`);
-      await this.currentActor.runAs(
-        {
-          id: seller.id,
-          displayName: seller.fullName,
-          permissions: new Set(seller.permissions),
-          system: false,
-        },
-        async () => {
-          const created = await this.orders.create({
-            customerId,
-            estimatedDeliveryDate: inDays(order.inDays),
-            ...(order.outcome === 'dispatch-today' ? { notes: DISPATCH_TODAY } : {}),
-            lines: order.lines.map(([code, quantity]) => ({
-              productId: products.get(code) ?? '',
-              quantity,
-            })),
-          });
-          if (order.outcome === 'draft') return;
-          await this.orders.confirm(created.id);
-          if (order.outcome === 'cancel')
-            await this.orders.cancel(created.id, order.cancelReason ?? 'Anulada');
-        },
-      );
-    }
-    this.logger.log(`Preventas adicionales: ${String(ORDERS.length)}`);
+    if ((await this.loader.loadCustomers(CUSTOMERS)) === 0) return;
+    await this.loader.loadOrders(ORDERS, DISPATCH_TODAY);
+    const visits = await this.loader.loadVisitHistory(12);
+    this.logger.log(`Preventas adicionales: ${String(ORDERS.length)} · visitas: ${String(visits)}`);
   }
 
   /** Runs after planta packaged and handed over today's goods. */
@@ -381,8 +361,4 @@ export class ShowcaseOrdersSeeder {
     for (const order of confirmed.filter((o) => o.notes === DISPATCH_TODAY))
       await this.orders.dispatch(order.id);
   }
-}
-
-function inDays(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }

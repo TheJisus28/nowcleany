@@ -45,6 +45,12 @@ export class AppConfig {
     return this.nodeEnv === 'production';
   }
 
+  /** An optional setting (empty means not configured). */
+  optional(name: string): string | null {
+    const value = this.raw[name]?.trim() ?? '';
+    return value === '' ? null : value;
+  }
+
   /** A required secret or setting that is not part of the static schema. */
   secret(name: string): string {
     const value = this.raw[name];

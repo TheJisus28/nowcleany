@@ -85,7 +85,7 @@ const pack = (
   batchYield: '1',
   lines: [
     { component: bulkCode, quantity: liters },
-    { component: container, quantity: '1', wasteBps: 50 },
+    { component: container, quantity: '1' },
     { component: cap, quantity: '1' },
     { component: label, quantity: '1' },
   ],
@@ -97,7 +97,7 @@ export const SHOWCASE_FORMULAS: readonly SeedFormula[] = [
     batchYield: '10000',
     lines: [
       { component: 'MP-AGUA', quantity: '9300' },
-      { component: 'MP-ESTER', quantity: '450', wasteBps: 100 },
+      { component: 'MP-ESTER', quantity: '450' },
       { component: 'MP-FRAG-SUAV', quantity: '60' },
       { component: 'MP-QUAT', quantity: '40' },
       { component: 'MP-COL-AZUL', quantity: '300' },
@@ -108,7 +108,7 @@ export const SHOWCASE_FORMULAS: readonly SeedFormula[] = [
     batchYield: '5000',
     lines: [
       { component: 'MP-AGUA', quantity: '4300' },
-      { component: 'MP-BUTIL', quantity: '250', wasteBps: 50 },
+      { component: 'MP-BUTIL', quantity: '250' },
       { component: 'MP-LAURIL', quantity: '200' },
       { component: 'MP-SODA', quantity: '25' },
       { component: 'MP-EDTA', quantity: '25' },
@@ -119,7 +119,7 @@ export const SHOWCASE_FORMULAS: readonly SeedFormula[] = [
     batchYield: '5000',
     lines: [
       { component: 'MP-AGUA', quantity: '3900' },
-      { component: 'MP-LAURIL', quantity: '600', wasteBps: 50 },
+      { component: 'MP-LAURIL', quantity: '600' },
       { component: 'MP-LAS', quantity: '250' },
       { component: 'MP-SAL', quantity: '100' },
       { component: 'MP-FRAG-LIM', quantity: '25' },
@@ -131,7 +131,7 @@ export const SHOWCASE_FORMULAS: readonly SeedFormula[] = [
     batchYield: '2000',
     lines: [
       { component: 'MP-AGUA', quantity: '1800' },
-      { component: 'MP-ALCOHOL', quantity: '180', wasteBps: 100 },
+      { component: 'MP-ALCOHOL', quantity: '180' },
       { component: 'MP-BUTIL', quantity: '20' },
       { component: 'MP-COL-AZUL', quantity: '40' },
     ],
@@ -141,7 +141,7 @@ export const SHOWCASE_FORMULAS: readonly SeedFormula[] = [
     batchYield: '8000',
     lines: [
       { component: 'MP-AGUA', quantity: '6600' },
-      { component: 'MP-LAS', quantity: '600', wasteBps: 50 },
+      { component: 'MP-LAS', quantity: '600' },
       { component: 'MP-LAURIL', quantity: '400' },
       { component: 'MP-SAL', quantity: '120' },
       { component: 'MP-EDTA', quantity: '20' },

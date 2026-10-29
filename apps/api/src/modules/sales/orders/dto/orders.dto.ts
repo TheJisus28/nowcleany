@@ -34,6 +34,15 @@ export class OrderDto {
   @IsUUID()
   customerId!: string;
 
+  /** Where it is delivered: a branch of the customer. */
+  @IsUUID()
+  branchId!: string;
+
+  /** The visit during which the order was taken (seller app). */
+  @IsOptional()
+  @IsUUID()
+  visitId?: string;
+
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   estimatedDeliveryDate?: string;

@@ -97,6 +97,30 @@ export class AdjustmentDto {
   reason!: string;
 }
 
+export class WasteDto {
+  @IsUUID()
+  productId!: string;
+
+  /** What was lost, in the product's unit (or `unit`). */
+  @Matches(DECIMAL)
+  quantity!: string;
+
+  @IsOptional()
+  @IsIn(UNIT_CODES)
+  unit?: string;
+
+  /** PLANTA by default. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  warehouse?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  note?: string;
+}
+
 export class StatusQuery {
   @IsOptional()
   @IsIn(PRODUCT_TYPES)

@@ -10,7 +10,6 @@ export interface FormulaLineRecord {
   readonly componentId: string;
   /** Per batch, base units of the component. */
   readonly quantity: bigint;
-  readonly wasteBps: number;
 }
 
 export interface FormulaRecord {
@@ -35,7 +34,7 @@ export interface DraftContent {
   readonly batchYield: bigint;
   readonly notes: string | null;
   readonly author: { id: string; name: string };
-  readonly lines: readonly { componentId: string; quantity: bigint; wasteBps: number }[];
+  readonly lines: readonly { componentId: string; quantity: bigint }[];
 }
 
 type FormulaRow = Selectable<ProductTables['formulas']>;
@@ -191,7 +190,6 @@ export class FormulasRepository {
           line_no: index + 1,
           component_id: line.componentId,
           quantity: line.quantity,
-          waste_bps: line.wasteBps,
         })),
       )
       .execute();
@@ -216,7 +214,6 @@ export class FormulasRepository {
         lineNo: line.line_no,
         componentId: line.component_id,
         quantity: line.quantity,
-        wasteBps: line.waste_bps,
       });
       byFormula.set(line.formula_id, list);
     }

@@ -10,6 +10,7 @@ import {
 } from '../../../shared-kernel/index.js';
 import { InventoryLedger } from '../../inventory/index.js';
 import { ProductCatalog } from '../../product/index.js';
+import { CustomersService } from '../customers/customers.service.js';
 import {
   assertEditable,
   assertTransition,
@@ -19,7 +20,7 @@ import {
   requireCancelReason,
   validateLines,
 } from '../domain/sales-order.js';
-import { CustomersRepository } from '../customers/customers.repository.js';
+import { VisitsRepository } from '../visits/visits.repository.js';
 import { type SalesOrderView, toOrderView } from './order-view.js';
 import {
   type OrderContent,
@@ -29,16 +30,23 @@ import {
 
 export interface OrderCommand {
   readonly customerId: string;
+  readonly branchId: string;
+  readonly visitId?: string;
   readonly estimatedDeliveryDate?: string | null;
   readonly notes?: string | null;
   readonly lines: readonly { productId: string; quantity: string; unit?: string }[];
 }
 
+/**
+ * Pre-sales. They never touch the physical stock (planning reads them as a projection); a seller sees
+ * only their own, whoever holds sales-orders:read-all sees everyone's.
+ */
 @Injectable()
 export class SalesOrdersService {
   constructor(
     private readonly orders: SalesOrdersRepository,
-    private readonly customers: CustomersRepository,
+    private readonly customers: CustomersService,
+    private readonly visits: VisitsRepository,
     private readonly catalog: ProductCatalog,
     private readonly inventory: InventoryLedger,
     private readonly currentActor: CurrentActor,
@@ -54,10 +62,11 @@ export class SalesOrdersService {
     limit?: number;
   }): Promise<SalesOrderView[]> {
     const actor = this.currentActor.require();
+    const onlyOwn = filter.mine === true || !seesAll(actor);
     const orders = await this.orders.list({
       limit: filter.limit ?? 100,
       ...(filter.statuses ? { statuses: filter.statuses } : {}),
-      ...(filter.mine ? { sellerId: actor.id } : {}),
+      ...(onlyOwn ? { sellerId: actor.id } : {}),
       ...(filter.customerId ? { customerId: filter.customerId } : {}),
       ...(filter.productId ? { productId: filter.productId } : {}),
       ...(filter.search ? { search: filter.search } : {}),
@@ -77,6 +86,7 @@ export class SalesOrdersService {
       id: actor.id,
       name: actor.displayName,
     });
+    if (command.visitId) await this.linkVisit(command.visitId, command.customerId, id);
     return this.get(id);
   }
 
@@ -89,23 +99,18 @@ export class SalesOrdersService {
     return this.get(id);
   }
 
-  /** Commits the order's finished goods and marks it confirmed. Never fails for lack of stock. */
+  /** Confirmed: it now counts for planning (what to make and buy). The stock is not touched. */
   @Transactional()
   async confirm(id: string): Promise<SalesOrderView> {
     const order = await this.require(id);
     this.assertCanManage(order);
     if (order.status === 'CONFIRMED') return toOrderView(order);
     assertTransition(order.status, 'CONFIRMED');
-    await this.inventory.reserve(
-      order.id,
-      orderLabel(order.number),
-      order.lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
-    );
     await this.orders.markConfirmed(id);
     return this.get(id);
   }
 
-  /** Ships the order from DESPACHO and marks it dispatched. */
+  /** Ships the order: the real stock leaves the dispatch warehouse. */
   @Transactional()
   async dispatch(id: string): Promise<SalesOrderView> {
     const order = await this.require(id);
@@ -121,7 +126,6 @@ export class SalesOrdersService {
     return this.get(id);
   }
 
-  /** Cancels the order and frees whatever it had committed. */
   @Transactional()
   async cancel(id: string, reason: string): Promise<SalesOrderView> {
     const order = await this.require(id);
@@ -129,15 +133,17 @@ export class SalesOrdersService {
     assertTransition(order.status, 'CANCELLED');
     const actor = this.currentActor.require();
     await this.orders.markCancelled(id, actor.displayName, requireCancelReason(reason));
-    await this.inventory.release(order.id);
     return this.get(id);
   }
 
   // --- helpers ---------------------------------------------------------------------------
 
   private async content(command: OrderCommand): Promise<OrderContent> {
-    if (!(await this.customers.findById(command.customerId))) {
-      throw new ValidationError('sales.customer_not_found', 'El cliente no existe.');
+    // Only customers in the seller's portfolio (or any, with customers:read-all).
+    await this.customers.requireVisible(command.customerId);
+    const branch = await this.customers.requireBranch(command.customerId, command.branchId);
+    if (!branch.active) {
+      throw new ValidationError('sales.inactive_branch', 'La sucursal está desactivada.');
     }
     const products = new Map(
       (await this.catalog.findByIds(command.lines.map((line) => line.productId))).map((p) => [
@@ -154,6 +160,7 @@ export class SalesOrdersService {
     validateLines(lines);
     return {
       customerId: command.customerId,
+      branchId: branch.id,
       estimatedDeliveryDate: parseDeliveryDate(command.estimatedDeliveryDate),
       notes: command.notes?.trim() ? command.notes.trim() : null,
       lines: lines.map(({ product, quantity }) => ({
@@ -164,6 +171,15 @@ export class SalesOrdersService {
         quantity: quantity.base,
       })),
     };
+  }
+
+  private async linkVisit(visitId: string, customerId: string, orderId: string): Promise<void> {
+    const visit = await this.visits.findById(visitId);
+    const actor = this.currentActor.require();
+    if (visit?.sellerId !== actor.id || visit.customerId !== customerId) {
+      throw new ValidationError('sales.invalid_visit', 'La visita no corresponde a este cliente.');
+    }
+    await this.visits.setOrder(visitId, orderId);
   }
 
   /** Sellers manage their own orders; managers (sales-orders:manage-all) any order. */
@@ -180,7 +196,14 @@ export class SalesOrdersService {
 
   private async require(id: string): Promise<OrderRecord> {
     const order = await this.orders.findById(id);
-    if (!order) throw new NotFoundError('sales.order_not_found', 'La preventa no existe.');
+    const actor = this.currentActor.require();
+    if (!order || (!seesAll(actor) && order.seller.id !== actor.id)) {
+      throw new NotFoundError('sales.order_not_found', 'La preventa no existe.');
+    }
     return order;
   }
+}
+
+function seesAll(actor: Actor): boolean {
+  return actor.system || actor.permissions.has('sales-orders:read-all');
 }

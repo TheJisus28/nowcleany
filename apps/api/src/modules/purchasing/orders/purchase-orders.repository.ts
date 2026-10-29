@@ -19,7 +19,7 @@ export interface PurchaseLineRecord {
 export interface PurchaseOrderRecord {
   readonly id: string;
   readonly number: bigint;
-  readonly supplier: string;
+  readonly supplier: { id: string; name: string };
   readonly expectedDate: string | null;
   readonly status: PurchaseStatus;
   readonly notes: string | null;
@@ -34,7 +34,7 @@ export interface PurchaseOrderRecord {
 }
 
 export interface NewPurchaseOrder {
-  readonly supplier: string;
+  readonly supplier: { id: string; name: string };
   readonly expectedDate: string | null;
   readonly notes: string | null;
   readonly createdBy: { id: string; name: string };
@@ -85,7 +85,8 @@ export class PurchaseOrdersRepository {
     const row = await this.host.tx
       .insertInto('purchase_orders')
       .values({
-        supplier: order.supplier,
+        supplier_id: order.supplier.id,
+        supplier: order.supplier.name,
         expected_date: order.expectedDate,
         status: 'OPEN',
         notes: order.notes,
@@ -190,7 +191,7 @@ export class PurchaseOrdersRepository {
     return rows.map((row) => ({
       id: row.id,
       number: row.number,
-      supplier: row.supplier,
+      supplier: { id: row.supplier_id, name: row.supplier },
       expectedDate: row.expected_date,
       status: row.status,
       notes: row.notes,

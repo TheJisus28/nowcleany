@@ -8,6 +8,7 @@ import {
   type ProductSummary,
 } from '../../product/index.js';
 import { type PlannedProduction, ProductionSchedule } from '../../production/index.js';
+import { CurrentActor } from '../../../platform/security/current-actor.js';
 import { type OnOrderLine, PurchasingBook } from '../../purchasing/index.js';
 import { type OpenOrder, SalesDirectory } from '../../sales/index.js';
 import {
@@ -75,7 +76,14 @@ export class PlanningService {
     private readonly sales: SalesDirectory,
     private readonly production: ProductionSchedule,
     private readonly purchasing: PurchasingBook,
+    private readonly currentActor: CurrentActor,
   ) {}
+
+  /** Sellers only see their own orders in the planning views (the plan itself stays global). */
+  private ownSeller(): string | undefined {
+    const actor = this.currentActor.require();
+    return actor.system || actor.permissions.has('sales-orders:read-all') ? undefined : actor.id;
+  }
 
   async summary(): Promise<PlanningSummary> {
     const snapshot = await this.snapshot();
@@ -147,6 +155,10 @@ export class PlanningService {
         sold: toQuantityDto(sold, unit),
         potential: toQuantityDto(potential.get(productId) ?? 0n, unit),
         bySeller: [...sellers]
+          .filter(([sellerId]) => {
+            const own = this.ownSeller();
+            return !own || sellerId === own;
+          })
           .sort(([, a], [, b]) => (a.quantity > b.quantity ? -1 : 1))
           .map(([sellerId, entry]) => ({
             sellerId,
@@ -183,7 +195,8 @@ export class PlanningService {
     const snapshot = await this.snapshot();
     const plan = await this.plan(snapshot);
     let priority = 0;
-    return [...this.groupCoverage(plan.coverage).values()].map((lines) => {
+    const own = this.ownSeller();
+    const views = [...this.groupCoverage(plan.coverage).values()].map((lines) => {
       const first = lines[0];
       if (!first) throw new Error('Pedido sin líneas en la cobertura');
       const status = worstStatus(lines.map((line) => line.status));
@@ -213,6 +226,7 @@ export class PlanningService {
         }),
       };
     });
+    return own ? views.filter((view) => view.seller.id === own) : views;
   }
 
   /** Plant: what to package and which bulk to produce, against what is already scheduled. */

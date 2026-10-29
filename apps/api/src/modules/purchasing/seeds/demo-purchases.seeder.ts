@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ProductCatalog } from '../../product/index.js';
 import { PurchaseOrdersRepository } from '../orders/purchase-orders.repository.js';
 import { PurchaseOrdersService } from '../orders/purchase-orders.service.js';
+import { SupplierDirectory } from './supplier-directory.js';
 
 /** DATOS DE EJEMPLO: compras ya pidió 300 cajas corrugadas; el panel las descuenta del faltante. */
 @Injectable()
@@ -12,6 +13,7 @@ export class DemoPurchasesSeeder {
     private readonly catalog: ProductCatalog,
     private readonly orders: PurchaseOrdersService,
     private readonly repository: PurchaseOrdersRepository,
+    private readonly suppliers: SupplierDirectory,
   ) {}
 
   async seed(): Promise<void> {
@@ -19,7 +21,7 @@ export class DemoPurchasesSeeder {
     const [boxes] = await this.catalog.findByCodes(['MP-CAJA-6']);
     if (!boxes) return;
     await this.orders.create({
-      supplier: 'Cartones de Córdoba SAS',
+      supplierId: await this.suppliers.idOf('Cartones de Córdoba S.A.S.'),
       expectedDate: new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10),
       notes: 'Pedido por teléfono (datos de ejemplo).',
       lines: [{ productId: boxes.id, quantity: '300' }],

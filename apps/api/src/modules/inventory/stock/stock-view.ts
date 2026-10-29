@@ -1,7 +1,7 @@
 import { type QuantityDto, toQuantityDto } from '../../../shared-kernel/index.js';
 import type { ProductSummary } from '../../product/index.js';
 import { PRODUCT_TYPE_LABELS } from '../../product/index.js';
-import { available, MOVEMENT_LABELS, type MovementType } from '../domain/stock.js';
+import { MOVEMENT_LABELS, type MovementType } from '../domain/stock.js';
 import type { BalanceRecord, MovementRecord, Warehouse } from './stock.repository.js';
 
 export interface StockStatusView {
@@ -11,12 +11,15 @@ export interface StockStatusView {
   readonly type: ProductSummary['type'];
   readonly typeLabel: string;
   readonly unit: ProductSummary['stockUnit'];
+  /** Real stock: only real movements change it. */
   readonly onHand: QuantityDto;
-  readonly reserved: QuantityDto;
-  readonly available: QuantityDto;
+  /** Committed by confirmed pre-sales (informative). */
+  readonly committed: QuantityDto;
+  /** Hypothetical stock: physical minus what pre-sales committed. */
+  readonly projected: QuantityDto;
   /** Physical stock below zero (movements recorded before their counterpart). */
   readonly negativeOnHand: boolean;
-  /** More committed than in stock: oversold. */
+  /** Pre-sales commit more than is in stock: oversold. */
   readonly oversold: boolean;
   readonly byWarehouse: readonly {
     warehouseCode: string;
@@ -43,10 +46,10 @@ export function toStatusView(
   product: ProductSummary,
   balances: readonly BalanceRecord[],
   warehouses: readonly Warehouse[],
+  committed: bigint,
 ): StockStatusView {
   const onHand = balances.reduce((sum, balance) => sum + balance.onHand, 0n);
-  const reserved = balances.reduce((sum, balance) => sum + balance.reserved, 0n);
-  const free = available({ onHand, reserved });
+  const projected = onHand - committed;
   return {
     productId: product.id,
     code: product.code,
@@ -55,10 +58,10 @@ export function toStatusView(
     typeLabel: PRODUCT_TYPE_LABELS[product.type],
     unit: product.stockUnit,
     onHand: toQuantityDto(onHand, product.stockUnit),
-    reserved: toQuantityDto(reserved, product.stockUnit),
-    available: toQuantityDto(free, product.stockUnit),
+    committed: toQuantityDto(committed, product.stockUnit),
+    projected: toQuantityDto(projected, product.stockUnit),
     negativeOnHand: onHand < 0n,
-    oversold: free < 0n,
+    oversold: committed > 0n && projected < 0n,
     byWarehouse: warehouses.map((warehouse) => ({
       warehouseCode: warehouse.code,
       warehouseName: warehouse.name,

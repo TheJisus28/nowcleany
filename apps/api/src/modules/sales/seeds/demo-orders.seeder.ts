@@ -1,135 +1,110 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CurrentActor } from '../../../platform/security/current-actor.js';
-import { UserDirectory } from '../../identity/index.js';
-import { ProductCatalog } from '../../product/index.js';
-import { CustomersService } from '../customers/customers.service.js';
-import { SalesOrdersRepository } from '../orders/sales-orders.repository.js';
-import { SalesOrdersService } from '../orders/sales-orders.service.js';
+import { type SeedCustomer, type SeedOrder, PortfolioLoader } from './portfolio-loader.js';
 
 // DATOS DE EJEMPLO de la propuesta SCIP: tres vendedores preventan 1.200 + 800 + 950 = 2.950 cajas de
 // cloro 00224, pero con las materias primas disponibles solo se pueden fabricar 2.000.
-const CUSTOMERS = [
+export const DEMO_CUSTOMERS: readonly SeedCustomer[] = [
   {
-    name: 'Supermercados La Economía',
-    taxId: '900123456-7',
-    city: 'Montería',
+    seller: 'a',
+    documentType: 'NIT',
+    documentNumber: '900123456-7',
+    name: 'Supermercados La Economía S.A.S.',
     phone: '604 785 1200',
+    branches: [
+      {
+        name: 'Principal',
+        address: 'Calle 41 # 6-20, Centro',
+        city: 'Montería',
+        latitude: 8.7608,
+        longitude: -75.8822,
+      },
+      {
+        name: 'La Castellana',
+        address: 'Carrera 6 # 61-15, La Castellana',
+        city: 'Montería',
+        latitude: 8.7768,
+        longitude: -75.8741,
+      },
+      {
+        name: 'Mocarí',
+        address: 'Calle 70 # 2-35, Mocarí',
+        city: 'Montería',
+        latitude: 8.7889,
+        longitude: -75.8607,
+      },
+    ],
   },
-  { name: 'Distribuidora El Sinú', taxId: '900456789-1', city: 'Cereté', phone: '604 774 3300' },
-  { name: 'Hotel Casa Grande', taxId: '800987654-3', city: 'Montería', phone: '604 789 4500' },
-  { name: 'Colegio San José', taxId: '891080123-5', city: 'Lorica', phone: '604 773 2100' },
-] as const;
+  {
+    seller: 'b',
+    documentType: 'NIT',
+    documentNumber: '900456789-1',
+    name: 'Distribuidora El Sinú Ltda.',
+    phone: '604 774 3300',
+    branches: [
+      {
+        name: 'Principal',
+        address: 'Carrera 12 # 14-30',
+        city: 'Cereté',
+        latitude: 8.8851,
+        longitude: -75.7905,
+      },
+    ],
+  },
+  {
+    seller: 'c',
+    documentType: 'NIT',
+    documentNumber: '800987654-3',
+    name: 'Hotel Casa Grande S.A.',
+    phone: '604 789 4500',
+    branches: [
+      {
+        name: 'Principal',
+        address: 'Calle 29 # 1-50, Ronda del Sinú',
+        city: 'Montería',
+        latitude: 8.7531,
+        longitude: -75.8869,
+      },
+    ],
+  },
+  {
+    seller: 'a',
+    documentType: 'NIT',
+    documentNumber: '891080123-5',
+    name: 'Colegio San José de Lorica',
+    phone: '604 773 2100',
+    branches: [
+      {
+        name: 'Principal',
+        address: 'Calle 3 # 18-40',
+        city: 'Lorica',
+        latitude: 9.2369,
+        longitude: -75.8132,
+      },
+    ],
+  },
+];
 
-interface DemoOrder {
-  seller: string;
-  customer: number;
-  inDays: number;
-  confirm: boolean;
-  lines: readonly (readonly [code: string, quantity: string])[];
-}
-
-const ORDERS: readonly DemoOrder[] = [
-  {
-    seller: 'vendedor.a@nowcleany.local',
-    customer: 0,
-    inDays: 9,
-    confirm: true,
-    lines: [['00224', '1200']],
-  },
-  {
-    seller: 'vendedor.b@nowcleany.local',
-    customer: 1,
-    inDays: 11,
-    confirm: true,
-    lines: [['00224', '800']],
-  },
-  {
-    seller: 'vendedor.c@nowcleany.local',
-    customer: 2,
-    inDays: 16,
-    confirm: true,
-    lines: [['00224', '950']],
-  },
-  {
-    seller: 'vendedor.a@nowcleany.local',
-    customer: 3,
-    inDays: 5,
-    confirm: true,
-    lines: [['00225', '300']],
-  },
-  {
-    seller: 'vendedor.c@nowcleany.local',
-    customer: 3,
-    inDays: 14,
-    confirm: true,
-    lines: [['00310', '400']],
-  },
-  {
-    seller: 'vendedor.b@nowcleany.local',
-    customer: 0,
-    inDays: 20,
-    confirm: false,
-    lines: [['00224', '300']],
-  },
+const ORDERS: readonly SeedOrder[] = [
+  { customer: '900123456-7', inDays: 9, outcome: 'confirm', lines: [['00224', '1200']] },
+  { customer: '900456789-1', inDays: 11, outcome: 'confirm', lines: [['00224', '800']] },
+  { customer: '800987654-3', inDays: 16, outcome: 'confirm', lines: [['00224', '950']] },
+  { customer: '891080123-5', inDays: 5, outcome: 'confirm', lines: [['00225', '300']] },
+  { customer: '800987654-3', inDays: 14, outcome: 'confirm', lines: [['00310', '400']] },
+  { customer: '900456789-1', inDays: 20, outcome: 'draft', lines: [['00224', '300']] },
 ];
 
 @Injectable()
 export class DemoOrdersSeeder {
   private readonly logger = new Logger('sales');
 
-  constructor(
-    private readonly users: UserDirectory,
-    private readonly catalog: ProductCatalog,
-    private readonly customers: CustomersService,
-    private readonly orders: SalesOrdersService,
-    private readonly repository: SalesOrdersRepository,
-    private readonly currentActor: CurrentActor,
-  ) {}
+  constructor(private readonly loader: PortfolioLoader) {}
 
   async seed(): Promise<void> {
-    if ((await this.repository.list({ limit: 1 })).length > 0) {
-      this.logger.log('Ya hay preventas registradas: no se cargan las de demo');
+    if ((await this.loader.loadCustomers(DEMO_CUSTOMERS)) === 0) {
+      this.logger.log('Los clientes de demo ya existían: no se cargan preventas');
       return;
     }
-    const customerIds: string[] = [];
-    for (const customer of CUSTOMERS) customerIds.push((await this.customers.create(customer)).id);
-
-    const sellers = new Map(
-      (await this.users.findByEmails(ORDERS.map((order) => order.seller))).map((u) => [u.email, u]),
-    );
-    const products = new Map(
-      (await this.catalog.findByCodes(ORDERS.flatMap((o) => o.lines.map(([code]) => code)))).map(
-        (p) => [p.code, p.id],
-      ),
-    );
-    for (const order of ORDERS) {
-      const seller = sellers.get(order.seller);
-      if (!seller) throw new Error(`Vendedor de demo ${order.seller} no encontrado`);
-      // Registered by the seller, so the report attributes it to them.
-      await this.currentActor.runAs(
-        {
-          id: seller.id,
-          displayName: seller.fullName,
-          permissions: new Set(seller.permissions),
-          system: false,
-        },
-        async () => {
-          const created = await this.orders.create({
-            customerId: customerIds[order.customer] ?? '',
-            estimatedDeliveryDate: inDays(order.inDays),
-            lines: order.lines.map(([code, quantity]) => ({
-              productId: products.get(code) ?? '',
-              quantity,
-            })),
-          });
-          if (order.confirm) await this.orders.confirm(created.id);
-        },
-      );
-    }
+    await this.loader.loadOrders(ORDERS, '');
     this.logger.log(`Preventas de demo: ${String(ORDERS.length)}`);
   }
-}
-
-function inDays(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }

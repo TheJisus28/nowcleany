@@ -11,7 +11,6 @@ export interface FormulaLineView {
   readonly componentType: ProductType;
   readonly componentTypeLabel: string;
   readonly quantity: QuantityDto;
-  readonly wasteBps: number;
 }
 
 export interface FormulaView {
@@ -59,7 +58,6 @@ export function toFormulaView(
         componentType: component.type,
         componentTypeLabel: PRODUCT_TYPE_LABELS[component.type],
         quantity: toQuantityDto(line.quantity, component.stockUnit),
-        wasteBps: line.wasteBps,
       };
     }),
   };

@@ -140,9 +140,10 @@ export class ProductionOrdersService {
    * Records the real output: inventory adds the product and consumes the active formula for that
    * quantity (inventory's transaction, idempotent per order), then the order is marked completed.
    */
+  @Transactional()
   async complete(
     id: string,
-    command: { producedQuantity?: string; unit?: string },
+    command: { producedQuantity?: string; unit?: string; bulkWaste?: string },
   ): Promise<ProductionOrderView> {
     const order = await this.load(id);
     if (order.status === 'COMPLETED') return toView(order);
@@ -174,6 +175,23 @@ export class ProductionOrdersService {
       })),
       reference: { type: 'production_order', id: order.id, label: productionLabel(order.number) },
     });
+    if (command.bulkWaste && Number(command.bulkWaste) > 0) {
+      // Packaging done: what is left of the bulk in the tank is lost.
+      const components = await this.catalog.findByIds(requirements.needs.map((n) => n.componentId));
+      const bulk = components.find((component) => component.type === 'BULK');
+      if (!bulk) {
+        throw new ValidationError(
+          'production.no_bulk',
+          'Esta orden no usa granel: no hay merma de tanque que registrar.',
+        );
+      }
+      await this.inventory.recordWaste({
+        productId: bulk.id,
+        quantity: command.bulkWaste,
+        reference: { type: 'production_order', id: order.id, label: productionLabel(order.number) },
+        note: 'Granel sobrante en el tanque al terminar el envasado',
+      });
+    }
     return this.finish(id, produced);
   }
 

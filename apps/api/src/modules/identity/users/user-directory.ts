@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { permissionsOf } from '../access.js';
 import { Transactional } from '@nestjs-cls/transactional';
-import { CurrentActor } from '../../../platform/security/current-actor.js';
-import { UsersRepository } from './users.repository.js';
+import { permissionsOf } from '../access.js';
+import { type UserRecord, UsersRepository } from './users.repository.js';
 
 export interface DirectoryUser {
   readonly id: string;
@@ -13,30 +12,39 @@ export interface DirectoryUser {
   readonly permissions: readonly string[];
 }
 
-/** Public read API of the identity module. */
+/** What other modules read about users (sellers for portfolios, seeds by email). */
 @Injectable()
 export class UserDirectory {
-  constructor(
-    private readonly users: UsersRepository,
-    private readonly currentActor: CurrentActor,
-  ) {}
+  constructor(private readonly users: UsersRepository) {}
 
   @Transactional()
   async findByEmails(emails: readonly string[]): Promise<DirectoryUser[]> {
-    this.currentActor.requirePermission('users:read');
-    const found: DirectoryUser[] = [];
-    for (const email of emails) {
-      const user = await this.users.findByEmail(email);
-      if (!user) continue;
-      found.push({
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        active: user.active,
-        roles: user.roles,
-        permissions: permissionsOf(user.roles),
-      });
-    }
-    return found;
+    const found = await Promise.all(emails.map((email) => this.users.findByEmail(email)));
+    return found.filter((user): user is UserRecord => Boolean(user)).map(toDirectoryUser);
   }
+
+  @Transactional()
+  async findByIds(ids: readonly string[]): Promise<DirectoryUser[]> {
+    const found = await Promise.all(ids.map((id) => this.users.findById(id)));
+    return found.filter((user): user is UserRecord => Boolean(user)).map(toDirectoryUser);
+  }
+
+  /** Active users with the sales role. */
+  @Transactional()
+  async sellers(): Promise<DirectoryUser[]> {
+    return (await this.users.list())
+      .filter((user) => user.active && user.roles.includes('sales'))
+      .map(toDirectoryUser);
+  }
+}
+
+function toDirectoryUser(user: UserRecord): DirectoryUser {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    active: user.active,
+    roles: user.roles,
+    permissions: permissionsOf(user.roles),
+  };
 }

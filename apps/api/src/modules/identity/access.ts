@@ -103,9 +103,9 @@ export const PERMISSIONS: readonly {
     roles: [],
   },
   {
-    code: 'inventory:reserve',
-    description: 'Comprometer y liberar producto terminado para preventas',
-    roles: ['sales'],
+    code: 'inventory:waste',
+    description: 'Registrar merma (lo que queda en el tanque, producto dañado)',
+    roles: ['plant', 'warehouse'],
   },
   {
     code: 'inventory:dispatch',
@@ -118,8 +118,31 @@ export const PERMISSIONS: readonly {
     roles: ['plant'],
   },
   { code: 'customers:read', description: 'Ver clientes', roles: ['manager', 'sales', 'warehouse'] },
-  { code: 'customers:write', description: 'Crear y editar clientes', roles: ['sales'] },
-  { code: 'sales-orders:read', description: 'Ver las preventas del equipo', roles: OPERATIONS },
+  {
+    code: 'customers:read-all',
+    description: 'Ver los clientes de todos los vendedores (sin esto, solo su cartera)',
+    roles: ['manager', 'warehouse'],
+  },
+  {
+    code: 'customers:write',
+    description: 'Crear y editar clientes y sucursales',
+    roles: ['sales', 'manager'],
+  },
+  {
+    code: 'customers:assign',
+    description: 'Asignar o reasignar el vendedor de un cliente',
+    roles: ['manager'],
+  },
+  {
+    code: 'sales-orders:read',
+    description: 'Ver preventas (solo las propias, salvo con read-all)',
+    roles: OPERATIONS,
+  },
+  {
+    code: 'sales-orders:read-all',
+    description: 'Ver las preventas de todos los vendedores',
+    roles: ['manager', 'plant', 'purchasing', 'warehouse'],
+  },
   {
     code: 'sales-orders:write',
     description: 'Registrar, confirmar y anular sus propias preventas',
@@ -154,6 +177,27 @@ export const PERMISSIONS: readonly {
     code: 'purchasing:write',
     description: 'Crear y anular órdenes de compra',
     roles: ['purchasing'],
+  },
+  {
+    code: 'suppliers:read',
+    description: 'Ver proveedores',
+    roles: ['manager', 'purchasing', 'warehouse'],
+  },
+  { code: 'suppliers:write', description: 'Crear y editar proveedores', roles: ['purchasing'] },
+  {
+    code: 'visits:write',
+    description: 'Registrar sus visitas a clientes con el GPS del celular',
+    roles: ['sales'],
+  },
+  {
+    code: 'visits:read',
+    description: 'Ver visitas (solo las propias, salvo con read-all)',
+    roles: ['sales', 'manager'],
+  },
+  {
+    code: 'visits:read-all',
+    description: 'Ver en el mapa las visitas de todos los vendedores',
+    roles: ['manager'],
   },
   {
     code: 'purchasing:receive',

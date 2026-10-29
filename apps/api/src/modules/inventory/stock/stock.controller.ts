@@ -4,6 +4,7 @@ import { Permission } from '../../../platform/security/decorators.js';
 import { ValidationError } from '../../../shared-kernel/index.js';
 import {
   AdjustmentDto,
+  WasteDto,
   MovementsQuery,
   ReceiptDto,
   StatusQuery,
@@ -87,6 +88,21 @@ export class StockController {
       },
       warehouseCode: body.warehouse,
       reason: body.reason,
+    });
+  }
+
+  /** What is lost: bulk left in a tank, a damaged product. It leaves the stock with a WASTE movement. */
+  @Permission('inventory:waste')
+  @Post('waste')
+  waste(@Body() body: WasteDto): Promise<OperationResult> {
+    return this.stock.waste({
+      line: {
+        productId: body.productId,
+        quantity: body.quantity,
+        ...(body.unit ? { unit: body.unit } : {}),
+      },
+      ...(body.warehouse ? { warehouseCode: body.warehouse } : {}),
+      ...(body.note ? { note: body.note } : {}),
     });
   }
 

@@ -9,6 +9,7 @@ export const MOVEMENT_TYPES = [
   'TRANSFER_IN',
   'DISPATCH',
   'ADJUSTMENT',
+  'WASTE',
 ] as const;
 export type MovementType = (typeof MOVEMENT_TYPES)[number];
 
@@ -21,6 +22,7 @@ export const MOVEMENT_LABELS: Record<MovementType, string> = {
   TRANSFER_IN: 'Traslado (entrada)',
   DISPATCH: 'Despacho',
   ADJUSTMENT: 'Ajuste',
+  WASTE: 'Merma',
 };
 
 export const PLANT_WAREHOUSE = 'PLANTA';
@@ -28,12 +30,6 @@ export const DISPATCH_WAREHOUSE = 'DESPACHO';
 
 export interface Balance {
   readonly onHand: bigint;
-  readonly reserved: bigint;
-}
-
-/** What is free to promise. Negative means oversold — allowed by design. */
-export function available(balance: Balance): bigint {
-  return balance.onHand - balance.reserved;
 }
 
 export function requirePositive(quantity: Quantity, what: string): Quantity {

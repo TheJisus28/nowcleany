@@ -13,7 +13,6 @@ import {
 import { ProductCatalog, type ProductSummary } from '../../product/index.js';
 import {
   adjustmentDelta,
-  type Balance,
   DISPATCH_WAREHOUSE,
   type MovementType,
   PLANT_WAREHOUSE,
@@ -64,7 +63,6 @@ export interface OperationResult {
 interface Entry extends BalanceKey {
   readonly type?: MovementType;
   readonly delta: bigint;
-  readonly reservedDelta?: bigint;
 }
 
 @Injectable()
@@ -88,15 +86,18 @@ export class StockService {
     const products = (
       await this.catalog.list({ active: true, ...(filter.type ? { type: filter.type } : {}) })
     ).filter((product) => matches(product, filter.search));
-    const [balances, warehouses] = await Promise.all([
-      this.stock.balances(products.map((product) => product.id)),
+    const ids = products.map((product) => product.id);
+    const [balances, warehouses, committed] = await Promise.all([
+      this.stock.balances(ids),
       this.stock.warehouses(),
+      this.stock.committed(ids),
     ]);
     return products.map((product) =>
       toStatusView(
         product,
         balances.filter((balance) => balance.productId === product.id),
         warehouses,
+        committed.get(product.id) ?? 0n,
       ),
     );
   }
@@ -313,60 +314,7 @@ export class StockService {
     return { rows: rows.length, movements: entries.length };
   }
 
-  /**
-   * Commits finished goods to a sales order. Never fails for lack of stock (overselling is allowed) and
-   * is idempotent: an order that already has reservations is left as is.
-   */
-  @Transactional()
-  async reserve(command: {
-    orderId: string;
-    orderLabel: string;
-    lines: readonly StockLine[];
-  }): Promise<{ alreadyReserved: boolean }> {
-    await this.stock.lockOrder(command.orderId);
-    if ((await this.stock.reservationsOf(command.orderId)).length > 0)
-      return { alreadyReserved: true };
-    const dispatch = this.warehouse(await this.stock.warehouses(), DISPATCH_WAREHOUSE);
-    const lines = mergeLines(command.lines);
-    await this.applyReserved(
-      lines.map((line) => ({
-        warehouseId: dispatch.id,
-        productId: line.productId,
-        delta: 0n,
-        reservedDelta: line.quantity,
-      })),
-    );
-    await this.stock.insertReservations(
-      lines.map((line) => ({
-        orderId: command.orderId,
-        orderLabel: command.orderLabel,
-        productId: line.productId,
-        warehouseId: dispatch.id,
-        quantity: line.quantity,
-      })),
-    );
-    return { alreadyReserved: false };
-  }
-
-  /** Releases an order's reservations (cancelled, or abandoned in draft). Idempotent. */
-  @Transactional()
-  async release(orderId: string): Promise<{ released: boolean }> {
-    await this.stock.lockOrder(orderId);
-    const reservations = await this.stock.reservationsOf(orderId);
-    if (reservations.length === 0) return { released: false };
-    await this.applyReserved(
-      reservations.map((r) => ({
-        warehouseId: r.warehouseId,
-        productId: r.productId,
-        delta: 0n,
-        reservedDelta: -r.quantity,
-      })),
-    );
-    await this.stock.deleteReservations(orderId);
-    return { released: true };
-  }
-
-  /** Ships an order from DESPACHO: stock goes out and its reservations are consumed. */
+  /** Ships an order from DESPACHO: the stock goes out. */
   @Transactional()
   async dispatch(command: {
     idempotencyKey: string;
@@ -374,11 +322,9 @@ export class StockService {
     reference: Reference;
     lines: readonly StockLine[];
   }): Promise<OperationResult> {
-    await this.stock.lockOrder(command.orderId);
     const dispatch = this.warehouse(await this.stock.warehouses(), DISPATCH_WAREHOUSE);
-    const reservations = await this.stock.reservationsOf(command.orderId);
     const lines = mergeLines(command.lines);
-    const result = await this.post({
+    return this.post({
       kind: 'DISPATCH',
       key: command.idempotencyKey,
       reference: command.reference,
@@ -390,37 +336,50 @@ export class StockService {
           type: 'DISPATCH' as const,
           delta: -line.quantity,
         })),
-        ...reservations.map((r) => ({
-          warehouseId: r.warehouseId,
-          productId: r.productId,
-          delta: 0n,
-          reservedDelta: -r.quantity,
-        })),
       ],
     });
-    if (result.applied) await this.stock.deleteReservations(command.orderId);
-    return result;
+  }
+
+  /**
+   * Waste: what is lost (the bulk left in the tank after packaging, a damaged product). Taken from
+   * PLANTA unless another warehouse is given.
+   */
+  @Transactional()
+  async waste(command: {
+    line: QuantityInput;
+    warehouseCode?: string;
+    note?: string;
+    reference?: Reference;
+  }): Promise<OperationResult> {
+    const warehouse = this.warehouse(
+      await this.stock.warehouses(),
+      command.warehouseCode ?? PLANT_WAREHOUSE,
+    );
+    const [line] = await this.resolve([command.line]);
+    if (!line) throw new Error('Línea de merma vacía');
+    requirePositive(line.quantity, 'La merma');
+    return this.post({
+      kind: 'WASTE',
+      reference: command.reference ?? null,
+      note: command.note?.trim() ? command.note.trim() : 'Merma',
+      entries: [
+        {
+          warehouseId: warehouse.id,
+          productId: line.product.id,
+          type: 'WASTE',
+          delta: -line.quantity.base,
+        },
+      ],
+    });
   }
 
   /** Totals across warehouses, for planning. */
   @Transactional()
-  async levels(
-    productIds?: readonly string[],
-  ): Promise<{ productId: string; onHand: bigint; reserved: bigint }[]> {
-    const totals = new Map<string, Balance>();
-    for (const balance of await this.stock.balances(productIds)) {
-      const current = totals.get(balance.productId) ?? { onHand: 0n, reserved: 0n };
-      totals.set(balance.productId, {
-        onHand: current.onHand + balance.onHand,
-        reserved: current.reserved + balance.reserved,
-      });
-    }
-    return [...totals].map(([productId, balance]) => ({ productId, ...balance }));
-  }
-
-  @Transactional()
-  async reservations(productIds?: readonly string[]) {
-    return this.stock.reservations(productIds);
+  async levels(productIds?: readonly string[]): Promise<{ productId: string; onHand: bigint }[]> {
+    const totals = new Map<string, bigint>();
+    for (const balance of await this.stock.balances(productIds))
+      totals.set(balance.productId, (totals.get(balance.productId) ?? 0n) + balance.onHand);
+    return [...totals].map(([productId, onHand]) => ({ productId, onHand }));
   }
 
   // --- internals -------------------------------------------------------------------------------
@@ -448,11 +407,8 @@ export class StockService {
     const movements: NewMovement[] = [];
     for (const entry of operation.entries) {
       const key = balanceKey(entry);
-      const current = balances.get(key) ?? { onHand: 0n, reserved: 0n };
-      const next = {
-        onHand: current.onHand + entry.delta,
-        reserved: current.reserved + (entry.reservedDelta ?? 0n),
-      };
+      const current = balances.get(key) ?? { onHand: 0n };
+      const next = { onHand: current.onHand + entry.delta };
       balances.set(key, next);
       if (entry.type && entry.delta !== 0n) {
         movements.push({
@@ -469,17 +425,10 @@ export class StockService {
       }
     }
     for (const entry of operation.entries) {
-      await this.stock.saveBalance(
-        entry,
-        balances.get(balanceKey(entry)) ?? { onHand: 0n, reserved: 0n },
-      );
+      await this.stock.saveBalance(entry, balances.get(balanceKey(entry)) ?? { onHand: 0n });
     }
     await this.stock.insertMovements(movements);
     return { operationId, applied: true };
-  }
-
-  private async applyReserved(entries: readonly Entry[]): Promise<void> {
-    await this.post({ kind: 'RESERVATION', reference: null, note: null, entries });
   }
 
   private async resolve(

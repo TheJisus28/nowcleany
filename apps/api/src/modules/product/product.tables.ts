@@ -36,6 +36,5 @@ export interface ProductTables {
     line_no: number;
     component_id: string;
     quantity: bigint;
-    waste_bps: number;
   };
 }

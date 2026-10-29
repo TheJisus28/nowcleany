@@ -10,7 +10,11 @@ funcional detallado: `docs/alcance-scip.md`; por qué se simplificó: `docs/adr/
 - Problema: las preventas no se cruzan con las materias primas disponibles ("teléfono roto" entre ventas y
   planta). Planta se queda sin insumos y compras compra de urgencia.
 - Objetivo: desde que se confirma una preventa, saber qué hay que producir, envasar y comprar.
-- **La sobreventa es válida**: ventas nunca se bloquea; el disponible y el **físico** pueden quedar negativos.
+- **La sobreventa es válida**: ventas nunca se bloquea; el **físico** puede quedar negativo.
+- **La preventa no descuenta inventario**: lo confirmado queda como comprometido y el inventario proyectado
+  (físico − comprometido) es informativo. El físico solo cambia con movimientos reales (despacho, producción…).
+- **Cartera por vendedor**: cada cliente tiene un vendedor; un vendedor no ve clientes, preventas ni visitas de
+  otro. Gerencia (y planta, compras, bodega para preventas) ve todo.
 - **Nunca sobreinventario**: la sugerencia de compra es exactamente el faltante neto (sin stock de seguridad ni
   punto de reorden). Prefieren salir a comprar que tener inventario quieto.
 - Paneles por equipo: Ventas, Planta, Compras, Inventario/Bodega y Gerencia.
@@ -27,15 +31,19 @@ funcional detallado: `docs/alcance-scip.md`; por qué se simplificó: `docs/adr/
 | Español                                  | Código                                                   |
 | ---------------------------------------- | -------------------------------------------------------- |
 | materia prima / granel / terminado       | `RAW_MATERIAL` / `BULK` / `FINISHED_GOOD`                |
-| fórmula, línea, rinde (bache), merma     | formula, formula line, `batchYield`, `wasteBps`          |
+| fórmula, línea, rinde (bache)            | formula, formula line, `batchYield`                      |
+| merma (sobrante del tanque, daño)        | waste (movimiento `WASTE`)                               |
 | borrador / vigente / retirada            | `DRAFT` / `ACTIVE` / `RETIRED`                           |
 | requerimientos                           | requirements                                             |
 | bodega (PLANTA, DESPACHO)                | warehouse (códigos de datos `PLANTA`, `DESPACHO`)        |
-| movimiento / saldo / reserva / kardex    | stock movement / stock balance / reservation / kardex    |
-| físico / reservado / disponible          | `onHand` / `reserved` / `available`                      |
+| movimiento / saldo / kardex              | stock movement / stock balance / kardex                  |
+| físico / comprometido / proyectado       | `onHand` / `committed` / `projected`                     |
 | recepción / traslado / despacho / ajuste | receipt / transfer / dispatch / adjustment               |
 | carga inicial                            | initial load                                             |
 | preventa (pedido), cliente, vendedor     | sales order, customer, seller                            |
+| NIT / cédula, razón social, sucursal     | document (`NIT`/`CC`), name, branch                      |
+| cartera, visita (en sitio)               | portfolio, visit (`onSite`)                              |
+| proveedor                                | supplier                                                 |
 | fecha estimada de entrega                | `estimatedDeliveryDate`                                  |
 | orden de producción / envasado           | production order (granel) / production order (terminado) |
 | orden de compra, en tránsito             | purchase order, on order                                 |
@@ -84,14 +92,14 @@ docs/adr/  docs/alcance-scip.md  docs/preguntas-abiertas.md
 ops/       compose, Dockerfile, scripts
 ```
 
-Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing`, `planning`.
+Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing`, `planning`, `maps`.
 
 ## Reglas del código
 
 1. Controlador → servicio → repositorio (clase concreta con SQL de Kysely). Las reglas de negocio viven en
    `domain/`. Los módulos se usan entre sí por sus servicios (se exportan en `index.ts`).
 2. Un esquema, una conexión y `@Transactional()`: una operación es una transacción, aunque toque varios
-   módulos (confirmar una preventa reserva el inventario en la misma transacción).
+   módulos (completar un envasado registra entrada, consumos y merma en la misma transacción).
 3. Cantidades en `bigint` en unidad base (mg, mL, un); nunca `number` para cantidades ni dinero. En DTOs,
    cadenas decimales (`"2.5"`) con unidad. Redondeo hacia arriba al calcular requerimientos.
 4. Toda ruta declara `@Permission('x:y')` o `@Public()`; el guard global deniega por defecto. Roles y
@@ -113,42 +121,54 @@ Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing
 - Versionada `DRAFT → ACTIVE → RETIRED`, inmutable al publicar; un borrador y una vigente por producto
   (índices únicos parciales); triggers impiden tocar una publicada. Cuatro ojos: quien define no publica,
   salvo permiso `product:publish-own`.
-- `requirements(qty) = line * qty * (1 + waste) / yield`, redondeado hacia arriba en unidad base; explosión
+- `requirements(qty) = line * qty / yield`, redondeado hacia arriba en unidad base (la fórmula no lleva merma:
+  se registra al envasar); explosión
   multinivel para planeación. Importación de productos por CSV.
 
 **inventory** (único que escribe stock)
 
 - Bodegas `PLANTA` y `DESPACHO` (`warehouse_id` en todo el modelo). Movimientos: libro inmutable (solo
-  `INSERT`), cantidad con signo y saldo resultante (kardex). Saldos (`onHand`, `reserved`) actualizados en la
+  `INSERT`), cantidad con signo y saldo resultante (kardex). Saldos (`onHand`) actualizados en la
   misma transacción, con `SELECT ... FOR UPDATE` en orden fijo. Sin `CHECK` de no negativos.
-- Reservas de terminado por pedido, `UNIQUE (order_id, product_id)` (idempotencia).
+- Sin reservas: el comprometido se calcula de las preventas confirmadas (lectura de las tablas de ventas).
+- Merma: movimiento `WASTE` (permiso `inventory:waste`) o al completar un envasado (granel sobrante).
 - Operaciones con clave de idempotencia: recepción, consumo/producción (desde `production`), traslado
   PLANTA → DESPACHO, despacho, ajuste (permiso restringido y auditado), carga inicial por CSV.
-- Estado: físico, reservado y disponible (total y por bodega). La capacidad de fabricación vive en planning.
+- Estado: físico (total y por bodega), comprometido y proyectado. La capacidad de fabricación vive en planning.
 
 **sales**
 
-- Cliente mínimo (nombre, NIT opcional). Preventa con cliente, vendedor (usuario que la registra), fecha
-  estimada de entrega, notas y líneas de terminado. Sin precios en esta fase.
-- `DRAFT → CONFIRMED → DISPATCHED | CANCELLED`. En una sola transacción: confirmar reserva el terminado
-  (nunca falla por stock), anular libera la reserva, despachar crea el movimiento y consume la reserva.
+- Cliente: NIT (razón social) o cédula (nombre), dirección, teléfono, ciudad, vendedor dueño de la cartera
+  (`customers:assign` para cambiarlo) y sucursales con ubicación (lat/lng). Preventa con cliente, sucursal de
+  entrega, vendedor, fecha estimada de entrega, notas y líneas de terminado. Sin precios en esta fase.
+- Visitas: el vendedor registra su posición GPS en el cliente; se calcula la distancia a la sucursal y si fue
+  en sitio (150 m + precisión). Una visita puede quedar ligada a la preventa que se tomó.
+- `DRAFT → CONFIRMED → DISPATCHED | CANCELLED`. Confirmar compromete (no mueve stock, nunca falla), anular
+  deja de comprometer, despachar crea el movimiento de salida.
 
 **production**
 
 - Orden de producción `PLANNED → COMPLETED | CANCELLED` para un `BULK` (producción por litros o baches) o un
   `FINISHED_GOOD` (envasado). Al completarla con la cantidad real, inventory registra la entrada del producto
-  y el consumo de la fórmula vigente (un nivel), en una operación idempotente.
+  y el consumo de la fórmula vigente (un nivel), en una operación idempotente. Al completar un envasado se
+  puede registrar el granel que quedó en el tanque como merma (`bulkWaste`).
 
 **purchasing**
 
-- Orden de compra simple: proveedor (texto), fecha esperada, líneas de materia prima. `OPEN → RECEIVED |
+- Proveedores (NIT, contacto, teléfono, correo, ciudad). Orden de compra simple: proveedor, fecha esperada, líneas de materia prima. `OPEN → RECEIVED |
 CANCELLED`. Recibir registra la recepción en inventory con las cantidades reales y cierra la orden.
 
 **planning** (solo lectura; compone los servicios de los demás módulos, sin tablas)
 
-- Necesidades netas multinivel: terminado `toPack = max(0, reserved - onHand)`; granel requerido por envasado
+- Necesidades netas multinivel: terminado `toPack = max(0, committed - onHand)`; granel requerido por envasado
   menos físico y producción planeada; materias primas requeridas menos físico y en tránsito → `toBuy`.
 - Reporte de sobreventa: vendido por vendedor, capacidad con lo disponible, sin cobertura y compras necesarias.
+  El plan es global, pero un vendedor solo recibe sus propios pedidos.
+
+**maps**
+
+- Token público de Mapbox para el mapa del panel (`MAPBOX_PUBLIC_TOKEN`) y búsqueda de direcciones desde el
+  servidor (`MAPBOX_GEOCODING_TOKEN`). Los tokens viven en `.env`, nunca en el repositorio.
 
 **identity**
 

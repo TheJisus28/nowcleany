@@ -5,14 +5,11 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
-  IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
-  Max,
   MaxLength,
-  Min,
   ValidateNested,
 } from 'class-validator';
 import { UNIT_CODES } from '../../../../shared-kernel/index.js';
@@ -31,13 +28,6 @@ export class FormulaLineDto {
   @IsOptional()
   @IsIn(UNIT_CODES)
   unit?: string;
-
-  /** 100 = 1 %. */
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(10_000)
-  wasteBps?: number;
 }
 
 export class SaveDraftFormulaDto {

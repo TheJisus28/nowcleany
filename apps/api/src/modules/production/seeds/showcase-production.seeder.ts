@@ -13,12 +13,15 @@ const ORDERS: readonly {
   inDays: number;
   outcome: Outcome;
   notes?: string;
+  /** Liters of bulk left in the tank after packaging. */
+  bulkWaste?: string;
 }[] = [
   {
     code: '00411',
     quantity: '120',
     inDays: 0,
     outcome: 'completed-today',
+    bulkWaste: '6.5',
     notes: 'Turno de la mañana.',
   },
   {
@@ -26,6 +29,7 @@ const ORDERS: readonly {
     quantity: '200',
     inDays: 0,
     outcome: 'completed-today',
+    bulkWaste: '4',
     notes: 'Turno de la mañana.',
   },
   {
@@ -69,7 +73,10 @@ export class ShowcaseProductionSeeder {
         scheduledDate: inDays(order.inDays),
         ...(order.notes ? { notes: order.notes } : {}),
       });
-      if (order.outcome === 'completed-today') await this.orders.complete(created.id, {});
+      if (order.outcome === 'completed-today')
+        await this.orders.complete(created.id, {
+          ...(order.bulkWaste ? { bulkWaste: order.bulkWaste } : {}),
+        });
       if (order.outcome === 'cancelled') await this.orders.cancel(created.id);
     }
     this.logger.log(`Órdenes de producción adicionales: ${String(ORDERS.length)}`);

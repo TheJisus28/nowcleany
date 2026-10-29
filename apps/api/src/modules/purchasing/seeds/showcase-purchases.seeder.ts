@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ProductCatalog } from '../../product/index.js';
 import { PurchaseOrdersRepository } from '../orders/purchase-orders.repository.js';
 import { PurchaseOrdersService } from '../orders/purchase-orders.service.js';
+import { SupplierDirectory } from './supplier-directory.js';
 
 // DATOS DE EJEMPLO (proveedores inventados): compras recibidas hoy, en camino (una atrasada) y una anulada
 // porque el proveedor no tenía; el alcohol sigue faltando y compras lo ve.
@@ -24,13 +25,13 @@ const ORDERS: readonly {
     ],
   },
   {
-    supplier: 'Plásticos del Sinú',
+    supplier: 'Plásticos del Sinú S.A.S.',
     inDays: 0,
     outcome: 'received-today',
     lines: [['MP-ENV-500', '2000']],
   },
   {
-    supplier: 'Plásticos del Sinú',
+    supplier: 'Plásticos del Sinú S.A.S.',
     inDays: -2,
     outcome: 'open',
     lines: [
@@ -74,6 +75,7 @@ export class ShowcasePurchasesSeeder {
     private readonly catalog: ProductCatalog,
     private readonly orders: PurchaseOrdersService,
     private readonly repository: PurchaseOrdersRepository,
+    private readonly suppliers: SupplierDirectory,
   ) {}
 
   async seed(): Promise<void> {
@@ -85,7 +87,7 @@ export class ShowcasePurchasesSeeder {
     );
     for (const order of ORDERS) {
       const created = await this.orders.create({
-        supplier: order.supplier,
+        supplierId: await this.suppliers.idOf(order.supplier),
         expectedDate: inDays(order.inDays),
         ...(order.notes ? { notes: order.notes } : {}),
         lines: order.lines.map(([code, quantity]) => ({

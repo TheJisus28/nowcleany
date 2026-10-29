@@ -25,7 +25,6 @@ export interface SaveDraftCommand {
     readonly componentId: string;
     readonly quantity: string;
     readonly unit?: string;
-    readonly wasteBps?: number;
   }[];
 }
 
@@ -104,7 +103,6 @@ export class FormulasService {
       return {
         componentId: line.componentId,
         quantity: Quantity.parse(line.quantity, line.unit ?? component?.stockUnit ?? 'un'),
-        wasteBps: line.wasteBps ?? 0,
       };
     });
     validateFormula(
@@ -121,7 +119,6 @@ export class FormulasService {
       lines: lines.map((line) => ({
         componentId: line.componentId,
         quantity: line.quantity.base,
-        wasteBps: line.wasteBps,
       })),
     };
     const draft = await this.formulas.findByStatus(productId, 'DRAFT');
@@ -166,7 +163,6 @@ export class FormulasService {
             line.quantity,
             dimensionOf(components.get(line.componentId)?.stockUnit ?? 'un'),
           ),
-          wasteBps: line.wasteBps,
         })),
       },
       toFormulaProducts(components),

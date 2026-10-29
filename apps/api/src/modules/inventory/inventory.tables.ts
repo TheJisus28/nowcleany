@@ -7,7 +7,6 @@ export interface InventoryTables {
     warehouse_id: string;
     product_id: string;
     on_hand: Generated<bigint>;
-    reserved: Generated<bigint>;
     updated_at: Generated<Date>;
   };
   stock_movements: {
@@ -25,14 +24,6 @@ export interface InventoryTables {
     actor_id: string;
     actor_name: string;
     occurred_at: Generated<Date>;
-  };
-  reservations: {
-    order_id: string;
-    order_label: string;
-    product_id: string;
-    warehouse_id: string;
-    quantity: bigint;
-    created_at: Generated<Date>;
   };
   operations: {
     idempotency_key: string;

@@ -42,7 +42,7 @@ export const DEMO_FORMULAS: readonly SeedFormula[] = [
     product: 'GR-CLORO',
     batchYield: '25000',
     lines: [
-      { component: 'MP-HIPO-15', quantity: '8750', wasteBps: 100 },
+      { component: 'MP-HIPO-15', quantity: '8750' },
       { component: 'MP-AGUA', quantity: '16250' },
       { component: 'MP-SODA', quantity: '50' },
     ],
@@ -52,7 +52,7 @@ export const DEMO_FORMULAS: readonly SeedFormula[] = [
     batchYield: '10000',
     lines: [
       { component: 'MP-AGUA', quantity: '9500' },
-      { component: 'MP-LAS', quantity: '350', wasteBps: 50 },
+      { component: 'MP-LAS', quantity: '350' },
       { component: 'MP-FRAG-LAV', quantity: '40' },
       { component: 'MP-COL-VIO', quantity: '500' },
     ],
@@ -62,7 +62,7 @@ export const DEMO_FORMULAS: readonly SeedFormula[] = [
     batchYield: '1',
     lines: [
       { component: 'GR-CLORO', quantity: '12' },
-      { component: 'MP-ENV-2L', quantity: '6', wasteBps: 100 },
+      { component: 'MP-ENV-2L', quantity: '6' },
       { component: 'MP-TAPA-28', quantity: '6' },
       { component: 'MP-ETQ-CL2', quantity: '6' },
       { component: 'MP-CAJA-6', quantity: '1' },
@@ -72,8 +72,8 @@ export const DEMO_FORMULAS: readonly SeedFormula[] = [
     product: '00225',
     batchYield: '1000',
     lines: [
-      { component: 'GR-CLORO', quantity: '1000', wasteBps: 50 },
-      { component: 'MP-ENV-1L', quantity: '1000', wasteBps: 100 },
+      { component: 'GR-CLORO', quantity: '1000' },
+      { component: 'MP-ENV-1L', quantity: '1000' },
       { component: 'MP-TAPA-28', quantity: '1000' },
       { component: 'MP-ETQ-CL1', quantity: '1000' },
     ],

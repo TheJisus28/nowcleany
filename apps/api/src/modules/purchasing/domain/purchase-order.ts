@@ -13,15 +13,51 @@ export function purchaseLabel(number: bigint | number): string {
   return `OC-${number.toString().padStart(5, '0')}`;
 }
 
-export function normalizeSupplier(raw: string): string {
-  const supplier = raw.trim().replace(/\s+/g, ' ');
-  if (supplier.length < 2 || supplier.length > 160) {
+export interface SupplierData {
+  readonly documentNumber: string | null;
+  readonly name: string;
+  readonly contact: string | null;
+  readonly phone: string | null;
+  readonly email: string | null;
+  readonly city: string | null;
+}
+
+const clean = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim().replace(/\s+/g, ' ') ?? '';
+  return trimmed === '' ? null : trimmed;
+};
+
+export function normalizeSupplier(input: {
+  documentNumber?: string | null | undefined;
+  name: string;
+  contact?: string | null | undefined;
+  phone?: string | null | undefined;
+  email?: string | null | undefined;
+  city?: string | null | undefined;
+}): SupplierData {
+  const name = clean(input.name) ?? '';
+  if (name.length < 2 || name.length > 160) {
     throw new ValidationError(
       'purchasing.invalid_supplier',
-      'El proveedor debe tener entre 2 y 160 caracteres.',
+      'El nombre del proveedor debe tener entre 2 y 160 caracteres.',
     );
   }
-  return supplier;
+  const documentNumber = clean(input.documentNumber)?.replace(/[\s.]/g, '') ?? null;
+  if (documentNumber !== null && !/^\d{6,12}(-\d)?$/.test(documentNumber)) {
+    throw new ValidationError('purchasing.invalid_document', 'El NIT del proveedor no es válido.');
+  }
+  const email = clean(input.email)?.toLowerCase() ?? null;
+  if (email !== null && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw new ValidationError('purchasing.invalid_email', 'El correo del proveedor no es válido.');
+  }
+  return {
+    documentNumber,
+    name,
+    contact: clean(input.contact),
+    phone: clean(input.phone),
+    email,
+    city: clean(input.city),
+  };
 }
 
 /** Only raw materials are purchased; each once per order, with positive quantities. */

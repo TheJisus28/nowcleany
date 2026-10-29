@@ -161,7 +161,6 @@ export function toDefinition(
       return {
         componentId: line.componentId,
         quantity: Quantity.ofBase(line.quantity, dimensionOf(component.stockUnit)),
-        wasteBps: line.wasteBps,
       };
     }),
   };

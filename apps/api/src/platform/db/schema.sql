@@ -67,7 +67,6 @@ CREATE TABLE formula_lines (
   line_no      integer NOT NULL,
   component_id uuid    NOT NULL REFERENCES products (id),
   quantity     bigint  NOT NULL CHECK (quantity > 0),
-  waste_bps    integer NOT NULL CHECK (waste_bps BETWEEN 0 AND 10000),
   PRIMARY KEY (formula_id, line_no)
 );
 
@@ -84,7 +83,6 @@ CREATE TABLE stock_balances (
   warehouse_id uuid        NOT NULL REFERENCES warehouses (id),
   product_id   uuid        NOT NULL REFERENCES products (id),
   on_hand      bigint      NOT NULL DEFAULT 0,
-  reserved     bigint      NOT NULL DEFAULT 0,
   updated_at   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (warehouse_id, product_id)
 );
@@ -108,16 +106,6 @@ CREATE TABLE stock_movements (
 );
 CREATE INDEX stock_movements_product_idx ON stock_movements (product_id, id DESC);
 
-CREATE TABLE reservations (
-  order_id     text        NOT NULL,
-  order_label  text        NOT NULL,
-  product_id   uuid        NOT NULL REFERENCES products (id),
-  warehouse_id uuid        NOT NULL REFERENCES warehouses (id),
-  quantity     bigint      NOT NULL,
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (order_id, product_id)
-);
-
 CREATE TABLE operations (
   idempotency_key text        PRIMARY KEY,
   operation_id    uuid        NOT NULL,
@@ -127,21 +115,39 @@ CREATE TABLE operations (
 
 -- Sales
 CREATE TABLE customers (
-  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  name       text        NOT NULL,
-  tax_id     text,
-  phone      text,
-  city       text,
-  active     boolean     NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_type   text        NOT NULL CHECK (document_type IN ('NIT', 'CC')),
+  document_number text        NOT NULL UNIQUE,
+  name            text        NOT NULL,
+  address         text,
+  phone           text,
+  city            text,
+  seller_id       uuid        REFERENCES users (id),
+  active          boolean     NOT NULL DEFAULT true,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX customers_tax_id_key ON customers (tax_id) WHERE tax_id IS NOT NULL;
+
+-- Where orders are delivered and sellers visit; the location lets the panel check visits.
+CREATE TABLE customer_branches (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id uuid        NOT NULL REFERENCES customers (id) ON DELETE CASCADE,
+  name        text        NOT NULL,
+  address     text,
+  city        text,
+  phone       text,
+  latitude    double precision,
+  longitude   double precision,
+  is_main     boolean     NOT NULL DEFAULT false,
+  active      boolean     NOT NULL DEFAULT true,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
 
 CREATE TABLE sales_orders (
   id                      uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   number                  bigint      GENERATED ALWAYS AS IDENTITY UNIQUE,
   customer_id             uuid        NOT NULL REFERENCES customers (id),
+  branch_id               uuid        NOT NULL REFERENCES customer_branches (id),
   seller_id               text        NOT NULL,
   seller_name             text        NOT NULL,
   status                  text        NOT NULL,
@@ -194,9 +200,23 @@ CREATE TABLE production_orders (
 );
 
 -- Purchasing
+CREATE TABLE suppliers (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_number text        UNIQUE,
+  name            text        NOT NULL,
+  contact         text,
+  phone           text,
+  email           text,
+  city            text,
+  active          boolean     NOT NULL DEFAULT true,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE purchase_orders (
   id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   number            bigint      GENERATED ALWAYS AS IDENTITY UNIQUE,
+  supplier_id       uuid        NOT NULL REFERENCES suppliers (id),
   supplier          text        NOT NULL,
   expected_date     date,
   status            text        NOT NULL,
@@ -223,3 +243,19 @@ CREATE TABLE purchase_order_lines (
   received_quantity bigint,
   PRIMARY KEY (order_id, line_no)
 );
+
+-- Seller visits, checked in with the phone's GPS
+CREATE TABLE visits (
+  id          uuid             PRIMARY KEY DEFAULT gen_random_uuid(),
+  seller_id   uuid             NOT NULL REFERENCES users (id),
+  customer_id uuid             NOT NULL REFERENCES customers (id),
+  branch_id   uuid             NOT NULL REFERENCES customer_branches (id),
+  visited_at  timestamptz      NOT NULL DEFAULT now(),
+  latitude    double precision NOT NULL,
+  longitude   double precision NOT NULL,
+  accuracy_m  integer,
+  distance_m  integer,
+  notes       text,
+  order_id    uuid             REFERENCES sales_orders (id)
+);
+CREATE INDEX visits_seller_idx ON visits (seller_id, visited_at DESC);

@@ -10,9 +10,6 @@ import type { ProductType } from './product.js';
 export const FORMULA_STATUSES = ['DRAFT', 'ACTIVE', 'RETIRED'] as const;
 export type FormulaStatus = (typeof FORMULA_STATUSES)[number];
 
-const BPS = 10_000n;
-export const MAX_WASTE_BPS = 10_000;
-
 export interface FormulaProduct {
   readonly id: string;
   readonly code: string;
@@ -25,8 +22,6 @@ export interface FormulaLine {
   readonly componentId: string;
   /** Per batch, in the component's base unit. */
   readonly quantity: Quantity;
-  /** Basis points: 100 = 1 %. */
-  readonly wasteBps: number;
 }
 
 export interface FormulaDefinition {
@@ -108,18 +103,12 @@ export function validateFormula(
         `La cantidad de ${component.code} debe ser mayor que cero y estar en una unidad compatible.`,
       );
     }
-    if (!Number.isInteger(line.wasteBps) || line.wasteBps < 0 || line.wasteBps > MAX_WASTE_BPS) {
-      throw new ValidationError(
-        'formula.invalid_waste',
-        `La merma de ${component.code} debe estar entre 0 y 10000 puntos básicos (0 % a 100 %).`,
-      );
-    }
   }
 }
 
 /**
  * Component quantities needed to make `quantity` of the product:
- * line × quantity × (1 + waste) / batchYield, rounded **up** to the component's base unit.
+ * line × quantity / batchYield, rounded **up** to the component's base unit.
  */
 export function requirements(
   definition: FormulaDefinition,
@@ -133,10 +122,7 @@ export function requirements(
   }
   return definition.lines.map((line) => ({
     componentId: line.componentId,
-    quantity: line.quantity.scaleCeil(
-      quantity.base * (BPS + BigInt(line.wasteBps)),
-      definition.batchYield.base * BPS,
-    ),
+    quantity: line.quantity.scaleCeil(quantity.base, definition.batchYield.base),
   }));
 }
 
@@ -158,8 +144,7 @@ export function assertCanPublish(
 
 /**
  * Largest quantity of the product that the available components allow, and the component that limits it.
- * Exact inverse of `requirements`: ceil(line × q × (1 + waste) / yield) ≤ available
- * ⇔ q ≤ available × yield / (line × (1 + waste)).
+ * Exact inverse of `requirements`: ceil(line × q / yield) ≤ available ⇔ q ≤ available × yield / line.
  */
 export function maxProducible(
   definition: FormulaDefinition,
@@ -169,9 +154,7 @@ export function maxProducible(
   for (const line of definition.lines) {
     const stock = available(line.componentId);
     const usable = stock > 0n ? stock : 0n;
-    const quantity =
-      (usable * definition.batchYield.base * BPS) /
-      (line.quantity.base * (BPS + BigInt(line.wasteBps)));
+    const quantity = (usable * definition.batchYield.base) / line.quantity.base;
     if (!best || quantity < best.quantity)
       best = { quantity, limitingComponentId: line.componentId };
   }

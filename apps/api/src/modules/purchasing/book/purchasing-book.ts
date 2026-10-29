@@ -30,7 +30,7 @@ export class PurchasingBook {
       order.lines.map((line) => ({
         orderId: order.id,
         label: purchaseLabel(order.number),
-        supplier: order.supplier,
+        supplier: order.supplier.name,
         expectedDate: order.expectedDate,
         productId: line.productId,
         quantity: line.quantity,

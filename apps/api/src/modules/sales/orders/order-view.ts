@@ -8,7 +8,8 @@ export interface SalesOrderView {
   readonly label: string;
   readonly status: OrderStatus;
   readonly statusLabel: string;
-  readonly customer: { id: string; name: string; taxId: string | null };
+  readonly customer: OrderRecord['customer'];
+  readonly branch: OrderRecord['branch'];
   readonly seller: { id: string; name: string };
   readonly estimatedDeliveryDate: string | null;
   readonly notes: string | null;
@@ -35,6 +36,7 @@ export function toOrderView(order: OrderRecord): SalesOrderView {
     status: order.status,
     statusLabel: ORDER_STATUS_LABELS[order.status],
     customer: order.customer,
+    branch: order.branch,
     seller: order.seller,
     estimatedDeliveryDate: order.estimatedDeliveryDate,
     notes: order.notes,

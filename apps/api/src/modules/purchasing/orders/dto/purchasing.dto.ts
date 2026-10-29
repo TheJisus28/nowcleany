@@ -30,9 +30,8 @@ export class PurchaseLineDto {
 }
 
 export class CreatePurchaseOrderDto {
-  @IsString()
-  @MaxLength(160)
-  supplier!: string;
+  @IsUUID()
+  supplierId!: string;
 
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)

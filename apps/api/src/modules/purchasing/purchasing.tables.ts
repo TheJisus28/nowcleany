@@ -2,9 +2,22 @@ import type { Generated } from 'kysely';
 import type { PurchaseStatus } from './domain/purchase-order.js';
 
 export interface PurchasingTables {
+  suppliers: {
+    id: Generated<string>;
+    document_number: string | null;
+    name: string;
+    contact: string | null;
+    phone: string | null;
+    email: string | null;
+    city: string | null;
+    active: Generated<boolean>;
+    created_at: Generated<Date>;
+    updated_at: Generated<Date>;
+  };
   purchase_orders: {
     id: Generated<string>;
     number: Generated<bigint>;
+    supplier_id: string;
     supplier: string;
     expected_date: string | null;
     status: PurchaseStatus;

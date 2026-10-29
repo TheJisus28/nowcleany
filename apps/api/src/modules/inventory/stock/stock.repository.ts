@@ -44,15 +44,6 @@ export interface MovementFilter {
 
 export interface BalanceRecord extends BalanceKey, Balance {}
 
-export interface ReservationRecord {
-  readonly orderId: string;
-  readonly orderLabel: string;
-  readonly productId: string;
-  readonly warehouseId: string;
-  readonly quantity: bigint;
-  readonly createdAt: Date;
-}
-
 export const balanceKey = (key: BalanceKey): string => `${key.warehouseId}:${key.productId}`;
 
 @Injectable()
@@ -81,12 +72,6 @@ export class StockRepository {
     return row !== undefined;
   }
 
-  async lockOrder(orderId: string): Promise<void> {
-    await sql`SELECT pg_advisory_xact_lock(hashtext(${`inventory.order:${orderId}`}))`.execute(
-      this.host.tx,
-    );
-  }
-
   async lockBalances(keys: readonly BalanceKey[]): Promise<Map<string, Balance>> {
     // Fixed order (warehouse, product) for both the insert and the lock: no deadlocks between operations.
     const unique = [...new Map(keys.map((key) => [balanceKey(key), key])).values()].sort((a, b) =>
@@ -101,7 +86,7 @@ export class StockRepository {
       .execute();
     const rows = await this.host.tx
       .selectFrom('stock_balances')
-      .select(['warehouse_id', 'product_id', 'on_hand', 'reserved'])
+      .select(['warehouse_id', 'product_id', 'on_hand'])
       .where((eb) =>
         eb.or(
           unique.map((key) =>
@@ -119,7 +104,6 @@ export class StockRepository {
     for (const row of rows) {
       result.set(balanceKey({ warehouseId: row.warehouse_id, productId: row.product_id }), {
         onHand: row.on_hand,
-        reserved: row.reserved,
       });
     }
     return result;
@@ -128,7 +112,7 @@ export class StockRepository {
   async saveBalance(key: BalanceKey, balance: Balance): Promise<void> {
     await this.host.tx
       .updateTable('stock_balances')
-      .set({ on_hand: balance.onHand, reserved: balance.reserved, updated_at: new Date() })
+      .set({ on_hand: balance.onHand, updated_at: new Date() })
       .where('warehouse_id', '=', key.warehouseId)
       .where('product_id', '=', key.productId)
       .execute();
@@ -160,7 +144,7 @@ export class StockRepository {
   async balances(productIds?: readonly string[]): Promise<BalanceRecord[]> {
     let query = this.host.tx
       .selectFrom('stock_balances')
-      .select(['warehouse_id', 'product_id', 'on_hand', 'reserved']);
+      .select(['warehouse_id', 'product_id', 'on_hand']);
     if (productIds) {
       if (productIds.length === 0) return [];
       query = query.where('product_id', 'in', productIds);
@@ -170,7 +154,6 @@ export class StockRepository {
       warehouseId: row.warehouse_id,
       productId: row.product_id,
       onHand: row.on_hand,
-      reserved: row.reserved,
     }));
   }
 
@@ -201,60 +184,18 @@ export class StockRepository {
     }));
   }
 
-  async reservationsOf(orderId: string): Promise<ReservationRecord[]> {
-    const rows = await this.host.tx
-      .selectFrom('reservations')
-      .selectAll()
-      .where('order_id', '=', orderId)
-      .execute();
-    return rows.map(toReservation);
+  /**
+   * Finished goods committed by confirmed pre-sales, per product. Informative only: pre-sales never
+   * change the physical stock.
+   */
+  async committed(productIds: readonly string[]): Promise<Map<string, bigint>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await sql<{ product_id: string; quantity: string }>`
+      SELECT l.product_id, sum(l.quantity)::text AS quantity
+      FROM sales_order_lines l
+      JOIN sales_orders o ON o.id = l.order_id
+      WHERE o.status = 'CONFIRMED' AND l.product_id IN (${sql.join(productIds)})
+      GROUP BY l.product_id`.execute(this.host.tx);
+    return new Map(rows.rows.map((row) => [row.product_id, BigInt(row.quantity)]));
   }
-
-  async reservations(productIds?: readonly string[]): Promise<ReservationRecord[]> {
-    let query = this.host.tx.selectFrom('reservations').selectAll();
-    if (productIds) {
-      if (productIds.length === 0) return [];
-      query = query.where('product_id', 'in', productIds);
-    }
-    const rows = await query.orderBy('created_at').execute();
-    return rows.map(toReservation);
-  }
-
-  async insertReservations(rows: readonly Omit<ReservationRecord, 'createdAt'>[]): Promise<void> {
-    if (rows.length === 0) return;
-    await this.host.tx
-      .insertInto('reservations')
-      .values(
-        rows.map((row) => ({
-          order_id: row.orderId,
-          order_label: row.orderLabel,
-          product_id: row.productId,
-          warehouse_id: row.warehouseId,
-          quantity: row.quantity,
-        })),
-      )
-      .execute();
-  }
-
-  async deleteReservations(orderId: string): Promise<void> {
-    await this.host.tx.deleteFrom('reservations').where('order_id', '=', orderId).execute();
-  }
-}
-
-function toReservation(row: {
-  order_id: string;
-  order_label: string;
-  product_id: string;
-  warehouse_id: string;
-  quantity: bigint;
-  created_at: Date;
-}): ReservationRecord {
-  return {
-    orderId: row.order_id,
-    orderLabel: row.order_label,
-    productId: row.product_id,
-    warehouseId: row.warehouse_id,
-    quantity: row.quantity,
-    createdAt: row.created_at,
-  };
 }

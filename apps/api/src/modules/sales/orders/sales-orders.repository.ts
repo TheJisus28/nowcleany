@@ -2,28 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
 import type { ModuleTransactionHost } from '../../../platform/db/module-transaction.js';
 import type { UnitCode } from '../../../shared-kernel/index.js';
-import type { SalesTables } from '../sales.tables.js';
-
-interface OrderRow {
-  id: string;
-  number: bigint;
-  customer_id: string;
-  customer_name: string;
-  customer_tax_id: string | null;
-  seller_id: string;
-  seller_name: string;
-  status: OrderRecord['status'];
-  estimated_delivery_date: string | null;
-  notes: string | null;
-  created_at: Date;
-  confirmed_at: Date | null;
-  dispatched_at: Date | null;
-  dispatched_by_name: string | null;
-  cancelled_at: Date | null;
-  cancelled_by_name: string | null;
-  cancel_reason: string | null;
-}
+import type { DocumentType } from '../domain/customer.js';
 import type { OrderStatus } from '../domain/sales-order.js';
+import type { SalesTables } from '../sales.tables.js';
 
 export interface OrderLineRecord {
   readonly productId: string;
@@ -37,7 +18,13 @@ export interface OrderLineRecord {
 export interface OrderRecord {
   readonly id: string;
   readonly number: bigint;
-  readonly customer: { id: string; name: string; taxId: string | null };
+  readonly customer: {
+    id: string;
+    name: string;
+    documentType: DocumentType;
+    documentNumber: string;
+  };
+  readonly branch: { id: string; name: string; address: string | null; city: string | null };
   readonly seller: { id: string; name: string };
   readonly status: OrderStatus;
   readonly estimatedDeliveryDate: string | null;
@@ -65,6 +52,7 @@ export interface OrderFilter {
 
 export interface OrderContent {
   readonly customerId: string;
+  readonly branchId: string;
   readonly estimatedDeliveryDate: string | null;
   readonly notes: string | null;
   readonly lines: readonly OrderLineRecord[];
@@ -104,13 +92,11 @@ export class SalesOrdersRepository {
         ]),
       );
     }
-    const rows = await query.orderBy('o.number', 'desc').limit(filter.limit).execute();
-    return this.withLines(rows);
+    return this.withLines(await query.orderBy('o.number', 'desc').limit(filter.limit).execute());
   }
 
   async findById(id: string): Promise<OrderRecord | undefined> {
-    const rows = await this.select().where('o.id', '=', id).execute();
-    return (await this.withLines(rows))[0];
+    return (await this.withLines(await this.select().where('o.id', '=', id).execute()))[0];
   }
 
   async insert(content: OrderContent, seller: { id: string; name: string }): Promise<string> {
@@ -118,6 +104,7 @@ export class SalesOrdersRepository {
       .insertInto('sales_orders')
       .values({
         customer_id: content.customerId,
+        branch_id: content.branchId,
         seller_id: seller.id,
         seller_name: seller.name,
         status: 'DRAFT',
@@ -141,6 +128,7 @@ export class SalesOrdersRepository {
       .updateTable('sales_orders')
       .set({
         customer_id: content.customerId,
+        branch_id: content.branchId,
         estimated_delivery_date: content.estimatedDeliveryDate,
         notes: content.notes,
         updated_at: new Date(),
@@ -152,37 +140,20 @@ export class SalesOrdersRepository {
     await this.insertLines(id, content.lines);
   }
 
-  async markConfirmed(id: string): Promise<boolean> {
-    const result = await this.host.tx
-      .updateTable('sales_orders')
-      .set({
-        status: 'CONFIRMED',
-        confirmed_at: new Date(),
-        updated_at: new Date(),
-      })
-      .where('id', '=', id)
-      .where('status', '=', 'DRAFT')
-      .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+  async markConfirmed(id: string): Promise<void> {
+    await this.setStatus(id, 'DRAFT', { status: 'CONFIRMED', confirmed_at: new Date() });
   }
 
-  async markDispatched(id: string, byName: string): Promise<boolean> {
-    const result = await this.host.tx
-      .updateTable('sales_orders')
-      .set({
-        status: 'DISPATCHED',
-        dispatched_at: new Date(),
-        dispatched_by_name: byName,
-        updated_at: new Date(),
-      })
-      .where('id', '=', id)
-      .where('status', '=', 'CONFIRMED')
-      .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+  async markDispatched(id: string, byName: string): Promise<void> {
+    await this.setStatus(id, 'CONFIRMED', {
+      status: 'DISPATCHED',
+      dispatched_at: new Date(),
+      dispatched_by_name: byName,
+    });
   }
 
-  async markCancelled(id: string, byName: string, reason: string): Promise<boolean> {
-    const result = await this.host.tx
+  async markCancelled(id: string, byName: string, reason: string): Promise<void> {
+    await this.host.tx
       .updateTable('sales_orders')
       .set({
         status: 'CANCELLED',
@@ -193,20 +164,43 @@ export class SalesOrdersRepository {
       })
       .where('id', '=', id)
       .where('status', 'in', ['DRAFT', 'CONFIRMED'])
-      .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+      .execute();
+  }
+
+  private async setStatus(
+    id: string,
+    from: OrderStatus,
+    changes: {
+      status: OrderStatus;
+      confirmed_at?: Date;
+      dispatched_at?: Date;
+      dispatched_by_name?: string;
+    },
+  ): Promise<void> {
+    await this.host.tx
+      .updateTable('sales_orders')
+      .set({ ...changes, updated_at: new Date() })
+      .where('id', '=', id)
+      .where('status', '=', from)
+      .execute();
   }
 
   private select() {
     return this.host.tx
       .selectFrom('sales_orders as o')
       .innerJoin('customers as c', 'c.id', 'o.customer_id')
+      .innerJoin('customer_branches as b', 'b.id', 'o.branch_id')
       .select([
         'o.id',
         'o.number',
         'o.customer_id',
         'c.name as customer_name',
-        'c.tax_id as customer_tax_id',
+        'c.document_type as customer_document_type',
+        'c.document_number as customer_document_number',
+        'o.branch_id',
+        'b.name as branch_name',
+        'b.address as branch_address',
+        'b.city as branch_city',
         'o.seller_id',
         'o.seller_name',
         'o.status',
@@ -239,7 +233,9 @@ export class SalesOrdersRepository {
       .execute();
   }
 
-  private async withLines(rows: readonly OrderRow[]): Promise<OrderRecord[]> {
+  private async withLines(
+    rows: Awaited<ReturnType<ReturnType<SalesOrdersRepository['select']>['execute']>>,
+  ): Promise<OrderRecord[]> {
     if (rows.length === 0) return [];
     const lines = await this.host.tx
       .selectFrom('sales_order_lines')
@@ -266,7 +262,18 @@ export class SalesOrdersRepository {
     return rows.map((row) => ({
       id: row.id,
       number: row.number,
-      customer: { id: row.customer_id, name: row.customer_name, taxId: row.customer_tax_id },
+      customer: {
+        id: row.customer_id,
+        name: row.customer_name,
+        documentType: row.customer_document_type,
+        documentNumber: row.customer_document_number,
+      },
+      branch: {
+        id: row.branch_id,
+        name: row.branch_name,
+        address: row.branch_address,
+        city: row.branch_city,
+      },
       seller: { id: row.seller_id, name: row.seller_name },
       status: row.status,
       estimatedDeliveryDate: row.estimated_delivery_date,

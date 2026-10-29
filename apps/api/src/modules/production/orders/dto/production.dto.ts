@@ -46,6 +46,11 @@ export class CompleteProductionOrderDto {
   @IsOptional()
   @IsIn(UNIT_CODES)
   unit?: string;
+
+  /** Packaging only: liters of bulk left in the tank, recorded as waste. */
+  @IsOptional()
+  @Matches(DECIMAL)
+  bulkWaste?: string;
 }
 
 export class ListProductionOrdersQuery {
