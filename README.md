@@ -19,18 +19,18 @@ comprar (exactamente el faltante, sin sobreinventario). La sobreventa es válida
 corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env          # valores solo para desarrollo
-docker compose up -d          # PostgreSQL 18 en 127.0.0.1:5432
-pnpm db:demo                  # migraciones + semillas + datos de demo de la propuesta
+docker compose up -d          # PostgreSQL 18 (puerto POSTGRES_PORT de .env)
+pnpm db:demo                  # esquema + datos de demo de la propuesta
                               # o pnpm db:showcase: lo mismo + volumen (66 productos, 29 preventas…)
 pnpm api                      # API en http://127.0.0.1:3000 (Swagger en /docs)
-pnpm worker                   # en otra terminal: outbox, consumidores y tareas programadas
 pnpm web                      # en otra terminal: paneles en http://localhost:5173
 ```
 
 El frontend (React + Vite + Tailwind) habla con la API por el proxy de Vite (`/v1` → `127.0.0.1:3000`), así
 que en desarrollo no hay CORS. En producción, un proxy inverso sirve `apps/web/dist` y la API en el mismo origen.
 
-`pnpm db:setup` hace lo mismo sin datos de demo (solo roles, permisos y el administrador de `ADMIN_*`).
+`pnpm db:setup` hace lo mismo sin datos de demo (solo el administrador de `ADMIN_*`). Las semillas se
+aplican sobre una base vacía (`DB_NAME`); para una base nueva créala en el contenedor y ejecuta el comando.
 Para empezar de cero en desarrollo: `docker compose down -v` (borra la base local) y `docker compose up -d`.
 
 ### Usuarios de demo
@@ -55,67 +55,59 @@ vendidas por tres vendedores, capacidad para 2.000 con las materias primas dispo
 
 ## Comandos
 
-| Comando                    | Qué hace                                                         |
-| -------------------------- | ---------------------------------------------------------------- |
-| `pnpm verify`              | Formato, lint, tipos, reglas de arquitectura y todas las pruebas |
-| `pnpm test`                | Pruebas unitarias y de punta a punta (estas necesitan Docker)    |
-| `pnpm test:unit`           | Solo unitarias y de arquitectura (rápidas, sin Docker)           |
-| `pnpm test:e2e`            | Flujo completo contra un PostgreSQL desechable (Testcontainers)  |
-| `pnpm lint`                | ESLint (type-checked)                                            |
-| `pnpm typecheck`           | TypeScript estricto                                              |
-| `pnpm depcruise`           | Reglas de arquitectura (fronteras entre módulos y capas)         |
-| `pnpm audit`               | Vulnerabilidades conocidas en dependencias                       |
-| `pnpm build`               | Compila la API a `apps/api/dist`                                 |
-| `pnpm db:migrate`          | Compila y aplica migraciones                                     |
-| `pnpm db:setup`            | Migraciones + semillas (roles, permisos, administrador)          |
-| `pnpm db:demo`             | Migraciones + semillas + datos de demo                           |
-| `pnpm db:showcase`         | Igual que `db:demo` más volumen para presentar (base nueva)      |
-| `pnpm api` / `pnpm worker` | Ejecutan la API / el worker compilados con `.env`                |
+| Comando            | Qué hace                                                    |
+| ------------------ | ----------------------------------------------------------- |
+| `pnpm verify`      | Formato, lint y tipos                                       |
+| `pnpm lint`        | ESLint (type-checked)                                       |
+| `pnpm typecheck`   | TypeScript estricto                                         |
+| `pnpm audit`       | Vulnerabilidades conocidas en dependencias                  |
+| `pnpm build`       | Compila la API (`apps/api/dist`) y la web (`apps/web/dist`) |
+| `pnpm db:migrate`  | Crea el esquema en una base vacía (`schema.sql`)            |
+| `pnpm db:setup`    | Esquema + administrador de `ADMIN_*`                        |
+| `pnpm db:demo`     | Esquema + administrador + datos de demo de la propuesta     |
+| `pnpm db:showcase` | Igual que `db:demo` más volumen para presentar              |
+| `pnpm api`         | Ejecuta la API compilada con `.env`                         |
+| `pnpm web`         | Paneles en modo desarrollo                                  |
 
 ## Producción
 
-Una sola imagen (distroless, usuario no root) con tres entradas. En producción no se ejecuta `pnpm install`.
+Una sola imagen (distroless, usuario no root) con dos entradas. En producción no se ejecuta `pnpm install`.
 
 ```sh
 docker build -f ops/Dockerfile -t scip-api .
-docker run --env-file prod.env scip-api dist/migrate.js --seed   # una vez por versión
-docker run --env-file prod.env -p 3000:3000 scip-api             # API (N instancias)
-docker run --env-file prod.env scip-api dist/worker.js           # worker
+docker run --env-file prod.env scip-api dist/migrate.js --seed   # una vez
+docker run --env-file prod.env -p 3000:3000 scip-api             # API
 ```
 
-Variables: las de `.env.example`. En producción usa secretos reales para `DB_*_PASSWORD`, `JWT_SECRET`
+Variables: las de `.env.example`. En producción usa secretos reales para `DB_PASSWORD`, `JWT_SECRET`
 (32+ caracteres aleatorios) y `ADMIN_PASSWORD`; `NODE_ENV=production` desactiva Swagger.
 
 ## Arquitectura en una página
 
-Monolito modular (NestJS 12 sobre Fastify, PostgreSQL 18 con Kysely). Cada módulo tiene su esquema, su rol de
-base de datos y su pool, y solo expone su `index.ts`; dependency-cruiser lo verifica en CI.
+Monolito simple: NestJS 12 sobre Fastify, PostgreSQL 18 con Kysely, **un esquema, una conexión y una
+transacción por operación** (`@Transactional()`): confirmar, despachar o anular una preventa actualiza el
+inventario en la misma transacción. Cada funcionalidad es una carpeta en `apps/api/src/modules/` con
+controlador → servicio → repositorio (SQL con Kysely) y reglas puras en `domain/`.
 
-| Módulo       | Responsabilidad                                                               |
+| Carpeta      | Responsabilidad                                                               |
 | ------------ | ----------------------------------------------------------------------------- |
-| `identity`   | Usuarios, roles como datos, permisos sincronizados desde el código, JWT       |
+| `identity`   | Usuarios, sesiones y JWT; roles y permisos en código (`identity/access.ts`)   |
 | `product`    | Materias primas, granel y terminados; fórmulas versionadas en dos niveles     |
-| `inventory`  | Único que escribe stock: kardex inmutable, saldos, reservas por preventa      |
+| `inventory`  | Stock: kardex, saldos por bodega y reservas por preventa                      |
 | `sales`      | Clientes y preventas (vendedor, fecha estimada de entrega)                    |
 | `production` | Órdenes de producción de granel y de envasado                                 |
 | `purchasing` | Órdenes de compra (lo que está en tránsito)                                   |
 | `planning`   | Sobreventa, cobertura de preventas y necesidades netas de producción y compra |
 
-Entre módulos: llamadas a la API pública (con revalidación de permisos e idempotencia) o eventos por outbox
-transaccional con inbox en el consumidor.
+Plataforma (`apps/api/src/platform/`): configuración, conexión, errores en `problem+json`, guards (toda ruta
+declara `@Permission` o `@Public`), logs JSON y salud. Esquema en `platform/db/schema.sql`; datos de ejemplo
+en `src/seed.ts` (en orden).
 
-## Cómo agregar un módulo
+## Cómo agregar una funcionalidad
 
-1. Crea `apps/api/src/modules/<nombre>/` con `domain/` (reglas puras), una carpeta por funcionalidad
-   (`*.controller.ts`, `*.service.ts`, `*.repository.ts` abstracto y `kysely-*.repository.ts`), `permissions.ts`,
-   `<nombre>.module.ts` e `index.ts` con lo que otros módulos pueden usar.
-2. Escribe las tablas en `migrations/0001_<algo>.sql` (sin esquema explícito: se crean en el del módulo) y sus
-   tipos en `<nombre>.tables.ts`.
-3. Importa `DatabaseModule.forModule('<nombre>')` en el módulo y usa `@Transactional('<nombre>')` en los
-   servicios y `@InjectTransactionHost('<nombre>')` en los repositorios Kysely.
-4. Declara los permisos con `@DeclaresPermissions([...])` (con sus roles por defecto) y protege cada ruta con
-   `@Permission('area:accion')` o `@Public()`; sin decorador, la ruta queda denegada.
-5. Registra el nombre en `DATABASE_MODULES` (`src/module-registry.ts`), el módulo en
-   `src/feature-modules.ts` y su contraseña `DB_PASSWORD_<NOMBRE>` en `.env.example`.
-6. `pnpm db:migrate` crea el esquema, el rol `app_<nombre>` y aplica las migraciones. `pnpm verify` debe
-   quedar en verde.
+1. Crea `apps/api/src/modules/<nombre>/` con `<nombre>.module.ts`, controlador, servicio y repositorio.
+2. Agrega las tablas a `platform/db/schema.sql` (en una base existente, créalas con un `ALTER`/`CREATE` a
+   mano o vuelve a sembrar en una base nueva) y sus tipos en `<nombre>.tables.ts`.
+3. Usa `@Transactional()` en los servicios y `@InjectTransactionHost()` en el repositorio.
+4. Protege cada ruta con `@Permission('area:accion')` y agrega el permiso a `identity/access.ts`.
+5. Registra el módulo en `src/feature-modules.ts`. `pnpm verify` debe quedar en verde.

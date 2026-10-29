@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { CatalogLoader, type SeedFormula, type SeedProduct } from './catalog-loader.js';
 
 // DATOS DE EJEMPLO (ilustrativos) para ver la plataforma con volumen: las líneas de producto de
@@ -169,7 +168,6 @@ export class ShowcaseCatalogSeeder {
 
   constructor(private readonly loader: CatalogLoader) {}
 
-  @Seeder({ name: 'product.showcase-catalog', order: 110, showcase: true })
   async seed(): Promise<void> {
     await this.loader.load(SHOWCASE_PRODUCTS, SHOWCASE_FORMULAS);
     this.logger.log(`Catálogo ampliado: ${String(SHOWCASE_PRODUCTS.length)} productos más`);

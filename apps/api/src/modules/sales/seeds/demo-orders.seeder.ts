@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import { UserDirectory } from '../../identity/index.js';
 import { ProductCatalog } from '../../product/index.js';
@@ -87,7 +86,6 @@ export class DemoOrdersSeeder {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Seeder({ name: 'sales.demo-orders', order: 300, demo: true })
   async seed(): Promise<void> {
     if ((await this.repository.list({ limit: 1 })).length > 0) {
       this.logger.log('Ya hay preventas registradas: no se cargan las de demo');

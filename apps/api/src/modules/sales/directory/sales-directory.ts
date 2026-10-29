@@ -27,7 +27,7 @@ export class SalesDirectory {
   ) {}
 
   /** Drafts and confirmed orders not yet dispatched, oldest first. */
-  @Transactional('sales')
+  @Transactional()
   async openOrders(): Promise<OpenOrder[]> {
     this.currentActor.requirePermission('sales-orders:read');
     const orders = await this.orders.list({ statuses: ['DRAFT', 'CONFIRMED'], limit: 10_000 });

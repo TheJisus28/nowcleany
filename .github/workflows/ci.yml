@@ -33,8 +33,5 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
-      - run: pnpm depcruise
-      - run: pnpm --filter @nowcleanny/web build
-      # Integration tests use Testcontainers; ubuntu runners ship with Docker.
-      - run: pnpm test
+      - run: pnpm build
       - run: pnpm audit

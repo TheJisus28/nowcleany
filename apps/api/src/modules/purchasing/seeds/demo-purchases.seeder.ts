@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { ProductCatalog } from '../../product/index.js';
 import { PurchaseOrdersRepository } from '../orders/purchase-orders.repository.js';
 import { PurchaseOrdersService } from '../orders/purchase-orders.service.js';
@@ -15,7 +14,6 @@ export class DemoPurchasesSeeder {
     private readonly repository: PurchaseOrdersRepository,
   ) {}
 
-  @Seeder({ name: 'purchasing.demo-orders', order: 400, demo: true })
   async seed(): Promise<void> {
     if ((await this.repository.list({ limit: 1 })).length > 0) return;
     const [boxes] = await this.catalog.findByCodes(['MP-CAJA-6']);

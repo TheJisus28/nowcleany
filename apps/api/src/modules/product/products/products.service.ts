@@ -43,24 +43,24 @@ export interface ImportResult {
 export class ProductsService {
   constructor(private readonly products: ProductsRepository) {}
 
-  @Transactional('product')
+  @Transactional()
   async list(filter: ProductFilter): Promise<ProductView[]> {
     return (await this.products.list(filter)).map(toProductView);
   }
 
-  @Transactional('product')
+  @Transactional()
   async get(id: string): Promise<ProductView> {
     return toProductView(await this.require(id));
   }
 
-  @Transactional('product')
+  @Transactional()
   async create(command: CreateProductCommand): Promise<ProductView> {
     const product = this.build(command);
     const id = await this.products.insert(product);
     return toProductView(await this.require(id));
   }
 
-  @Transactional('product')
+  @Transactional()
   async update(id: string, command: UpdateProductCommand): Promise<ProductView> {
     const product = await this.require(id);
     await this.products.update(id, {
@@ -78,7 +78,7 @@ export class ProductsService {
   }
 
   /** Products are never deleted: they are deactivated, so history keeps its references. */
-  @Transactional('product')
+  @Transactional()
   async deactivate(id: string): Promise<void> {
     await this.require(id);
     await this.products.update(id, { active: false });
@@ -88,7 +88,7 @@ export class ProductsService {
    * CSV with columns codigo; nombre; tipo; unidad; [capacidad_bache]. All rows are validated first:
    * if any row is wrong nothing is imported. Existing codes are skipped.
    */
-  @Transactional('product')
+  @Transactional()
   async import(csv: string): Promise<ImportResult> {
     const rows = parseCsv(csv, ['codigo', 'nombre', 'tipo', 'unidad']);
     if (rows.length === 0) {

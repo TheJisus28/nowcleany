@@ -21,7 +21,7 @@ export class ProductionSchedule {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('production')
+  @Transactional()
   async planned(): Promise<PlannedProduction[]> {
     this.currentActor.requirePermission('production:read');
     const orders = await this.orders.list({ statuses: ['PLANNED'], limit: 10_000 });

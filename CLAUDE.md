@@ -1,9 +1,9 @@
 # CLAUDE.md — nowcleanny (SCIP)
 
 Sistema de control de inventario, producción y reporte de sobreventa para NOW CLEANY S.A.S., manufacturera de
-productos de limpieza (cloro y similares) en Montería, Colombia. MVP con la arquitectura final correcta:
-pequeño, pero el núcleo crecerá (posible ERP o integración con un ERP externo). Se despliega como **un**
-monolito modular. Alcance funcional detallado: `docs/alcance-scip.md`.
+productos de limpieza (cloro y similares) en Montería, Colombia. Demo para presentar e iterar rápido:
+**monolito simple** (NestJS + PostgreSQL, un esquema, una conexión), sin pruebas por ahora. Alcance
+funcional detallado: `docs/alcance-scip.md`; por qué se simplificó: `docs/adr/0003-monolito-simple.md`.
 
 ## Problema y reglas de negocio
 
@@ -47,11 +47,11 @@ monolito modular. Alcance funcional detallado: `docs/alcance-scip.md`.
 - Node.js 24 LTS (`.nvmrc`), TypeScript 6 estricto, pnpm 12 workspaces (`packageManager` con hash).
 - NestJS 12 (**solo ESM**: `"type": "module"`, imports relativos con extensión `.js`) sobre FastifyAdapter.
   ValidationPipe global con `whitelist` y `forbidNonWhitelisted`, class-validator + class-transformer.
-- PostgreSQL 18 con Kysely + pg. Migraciones SQL planas por módulo.
+- PostgreSQL 18 con Kysely + pg. Un solo esquema en `platform/db/schema.sql`.
 - nestjs-pino, nestjs-cls + @nestjs-cls/transactional + adaptador Kysely, @nestjs/config, @nestjs/swagger
   (solo fuera de producción), @nestjs/throttler, @fastify/helmet, argon2 (Argon2id).
-- Pruebas: Vitest 5 (Vite 8/oxc emite la metadata de decoradores; no hace falta SWC) + Testcontainers.
-- Fronteras: dependency-cruiser. ESLint 10 + typescript-eslint + Prettier.
+- Sin pruebas automáticas por ahora (decisión del usuario): se verifica con lint, tipos y pantallazos.
+- ESLint 10 + typescript-eslint + Prettier.
 - Docker multi-etapa (imagen mínima, usuario no root); docker compose para desarrollo.
 - Frontend: React + Vite + TypeScript + Tailwind.
 - **No agregar dependencias sin preguntar** (con razón y alternativa sin dependencia). Sin paquetes
@@ -70,46 +70,36 @@ monolito modular. Alcance funcional detallado: `docs/alcance-scip.md`.
 
 ```
 apps/api/src/
-  main.ts  worker.ts  migrate.ts       tres entradas, misma imagen
-  platform/        config, logging, db (pool por módulo), transacción (CLS), errores, seguridad
-                   (guards, @Permission, @Public), outbox, inbox, health, registro de permisos
+  main.ts  migrate.ts  seed.ts         API, esquema + semillas (misma imagen)
+  platform/        config, db (una conexión + schema.sql), errores, seguridad (guards, @Permission,
+                   @Public), logging, health
   modules/<module>/
-    <module>.module.ts  permissions.ts  index.ts (API pública)
-    domain/        clases planas: sin @nestjs/*, kysely ni otras capas
-    <feature>/     *.controller.ts *.service.ts *.repository.ts (abstracta) kysely-*.repository.ts dto/
-    migrations/    SQL del módulo
-    tests/
-  shared-kernel/   Quantity, errores base, tipos mínimos
+    <module>.module.ts  index.ts  <module>.tables.ts
+    domain/        reglas puras (sin @nestjs/*, kysely ni otras capas)
+    <feature>/     *.controller.ts *.service.ts *.repository.ts (SQL con Kysely) dto/
+    seeds/         datos de ejemplo
+  shared-kernel/   Quantity, errores base, CSV
 apps/web/          React + Vite + Tailwind (paneles)
-tests/architecture/  reglas de dependency-cruiser + pruebas con fixtures
 docs/adr/  docs/alcance-scip.md  docs/preguntas-abiertas.md
 ops/       compose, Dockerfile, scripts
 ```
 
 Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing`, `planning`.
 
-## Reglas de arquitectura (se verifican en CI)
+## Reglas del código
 
-1. Flujo controller → service → repositorio (clase abstracta como token) → implementación Kysely. Las reglas de
-   negocio viven en `domain/`, no en servicios ni controladores.
-2. Un módulo solo importa el `index.ts` de otro. Nadie lee tablas de otro módulo. Sin llaves foráneas entre
-   esquemas.
-3. Un esquema y un rol de BD por módulo (`ALTER ROLE ... SET search_path`), un pool por módulo (max 4). La app
-   nunca usa el rol propietario.
-4. Una transacción = un módulo (`@Transactional`). Entre módulos: API pública con idempotencia, o eventos.
-5. Outbox transaccional (tabla en esquema de plataforma; los roles de módulo solo pueden `INSERT`). Despachador
-   en el worker: uno activo (`pg_try_advisory_xact_lock`), `FOR UPDATE SKIP LOCKED`, orden estricto por id; un
-   evento fallido detiene el lote; tras 10 intentos `failed_at` + alerta. Consumidores idempotentes con inbox.
-6. Cantidades en `bigint` en unidad base (mg, mL, un); nunca `number` para cantidades ni dinero. En DTOs,
+1. Controlador → servicio → repositorio (clase concreta con SQL de Kysely). Las reglas de negocio viven en
+   `domain/`. Los módulos se usan entre sí por sus servicios (se exportan en `index.ts`).
+2. Un esquema, una conexión y `@Transactional()`: una operación es una transacción, aunque toque varios
+   módulos (confirmar una preventa reserva el inventario en la misma transacción).
+3. Cantidades en `bigint` en unidad base (mg, mL, un); nunca `number` para cantidades ni dinero. En DTOs,
    cadenas decimales (`"2.5"`) con unidad. Redondeo hacia arriba al calcular requerimientos.
-7. Toda ruta declara `@Permission('x:y')` o `@Public()`. Guard global que deniega por defecto. Autenticación
-   solo con guards, nunca middleware. Los servicios revalidan permisos cuando los llama otro módulo o un job.
-8. Errores de dominio con código estable → filtro global → `application/problem+json`. 404 no encontrado,
-   409 conflicto, 422 validación, 403 sin permiso.
-9. Logs JSON con requestId (`x-request-id` o UUID), actorId y módulo; redact de authorization, cookies,
-   password y token; nunca el cuerpo completo de una petición.
-10. Sin estado en memoria que importe (N instancias). Jobs solo en el worker. Migraciones solo con
-    `migrate.ts`, nunca al arrancar la API.
+4. Toda ruta declara `@Permission('x:y')` o `@Public()`; el guard global deniega por defecto. Roles y
+   permisos en código: `modules/identity/access.ts`.
+5. Errores de dominio con código estable → `application/problem+json` (404, 409, 422, 403).
+6. Logs JSON con requestId y actorId; nunca contraseñas, tokens ni el cuerpo de una petición.
+7. El esquema se crea con `migrate.ts` (nunca al arrancar la API). Para cambios en una base existente, SQL a
+   mano o volver a sembrar una base nueva.
 
 ## Modelo por módulo
 
@@ -140,10 +130,8 @@ Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing
 
 - Cliente mínimo (nombre, NIT opcional). Preventa con cliente, vendedor (usuario que la registra), fecha
   estimada de entrega, notas y líneas de terminado. Sin precios en esta fase.
-- `DRAFT → CONFIRMED → DISPATCHED | CANCELLED`. Confirmar = `inventory.reserve` (su transacción, nunca falla
-  por stock) y luego marcar el pedido (su transacción); reintentar es seguro. Job en el worker libera reservas
-  de pedidos que sigan en `DRAFT` tras 30 min. Anular publica `SalesOrderCancelled`; inventory lo consume
-  (inbox) y libera reservas. Despachar crea el movimiento de despacho y consume la reserva.
+- `DRAFT → CONFIRMED → DISPATCHED | CANCELLED`. En una sola transacción: confirmar reserva el terminado
+  (nunca falla por stock), anular libera la reserva, despachar crea el movimiento y consume la reserva.
 
 **production**
 
@@ -156,7 +144,7 @@ Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing
 - Orden de compra simple: proveedor (texto), fecha esperada, líneas de materia prima. `OPEN → RECEIVED |
 CANCELLED`. Recibir registra la recepción en inventory con las cantidades reales y cierra la orden.
 
-**planning** (solo lectura; compone las API públicas, sin tablas)
+**planning** (solo lectura; compone los servicios de los demás módulos, sin tablas)
 
 - Necesidades netas multinivel: terminado `toPack = max(0, reserved - onHand)`; granel requerido por envasado
   menos físico y producción planeada; materias primas requeridas menos físico y en tránsito → `toBuy`.
@@ -164,8 +152,7 @@ CANCELLED`. Recibir registra la recepción en inventory con las cantidades reale
 
 **identity**
 
-- users, roles, permissions, role_permissions, user_roles. Cada módulo declara permisos en `permissions.ts`;
-  la plataforma los sincroniza al arrancar. Roles semilla: `admin`, `manager`, `formulator`,
+- users, user_roles, sessions. Roles y permisos en `identity/access.ts`: `admin`, `manager`, `formulator`,
   `technical_lead`, `sales`, `plant`, `purchasing`, `warehouse`. Login Argon2id, JWT de acceso de 15 min.
   Admin inicial desde variables de entorno.
 
@@ -173,18 +160,17 @@ CANCELLED`. Recibir registra la recepción en inventory con las cantidades reale
 
 ```
 pnpm install --frozen-lockfile   instalar (respeta la política de seguridad)
-docker compose up -d             PostgreSQL de desarrollo (127.0.0.1:5432)
-pnpm verify                      format:check + lint + typecheck + depcruise + test
-pnpm test | pnpm lint | pnpm typecheck | pnpm depcruise | pnpm audit
+docker compose up -d             PostgreSQL de desarrollo (puerto POSTGRES_PORT de .env)
+pnpm db:showcase                 esquema + datos de demo con volumen (sobre una base vacía)
+pnpm api  |  pnpm web            API (127.0.0.1:3000) y paneles (localhost:5173)
+pnpm verify                      format:check + lint + typecheck
 ```
 
 ## Forma de trabajar
 
 - Funcional primero. Bloque A: backend funcional (plataforma + identidad → productos → inventario →
   preventa, producción y compras → planeación y datos de demo). Bloque B: frontend. Bloque C: endurecimiento.
-- Pruebas donde un error sale caro: cálculos de negocio (requerimientos, necesidades, sobreventa) y una prueba
-  de punta a punta del flujo completo contra PostgreSQL real; dependency-cruiser y lint siempre en verde. La
-  suite completa (concurrencia, variantes de rutas, permisos exhaustivos, aceptación) va en el bloque C.
+- Sin pruebas por ahora: iterar rápido sobre la demo. Verificar con `pnpm verify` y pantallazos.
 - Cada hito: commit convencional (en inglés) y resumen de máximo 10 líneas; antes, plan de máximo 15 líneas.
 - Pedir confirmación solo si una decisión cambia el stack o el modelo.
 - Verificar APIs de librerías en los paquetes instalados (`node_modules`, `.d.ts`, CHANGELOG), no de memoria:

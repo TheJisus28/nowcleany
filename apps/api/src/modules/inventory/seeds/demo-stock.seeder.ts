@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { StockService } from '../stock/stock.service.js';
 
 /**
@@ -36,7 +35,6 @@ export class DemoStockSeeder {
 
   constructor(private readonly stock: StockService) {}
 
-  @Seeder({ name: 'inventory.demo-stock', order: 200, demo: true })
   async seed(): Promise<void> {
     if ((await this.stock.levels()).length > 0) {
       this.logger.log('Ya hay existencias registradas: no se carga el inventario de demo');

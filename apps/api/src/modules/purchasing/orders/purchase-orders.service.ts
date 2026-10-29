@@ -61,7 +61,7 @@ export class PurchaseOrdersService {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('purchasing')
+  @Transactional()
   async list(filter: {
     statuses?: PurchaseStatus[];
     productId?: string;
@@ -75,12 +75,12 @@ export class PurchaseOrdersService {
     return orders.map(toView);
   }
 
-  @Transactional('purchasing')
+  @Transactional()
   async get(id: string): Promise<PurchaseOrderView> {
     return toView(await this.require(id));
   }
 
-  @Transactional('purchasing')
+  @Transactional()
   async create(command: {
     supplier: string;
     expectedDate?: string;
@@ -168,7 +168,7 @@ export class PurchaseOrdersService {
     return this.finishReceipt(id, received, command.document ?? null);
   }
 
-  @Transactional('purchasing')
+  @Transactional()
   async cancel(id: string): Promise<PurchaseOrderView> {
     const order = await this.require(id);
     assertOpen(order.status, 'cancel');
@@ -176,12 +176,12 @@ export class PurchaseOrdersService {
     return toView(await this.require(id));
   }
 
-  @Transactional('purchasing')
+  @Transactional()
   private load(id: string): Promise<PurchaseOrderRecord> {
     return this.require(id);
   }
 
-  @Transactional('purchasing')
+  @Transactional()
   private async finishReceipt(
     id: string,
     received: ReadonlyMap<string, bigint>,

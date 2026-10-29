@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfig } from '../../../platform/config/app-config.js';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { UsersService } from '../users/users.service.js';
 
@@ -19,7 +18,6 @@ export class ShowcaseUsersSeeder {
     private readonly repository: UsersRepository,
   ) {}
 
-  @Seeder({ name: 'identity.showcase-users', order: 21, showcase: true })
   async seed(): Promise<void> {
     const password = this.config.secret('DEMO_PASSWORD');
     for (const user of SHOWCASE_USERS) {

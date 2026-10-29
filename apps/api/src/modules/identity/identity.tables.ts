@@ -11,9 +11,6 @@ export interface IdentityTables {
     created_at: Generated<Date>;
     updated_at: Generated<Date>;
   };
-  roles: { code: string; name: string; description: string };
-  permissions: { code: string; description: string; synced_at: Generated<Date> };
-  role_permissions: { role_code: string; permission_code: string };
   user_roles: { user_id: string; role_code: string };
   sessions: {
     id: Generated<string>;

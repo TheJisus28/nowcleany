@@ -23,7 +23,6 @@ export interface SalesTables {
     notes: string | null;
     created_at: Generated<Date>;
     updated_at: Generated<Date>;
-    confirmation_started_at: Date | null;
     confirmed_at: Date | null;
     dispatched_at: Date | null;
     dispatched_by_name: string | null;

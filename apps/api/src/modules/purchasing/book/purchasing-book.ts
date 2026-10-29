@@ -22,7 +22,7 @@ export class PurchasingBook {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('purchasing')
+  @Transactional()
   async onOrder(): Promise<OnOrderLine[]> {
     this.currentActor.requirePermission('purchasing:read');
     const orders = await this.orders.list({ statuses: ['OPEN'], limit: 10_000 });

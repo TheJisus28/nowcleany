@@ -48,19 +48,19 @@ export class ProductCatalog {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('product')
+  @Transactional()
   async findByIds(ids: readonly string[]): Promise<ProductSummary[]> {
     this.currentActor.requirePermission('products:read');
     return (await this.products.findByIds([...new Set(ids)])).map(toSummary);
   }
 
-  @Transactional('product')
+  @Transactional()
   async findByCodes(codes: readonly string[]): Promise<ProductSummary[]> {
     this.currentActor.requirePermission('products:read');
     return (await this.products.findByCodes(codes)).map(toSummary);
   }
 
-  @Transactional('product')
+  @Transactional()
   async list(filter: { type?: ProductType; active?: boolean } = {}): Promise<ProductSummary[]> {
     this.currentActor.requirePermission('products:read');
     return (await this.products.list(filter)).map(toSummary);
@@ -70,7 +70,7 @@ export class ProductCatalog {
    * One level of explosion: the components needed to make each demanded quantity with the product's
    * active formula, aggregated by component and rounded up per product.
    */
-  @Transactional('product')
+  @Transactional()
   async requirementsFor(
     demands: readonly { productId: string; quantity: bigint }[],
   ): Promise<RequirementsResult> {
@@ -110,7 +110,7 @@ export class ProductCatalog {
   }
 
   /** Direct components of each product's active formula. */
-  @Transactional('product')
+  @Transactional()
   async componentsOf(productIds: readonly string[]): Promise<Map<string, string[]>> {
     this.currentActor.requirePermission('products:read');
     const formulas = await this.formulas.activeFor([...new Set(productIds)]);
@@ -121,7 +121,7 @@ export class ProductCatalog {
    * One level: how much of each product its active formula allows with the given component quantities
    * (each product computed on its own). Products without an active formula are left out.
    */
-  @Transactional('product')
+  @Transactional()
   async capacityFor(
     productIds: readonly string[],
     available: ReadonlyMap<string, bigint>,

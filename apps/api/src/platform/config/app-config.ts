@@ -6,24 +6,7 @@ import {
   validateEnvironment,
 } from './environment.js';
 
-export interface DatabaseCredentials {
-  readonly user: string;
-  readonly password: string;
-}
-
-const MODULE_NAME = /^[a-z][a-z0-9_]*$/;
-
-/** Name of the PostgreSQL login role a module connects with (one role and one schema per module). */
-export function roleName(module: string): string {
-  if (!MODULE_NAME.test(module)) {
-    throw new InvalidConfigurationError([
-      `Nombre de módulo inválido para la base de datos: "${module}".`,
-    ]);
-  }
-  return `app_${module}`;
-}
-
-/** Typed, validated configuration shared by the API, the worker and migrate.ts. */
+/** Typed, validated configuration shared by the API and migrate.ts. */
 export class AppConfig {
   readonly nodeEnv: NodeEnv;
   readonly http: { readonly host: string; readonly port: number };
@@ -31,10 +14,11 @@ export class AppConfig {
   readonly database: {
     readonly host: string;
     readonly port: number;
-    readonly name: string;
+    readonly database: string;
+    readonly user: string;
+    readonly password: string;
     readonly poolMax: number;
   };
-  readonly outboxMaxLagSeconds: number;
 
   private constructor(
     environment: Environment,
@@ -46,10 +30,11 @@ export class AppConfig {
     this.database = {
       host: environment.DB_HOST,
       port: environment.DB_PORT,
-      name: environment.DB_NAME,
+      database: environment.DB_NAME,
+      user: environment.DB_USER,
+      password: this.secret('DB_PASSWORD'),
       poolMax: environment.DB_POOL_MAX,
     };
-    this.outboxMaxLagSeconds = environment.OUTBOX_MAX_LAG_SECONDS;
   }
 
   static fromEnv(raw: Readonly<Record<string, string | undefined>>): AppConfig {
@@ -58,19 +43,6 @@ export class AppConfig {
 
   get isProduction(): boolean {
     return this.nodeEnv === 'production';
-  }
-
-  /** Credentials of the role for `module` (or "platform"), from DB_PASSWORD_<MODULE>. */
-  credentialsFor(module: string): DatabaseCredentials {
-    return {
-      user: roleName(module),
-      password: this.secret(`DB_PASSWORD_${module.toUpperCase()}`),
-    };
-  }
-
-  /** Owner role, used only by migrate.ts. */
-  ownerCredentials(): DatabaseCredentials {
-    return { user: this.secret('DB_OWNER_USER'), password: this.secret('DB_OWNER_PASSWORD') };
   }
 
   /** A required secret or setting that is not part of the static schema. */

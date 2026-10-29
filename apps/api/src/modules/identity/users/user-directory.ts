@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { permissionsOf } from '../access.js';
 import { Transactional } from '@nestjs-cls/transactional';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import { UsersRepository } from './users.repository.js';
@@ -20,7 +21,7 @@ export class UserDirectory {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('identity')
+  @Transactional()
   async findByEmails(emails: readonly string[]): Promise<DirectoryUser[]> {
     this.currentActor.requirePermission('users:read');
     const found: DirectoryUser[] = [];
@@ -33,7 +34,7 @@ export class UserDirectory {
         fullName: user.fullName,
         active: user.active,
         roles: user.roles,
-        permissions: await this.users.permissionsOf(user.roles),
+        permissions: permissionsOf(user.roles),
       });
     }
     return found;

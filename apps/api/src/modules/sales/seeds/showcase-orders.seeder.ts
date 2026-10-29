@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import { UserDirectory } from '../../identity/index.js';
 import { ProductCatalog } from '../../product/index.js';
@@ -324,7 +323,6 @@ export class ShowcaseOrdersSeeder {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Seeder({ name: 'sales.showcase-orders', order: 310, showcase: true })
   async seed(): Promise<void> {
     const known = new Map((await this.customers.list()).map((c) => [c.name, c.id]));
     if (known.has(CUSTOMERS[0].name)) return;
@@ -378,7 +376,6 @@ export class ShowcaseOrdersSeeder {
   }
 
   /** Runs after planta packaged and handed over today's goods. */
-  @Seeder({ name: 'sales.showcase-dispatches', order: 520, showcase: true })
   async dispatchToday(): Promise<void> {
     const confirmed = await this.orders.list({ statuses: ['CONFIRMED'], limit: 500 });
     for (const order of confirmed.filter((o) => o.notes === DISPATCH_TODAY))

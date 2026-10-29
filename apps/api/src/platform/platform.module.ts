@@ -1,46 +1,51 @@
-import { type DynamicModule, Global, Module, type ModuleMetadata, type Type } from '@nestjs/common';
+import {
+  type DynamicModule,
+  Global,
+  Inject,
+  Module,
+  type ModuleMetadata,
+  type OnApplicationShutdown,
+  type Type,
+} from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD, APP_PIPE, DiscoveryModule } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ClsPluginTransactional } from '@nestjs-cls/transactional';
+import { TransactionalAdapterKysely } from '@nestjs-cls/transactional-adapter-kysely';
+import type { Kysely } from 'kysely';
 import { ClsModule } from 'nestjs-cls';
 import { AppConfig } from './config/app-config.js';
 import { validateEnvironment } from './config/environment.js';
-import { DatabasePools } from './db/database-pools.js';
-import { MethodDiscovery } from './discovery.js';
+import { createKysely, KYSELY } from './db/database.js';
 import { ProblemDetailsFilter } from './errors/problem-details.filter.js';
 import { createValidationPipe } from './errors/validation-pipe.js';
 import { HealthController } from './health/health.controller.js';
-import { JobRunner } from './jobs/scheduled-job.js';
 import { loggingModule } from './logging/logging.js';
-import { EventConsumerRegistry } from './outbox/event-consumer.js';
-import { OutboxDispatcher } from './outbox/outbox-dispatcher.js';
 import { CurrentActor } from './security/current-actor.js';
 import { AuthenticationGuard, PermissionGuard } from './security/guards.js';
-import { RouteModules } from './security/route-modules.js';
-import { PermissionRegistry } from './security/permission-registry.js';
-import { RejectAllTokenVerifier, TokenVerifier } from './security/token-verifier.js';
-import { SeedRunner } from './seeding/seeder.js';
+import { TokenVerifier } from './security/token-verifier.js';
 
-/**
- * Configuration, database pools, the current actor and provider discovery: shared by the API,
- * the worker and the seed script.
- */
+/** Configuration, the database and the current actor: shared by the API and the seed script. */
 @Global()
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, validate: validateEnvironment }),
-    DiscoveryModule,
   ],
   providers: [
     { provide: AppConfig, useFactory: () => AppConfig.fromEnv(process.env) },
-    DatabasePools,
+    { provide: KYSELY, inject: [AppConfig], useFactory: createKysely },
     CurrentActor,
-    MethodDiscovery,
-    PermissionRegistry,
   ],
-  exports: [AppConfig, DatabasePools, CurrentActor, MethodDiscovery, PermissionRegistry],
+  exports: [AppConfig, KYSELY, CurrentActor],
 })
-class PlatformCoreModule {}
+class PlatformCoreModule implements OnApplicationShutdown {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(@Inject(KYSELY) private readonly db: Kysely<any>) {}
+
+  async onApplicationShutdown(): Promise<void> {
+    await this.db.destroy();
+  }
+}
 
 const commonImports = (service: string) => [
   PlatformCoreModule,
@@ -53,12 +58,19 @@ const commonImports = (service: string) => [
       generateId: true,
       idGenerator: (req: { id?: string }) => req.id ?? crypto.randomUUID(),
     },
+    // One connection: `@Transactional()` spans everything a request does.
+    plugins: [
+      new ClsPluginTransactional({
+        imports: [PlatformCoreModule],
+        adapter: new TransactionalAdapterKysely({ kyselyInstanceToken: KYSELY }),
+      }),
+    ],
   }),
 ];
 
 export interface ApiPlatformOptions {
-  /** Supplies the TokenVerifier (the identity module). Without it every token is rejected. */
-  readonly authentication?: {
+  /** Supplies the TokenVerifier (the identity module). */
+  readonly authentication: {
     readonly imports: NonNullable<ModuleMetadata['imports']>;
     readonly verifier: Type<TokenVerifier>;
   };
@@ -67,22 +79,17 @@ export interface ApiPlatformOptions {
 @Module({})
 export class PlatformModule {
   /** HTTP API: guards (deny by default), problem+json errors, validation, throttling, health. */
-  static forApi(options: ApiPlatformOptions = {}): DynamicModule {
+  static forApi(options: ApiPlatformOptions): DynamicModule {
     return {
       module: PlatformModule,
       imports: [
         ...commonImports('api'),
         ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
-        ...(options.authentication?.imports ?? []),
+        ...options.authentication.imports,
       ],
       controllers: [HealthController],
       providers: [
-        RouteModules,
-        {
-          provide: TokenVerifier,
-          useExisting: options.authentication?.verifier ?? RejectAllTokenVerifier,
-        },
-        RejectAllTokenVerifier,
+        { provide: TokenVerifier, useExisting: options.authentication.verifier },
         { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: AuthenticationGuard },
         { provide: APP_GUARD, useClass: PermissionGuard },
@@ -92,22 +99,8 @@ export class PlatformModule {
     };
   }
 
-  /** Worker: outbox dispatcher, event consumers and scheduled jobs. */
-  static forWorker(): DynamicModule {
-    return {
-      module: PlatformModule,
-      imports: commonImports('worker'),
-      providers: [EventConsumerRegistry, OutboxDispatcher, JobRunner],
-    };
-  }
-
-  /** One-off scripts (seeding): platform services without HTTP, dispatcher or jobs. */
+  /** One-off scripts (migrate and seed): platform services without HTTP. */
   static forScript(): DynamicModule {
-    return {
-      module: PlatformModule,
-      imports: commonImports('migrate'),
-      providers: [SeedRunner],
-      exports: [SeedRunner],
-    };
+    return { module: PlatformModule, imports: commonImports('migrate') };
   }
 }

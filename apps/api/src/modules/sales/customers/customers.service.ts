@@ -17,23 +17,23 @@ export interface CustomerCommand {
 export class CustomersService {
   constructor(private readonly customers: CustomersRepository) {}
 
-  @Transactional('sales')
+  @Transactional()
   list(search?: string): Promise<CustomerView[]> {
     return this.customers.list(search);
   }
 
-  @Transactional('sales')
+  @Transactional()
   get(id: string): Promise<CustomerView> {
     return this.require(id);
   }
 
-  @Transactional('sales')
+  @Transactional()
   async create(command: CustomerCommand): Promise<CustomerView> {
     const id = await this.customers.insert(normalizeCustomer(command));
     return this.require(id);
   }
 
-  @Transactional('sales')
+  @Transactional()
   async update(id: string, command: CustomerCommand & { active?: boolean }): Promise<CustomerView> {
     await this.require(id);
     await this.customers.update(id, {

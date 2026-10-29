@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfig } from '../../../platform/config/app-config.js';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { UsersService } from '../users/users.service.js';
 
@@ -15,7 +14,6 @@ export class AdminSeeder {
     private readonly repository: UsersRepository,
   ) {}
 
-  @Seeder({ name: 'identity.admin', order: 10 })
   async seed(): Promise<void> {
     const email = this.config.secret('ADMIN_EMAIL');
     if (await this.repository.findByEmail(email)) {

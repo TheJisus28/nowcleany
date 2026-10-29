@@ -1,6 +1,6 @@
 # ADR 0001 — Monolito modular con NestJS, Kysely y un esquema de PostgreSQL por módulo
 
-- Estado: aceptado
+- Estado: reemplazado por la ADR 0003 (monolito simple para la demo)
 - Fecha: 2026-10-24
 
 ## Contexto

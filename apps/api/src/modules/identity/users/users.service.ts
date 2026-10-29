@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { permissionsOf, ROLES } from '../access.js';
 import { Transactional } from '@nestjs-cls/transactional';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import { ConflictError, NotFoundError } from '../../../shared-kernel/index.js';
@@ -26,6 +27,8 @@ export interface UpdateUserCommand {
   readonly roles?: readonly string[];
 }
 
+const KNOWN_ROLES = new Set<string>(ROLES.map((role) => role.code));
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -34,22 +37,21 @@ export class UsersService {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('identity')
+  @Transactional()
   async list(): Promise<UserView[]> {
     return (await this.users.list()).map(toUserView);
   }
 
-  @Transactional('identity')
-  roles(): Promise<RoleView[]> {
-    return this.users.roles();
+  roles(): RoleView[] {
+    return ROLES.map((role) => ({ ...role, permissions: permissionsOf([role.code]) }));
   }
 
-  @Transactional('identity')
+  @Transactional()
   async create(command: CreateUserCommand): Promise<UserView> {
     const email = normalizeEmail(command.email);
     const fullName = normalizeFullName(command.fullName);
     assertPasswordPolicy(command.password);
-    const roles = assertRoles(command.roles, await this.knownRoles());
+    const roles = assertRoles(command.roles, KNOWN_ROLES);
     if (await this.users.findByEmail(email)) {
       throw new ConflictError('identity.email_taken', 'Ya existe un usuario con ese correo.');
     }
@@ -62,11 +64,10 @@ export class UsersService {
     return this.view(id);
   }
 
-  @Transactional('identity')
+  @Transactional()
   async update(id: string, command: UpdateUserCommand): Promise<UserView> {
     await this.require(id);
-    const roles =
-      command.roles === undefined ? undefined : assertRoles(command.roles, await this.knownRoles());
+    const roles = command.roles === undefined ? undefined : assertRoles(command.roles, KNOWN_ROLES);
     assertSelfChangeAllowed(this.currentActor.require().id, id, {
       ...(command.active === undefined ? {} : { active: command.active }),
       ...(roles === undefined ? {} : { roles }),
@@ -79,15 +80,11 @@ export class UsersService {
     return this.view(id);
   }
 
-  @Transactional('identity')
+  @Transactional()
   async resetPassword(id: string, password: string): Promise<void> {
     await this.require(id);
     assertPasswordPolicy(password);
     await this.users.update(id, { passwordHash: await this.passwords.hash(password) });
-  }
-
-  private async knownRoles(): Promise<Set<string>> {
-    return new Set((await this.users.roles()).map((role) => role.code));
   }
 
   private async require(id: string) {

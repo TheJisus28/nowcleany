@@ -65,13 +65,13 @@ export class FormulasService {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('product')
+  @Transactional()
   async history(productId: string): Promise<FormulaView[]> {
     const product = await this.requireProduct(productId);
     return this.views(await this.formulas.history(productId), product);
   }
 
-  @Transactional('product')
+  @Transactional()
   async current(productId: string, status: 'DRAFT' | 'ACTIVE'): Promise<FormulaView> {
     const product = await this.requireProduct(productId);
     const formula = await this.formulas.findByStatus(productId, status);
@@ -86,7 +86,7 @@ export class FormulasService {
     return this.view(formula, product);
   }
 
-  @Transactional('product')
+  @Transactional()
   async get(formulaId: string): Promise<FormulaView> {
     const formula = await this.requireFormula(formulaId);
     const product = await this.requireProduct(formula.productId);
@@ -94,7 +94,7 @@ export class FormulasService {
   }
 
   /** Creates the product's draft, or replaces its content if a draft already exists. */
-  @Transactional('product')
+  @Transactional()
   async saveDraft(productId: string, command: SaveDraftCommand): Promise<FormulaView> {
     const product = await this.requireProduct(productId);
     const components = await this.componentsOf(command.lines.map((line) => line.componentId));
@@ -137,7 +137,7 @@ export class FormulasService {
     return this.current(productId, 'DRAFT');
   }
 
-  @Transactional('product')
+  @Transactional()
   async discardDraft(productId: string): Promise<void> {
     const draft = await this.formulas.findByStatus(productId, 'DRAFT');
     if (!draft) throw new NotFoundError('formula.no_draft', 'No hay borrador para descartar.');
@@ -145,7 +145,7 @@ export class FormulasService {
   }
 
   /** DRAFT → ACTIVE; the previous active version becomes RETIRED. Four-eyes rule applies. */
-  @Transactional('product')
+  @Transactional()
   async publish(formulaId: string): Promise<FormulaView> {
     const formula = await this.requireFormula(formulaId);
     const product = await this.requireProduct(formula.productId);
@@ -178,7 +178,7 @@ export class FormulasService {
   }
 
   /** Which products (with an active formula) consume a component, to follow it up the chain. */
-  @Transactional('product')
+  @Transactional()
   async whereUsed(productId: string): Promise<WhereUsedView[]> {
     await this.requireProduct(productId);
     const users = await this.products.findByIds(await this.formulas.productsUsing(productId));
@@ -193,7 +193,7 @@ export class FormulasService {
       }));
   }
 
-  @Transactional('product')
+  @Transactional()
   async requirements(
     productId: string,
     request: { quantity: string; unit?: string; expand?: boolean },

@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { CatalogLoader, type SeedFormula, type SeedProduct } from './catalog-loader.js';
 
 // DATOS DE EJEMPLO (ilustrativos): cifras inventadas para la demo, no son fórmulas reales del cliente.
@@ -97,7 +96,6 @@ export class DemoCatalogSeeder {
 
   constructor(private readonly loader: CatalogLoader) {}
 
-  @Seeder({ name: 'product.demo-catalog', order: 100, demo: true })
   async seed(): Promise<void> {
     await this.loader.load(DEMO_PRODUCTS, DEMO_FORMULAS);
     this.logger.log(`Catálogo de demo listo: ${String(DEMO_PRODUCTS.length)} productos`);

@@ -1,6 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
-import { EventPublisher } from '../../../platform/outbox/event-publisher.js';
 import type { Actor } from '../../../platform/security/actor.js';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import {
@@ -35,22 +34,17 @@ export interface OrderCommand {
   readonly lines: readonly { productId: string; quantity: string; unit?: string }[];
 }
 
-const STALE_DRAFT_MS = 30 * 60 * 1000;
-
 @Injectable()
 export class SalesOrdersService {
-  private readonly logger = new Logger('sales');
-
   constructor(
     private readonly orders: SalesOrdersRepository,
     private readonly customers: CustomersRepository,
     private readonly catalog: ProductCatalog,
     private readonly inventory: InventoryLedger,
-    private readonly events: EventPublisher,
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('sales')
+  @Transactional()
   async list(filter: {
     statuses?: OrderStatus[];
     mine?: boolean;
@@ -71,12 +65,12 @@ export class SalesOrdersService {
     return orders.map(toOrderView);
   }
 
-  @Transactional('sales')
+  @Transactional()
   async get(id: string): Promise<SalesOrderView> {
     return toOrderView(await this.require(id));
   }
 
-  @Transactional('sales')
+  @Transactional()
   async create(command: OrderCommand): Promise<SalesOrderView> {
     const actor = this.currentActor.require();
     const id = await this.orders.insert(await this.content(command), {
@@ -86,7 +80,7 @@ export class SalesOrdersService {
     return this.get(id);
   }
 
-  @Transactional('sales')
+  @Transactional()
   async update(id: string, command: OrderCommand): Promise<SalesOrderView> {
     const order = await this.require(id);
     this.assertCanManage(order);
@@ -95,102 +89,48 @@ export class SalesOrdersService {
     return this.get(id);
   }
 
-  /**
-   * Commits the order's finished goods in inventory (inventory's transaction) and then marks it confirmed
-   * (sales' transaction). Never fails for lack of stock. Safe to retry: reserve is idempotent per order,
-   * and a draft left half-confirmed gets its reservations released by a worker job after 30 minutes.
-   */
+  /** Commits the order's finished goods and marks it confirmed. Never fails for lack of stock. */
+  @Transactional()
   async confirm(id: string): Promise<SalesOrderView> {
-    const order = await this.startConfirmation(id);
+    const order = await this.require(id);
+    this.assertCanManage(order);
     if (order.status === 'CONFIRMED') return toOrderView(order);
+    assertTransition(order.status, 'CONFIRMED');
     await this.inventory.reserve(
       order.id,
       orderLabel(order.number),
       order.lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
     );
-    return this.finishConfirmation(id);
+    await this.orders.markConfirmed(id);
+    return this.get(id);
   }
 
-  /** Ships the order from DESPACHO (inventory's transaction, idempotent key) and marks it dispatched. */
+  /** Ships the order from DESPACHO and marks it dispatched. */
+  @Transactional()
   async dispatch(id: string): Promise<SalesOrderView> {
-    const order = await this.loadForDispatch(id);
+    const order = await this.require(id);
     if (order.status === 'DISPATCHED') return toOrderView(order);
+    assertTransition(order.status, 'DISPATCHED');
     await this.inventory.dispatch({
       idempotencyKey: `sales-order:${order.id}:dispatch`,
       orderId: order.id,
       reference: { type: 'sales_order', id: order.id, label: orderLabel(order.number) },
       lines: order.lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
     });
-    return this.finishDispatch(id);
+    await this.orders.markDispatched(id, this.currentActor.require().displayName);
+    return this.get(id);
   }
 
-  /** Cancels and publishes SalesOrderCancelled in the same transaction; inventory releases the stock. */
-  @Transactional('sales')
+  /** Cancels the order and frees whatever it had committed. */
+  @Transactional()
   async cancel(id: string, reason: string): Promise<SalesOrderView> {
     const order = await this.require(id);
     this.assertCanManage(order);
     assertTransition(order.status, 'CANCELLED');
     const actor = this.currentActor.require();
     await this.orders.markCancelled(id, actor.displayName, requireCancelReason(reason));
-    await this.events.publish('SalesOrderCancelled', {
-      orderId: order.id,
-      orderLabel: orderLabel(order.number),
-    });
+    await this.inventory.release(order.id);
     return this.get(id);
-  }
-
-  /** Worker job: drafts whose confirmation started 30+ minutes ago and never finished. */
-  async releaseStaleDrafts(): Promise<number> {
-    const stale = await this.findStaleDrafts(new Date(Date.now() - STALE_DRAFT_MS));
-    for (const order of stale) {
-      await this.inventory.release(order.id);
-      await this.clearConfirmation(order.id);
-      this.logger.warn(
-        `Reservas liberadas de la preventa ${orderLabel(order.number)} que quedó en borrador`,
-      );
-    }
-    return stale.length;
-  }
-
-  // --- single-transaction steps ------------------------------------------------------------
-
-  @Transactional('sales')
-  private async startConfirmation(id: string): Promise<OrderRecord> {
-    const order = await this.require(id);
-    this.assertCanManage(order);
-    if (order.status === 'CONFIRMED') return order;
-    assertTransition(order.status, 'CONFIRMED');
-    await this.orders.markConfirmationStarted(id);
-    return order;
-  }
-
-  @Transactional('sales')
-  private async finishConfirmation(id: string): Promise<SalesOrderView> {
-    await this.orders.markConfirmed(id);
-    return this.get(id);
-  }
-
-  @Transactional('sales')
-  private async loadForDispatch(id: string): Promise<OrderRecord> {
-    const order = await this.require(id);
-    if (order.status !== 'DISPATCHED') assertTransition(order.status, 'DISPATCHED');
-    return order;
-  }
-
-  @Transactional('sales')
-  private async finishDispatch(id: string): Promise<SalesOrderView> {
-    await this.orders.markDispatched(id, this.currentActor.require().displayName);
-    return this.get(id);
-  }
-
-  @Transactional('sales')
-  private findStaleDrafts(before: Date) {
-    return this.orders.staleDrafts(before);
-  }
-
-  @Transactional('sales')
-  private clearConfirmation(id: string): Promise<void> {
-    return this.orders.clearConfirmationStarted(id);
   }
 
   // --- helpers ---------------------------------------------------------------------------

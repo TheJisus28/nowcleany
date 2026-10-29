@@ -7,7 +7,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json && node ../../ops/scripts/copy-assets.mjs src dist",
     "start": "node --env-file-if-exists=../../.env dist/main.js",
-    "start:worker": "node --env-file-if-exists=../../.env dist/worker.js",
     "migrate": "node --env-file-if-exists=../../.env dist/migrate.js"
   },
   "dependencies": {
@@ -35,9 +34,6 @@
     "rxjs": "7.8.2"
   },
   "devDependencies": {
-    "@nestjs/testing": "12.2.0",
-    "@testcontainers/postgresql": "12.2.1",
-    "@types/pg": "8.23.1",
-    "testcontainers": "12.2.1"
+    "@types/pg": "8.23.1"
   }
 }

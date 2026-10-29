@@ -75,12 +75,12 @@ export class StockService {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('inventory')
+  @Transactional()
   warehouses(): Promise<Warehouse[]> {
     return this.stock.warehouses();
   }
 
-  @Transactional('inventory')
+  @Transactional()
   async status(filter: {
     type?: ProductSummary['type'];
     search?: string;
@@ -101,7 +101,7 @@ export class StockService {
     );
   }
 
-  @Transactional('inventory')
+  @Transactional()
   async movements(
     filter: Omit<MovementFilter, 'warehouseId'> & { warehouseCode?: string },
   ): Promise<MovementView[]> {
@@ -127,7 +127,7 @@ export class StockService {
   }
 
   /** Raw-material receipt (default warehouse PLANTA). */
-  @Transactional('inventory')
+  @Transactional()
   async receive(command: {
     warehouseCode?: string;
     lines: readonly QuantityInput[];
@@ -155,7 +155,7 @@ export class StockService {
   }
 
   /** Output of a production or packaging order and the consumption of its formula, in PLANTA. */
-  @Transactional('inventory')
+  @Transactional()
   async recordProduction(command: {
     idempotencyKey: string;
     output: StockLine;
@@ -187,7 +187,7 @@ export class StockService {
   }
 
   /** Delivery of finished goods from the plant to the dispatch warehouse (or any other pair). */
-  @Transactional('inventory')
+  @Transactional()
   async transfer(command: {
     line: QuantityInput;
     fromCode?: string;
@@ -219,7 +219,7 @@ export class StockService {
   }
 
   /** Physical count: sets the balance to the counted quantity and records the difference. */
-  @Transactional('inventory')
+  @Transactional()
   async adjust(command: {
     line: QuantityInput;
     warehouseCode: string;
@@ -244,7 +244,7 @@ export class StockService {
    * Initial stock from a CSV (codigo; cantidad; [bodega]). Sets each balance to the given quantity.
    * All rows are validated first; with any error nothing is loaded.
    */
-  @Transactional('inventory')
+  @Transactional()
   async initialLoad(csv: string): Promise<{ rows: number; movements: number }> {
     const rows = parseCsv(csv, ['codigo', 'cantidad']);
     if (rows.length === 0) {
@@ -317,7 +317,7 @@ export class StockService {
    * Commits finished goods to a sales order. Never fails for lack of stock (overselling is allowed) and
    * is idempotent: an order that already has reservations is left as is.
    */
-  @Transactional('inventory')
+  @Transactional()
   async reserve(command: {
     orderId: string;
     orderLabel: string;
@@ -349,7 +349,7 @@ export class StockService {
   }
 
   /** Releases an order's reservations (cancelled, or abandoned in draft). Idempotent. */
-  @Transactional('inventory')
+  @Transactional()
   async release(orderId: string): Promise<{ released: boolean }> {
     await this.stock.lockOrder(orderId);
     const reservations = await this.stock.reservationsOf(orderId);
@@ -367,7 +367,7 @@ export class StockService {
   }
 
   /** Ships an order from DESPACHO: stock goes out and its reservations are consumed. */
-  @Transactional('inventory')
+  @Transactional()
   async dispatch(command: {
     idempotencyKey: string;
     orderId: string;
@@ -403,7 +403,7 @@ export class StockService {
   }
 
   /** Totals across warehouses, for planning. */
-  @Transactional('inventory')
+  @Transactional()
   async levels(
     productIds?: readonly string[],
   ): Promise<{ productId: string; onHand: bigint; reserved: bigint }[]> {
@@ -418,7 +418,7 @@ export class StockService {
     return [...totals].map(([productId, balance]) => ({ productId, ...balance }));
   }
 
-  @Transactional('inventory')
+  @Transactional()
   async reservations(productIds?: readonly string[]) {
     return this.stock.reservations(productIds);
   }

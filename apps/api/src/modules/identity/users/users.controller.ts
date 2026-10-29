@@ -48,7 +48,7 @@ export class RolesController {
 
   @Permission('users:read')
   @Get()
-  list(): Promise<RoleView[]> {
+  list(): RoleView[] {
     return this.users.roles();
   }
 }

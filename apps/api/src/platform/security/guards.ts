@@ -5,7 +5,6 @@ import { PinoLogger } from 'nestjs-pino';
 import { ForbiddenError, UnauthorizedError } from '../../shared-kernel/index.js';
 import { CurrentActor } from './current-actor.js';
 import { Permission, Public } from './decorators.js';
-import { RouteModules } from './route-modules.js';
 import { TokenVerifier } from './token-verifier.js';
 
 const BEARER = /^Bearer\s+(\S+)$/i;
@@ -17,12 +16,10 @@ export class AuthenticationGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly verifier: TokenVerifier,
     private readonly currentActor: CurrentActor,
-    private readonly routeModules: RouteModules,
     private readonly logger: PinoLogger,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    this.assignLogFields({ module: this.routeModules.of(context.getClass()) });
     if (isPublic(this.reflector, context)) return true;
 
     const request = context.switchToHttp().getRequest<FastifyRequest>();

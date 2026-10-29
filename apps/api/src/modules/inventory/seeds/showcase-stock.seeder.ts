@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { ProductCatalog } from '../../product/index.js';
 import { StockService } from '../stock/stock.service.js';
 
@@ -62,7 +61,6 @@ export class ShowcaseStockSeeder {
     private readonly catalog: ProductCatalog,
   ) {}
 
-  @Seeder({ name: 'inventory.showcase-stock', order: 210, showcase: true })
   async seed(): Promise<void> {
     const [marker] = await this.catalog.findByCodes(['MP-ESTER']);
     const loaded = (await this.stock.levels()).some((level) => level.productId === marker?.id);
@@ -75,7 +73,6 @@ export class ShowcaseStockSeeder {
   }
 
   /** Runs after today's production: moves the packaged goods to the dispatch warehouse. */
-  @Seeder({ name: 'inventory.showcase-handovers', order: 450, showcase: true })
   async handOver(): Promise<void> {
     const products = new Map(
       (await this.catalog.findByCodes(SHOWCASE_HANDOVERS.map(([code]) => code))).map((p) => [

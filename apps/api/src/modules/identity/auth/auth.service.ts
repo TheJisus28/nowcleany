@@ -4,6 +4,7 @@ import { Transactional } from '@nestjs-cls/transactional';
 import { NotFoundError, UnauthorizedError } from '../../../shared-kernel/index.js';
 import { type ProfileView, toUserView } from '../users/user-view.js';
 import { UsersRepository } from '../users/users.repository.js';
+import { permissionsOf } from '../access.js';
 import { AccessTokens } from './access-tokens.js';
 import { PasswordHasher } from './password-hasher.js';
 import { SessionsRepository } from './sessions.repository.js';
@@ -28,7 +29,7 @@ export class AuthService {
     private readonly passwords: PasswordHasher,
   ) {}
 
-  @Transactional('identity')
+  @Transactional()
   async login(email: string, password: string): Promise<AuthResult> {
     const user = await this.users.findByEmail(email.trim());
     const valid = await this.passwords.verify(user?.passwordHash, password);
@@ -40,7 +41,7 @@ export class AuthService {
   }
 
   /** Rotates the refresh token: the presented one is revoked and a new pair is issued. */
-  @Transactional('identity')
+  @Transactional()
   async refresh(refreshToken: string): Promise<AuthResult> {
     const session = await this.sessions.findActive(hashToken(refreshToken));
     if (!session) {
@@ -53,17 +54,17 @@ export class AuthService {
     return this.issue(session.userId);
   }
 
-  @Transactional('identity')
+  @Transactional()
   async logout(refreshToken: string): Promise<void> {
     const session = await this.sessions.findActive(hashToken(refreshToken));
     if (session) await this.sessions.revoke(session.id);
   }
 
-  @Transactional('identity')
+  @Transactional()
   async profile(userId: string): Promise<ProfileView> {
     const user = await this.users.findById(userId);
     if (!user) throw new NotFoundError('identity.user_not_found', 'El usuario no existe.');
-    return { ...toUserView(user), permissions: await this.users.permissionsOf(user.roles) };
+    return { ...toUserView(user), permissions: permissionsOf(user.roles) };
   }
 
   private async issue(userId: string): Promise<AuthResult> {
@@ -71,7 +72,7 @@ export class AuthService {
     if (!user?.active) {
       throw new UnauthorizedError('auth.inactive_user', 'El usuario está desactivado.');
     }
-    const permissions = await this.users.permissionsOf(user.roles);
+    const permissions = permissionsOf(user.roles);
     const refreshToken = randomBytes(32).toString('base64url');
     await this.sessions.create(
       user.id,

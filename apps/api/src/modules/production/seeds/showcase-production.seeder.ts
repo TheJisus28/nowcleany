@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Seeder } from '../../../platform/seeding/seeder.js';
 import { ProductCatalog } from '../../product/index.js';
 import { ProductionOrdersRepository } from '../orders/production-orders.repository.js';
 import { ProductionOrdersService } from '../orders/production-orders.service.js';
@@ -58,7 +57,6 @@ export class ShowcaseProductionSeeder {
     private readonly repository: ProductionOrdersRepository,
   ) {}
 
-  @Seeder({ name: 'production.showcase-orders', order: 410, showcase: true })
   async seed(): Promise<void> {
     if ((await this.repository.list({ limit: 2 })).length > 1) return;
     const products = new Map(

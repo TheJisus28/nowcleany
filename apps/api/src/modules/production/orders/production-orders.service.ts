@@ -68,7 +68,7 @@ export class ProductionOrdersService {
     private readonly currentActor: CurrentActor,
   ) {}
 
-  @Transactional('production')
+  @Transactional()
   async list(filter: {
     statuses?: ProductionStatus[];
     productId?: string;
@@ -91,7 +91,7 @@ export class ProductionOrdersService {
     };
   }
 
-  @Transactional('production')
+  @Transactional()
   async create(command: {
     productId: string;
     quantity: string;
@@ -177,7 +177,7 @@ export class ProductionOrdersService {
     return this.finish(id, produced);
   }
 
-  @Transactional('production')
+  @Transactional()
   async cancel(id: string): Promise<ProductionOrderView> {
     const order = await this.require(id);
     assertPlanned(order.status, 'cancel');
@@ -185,12 +185,12 @@ export class ProductionOrdersService {
     return toView(await this.require(id));
   }
 
-  @Transactional('production')
+  @Transactional()
   private load(id: string): Promise<ProductionOrderRecord> {
     return this.require(id);
   }
 
-  @Transactional('production')
+  @Transactional()
   private async finish(id: string, produced: bigint): Promise<ProductionOrderView> {
     await this.orders.markCompleted(id, produced, this.currentActor.require().displayName);
     return toView(await this.require(id));

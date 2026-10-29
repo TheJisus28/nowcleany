@@ -8,7 +8,7 @@ export type NodeEnv = (typeof NODE_ENVS)[number];
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
-/** Static environment variables. Per-module database passwords are checked in AppConfig. */
+/** Static environment variables (DB_PASSWORD and JWT_SECRET are read as secrets by AppConfig). */
 export class Environment {
   @IsIn(NODE_ENVS)
   NODE_ENV: NodeEnv = 'development';
@@ -43,12 +43,11 @@ export class Environment {
   @IsInt()
   @Min(1)
   @Max(20)
-  DB_POOL_MAX = 4;
+  DB_POOL_MAX = 10;
 
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  OUTBOX_MAX_LAG_SECONDS = 60;
+  @IsString()
+  @IsNotEmpty()
+  DB_USER = 'nowcleanny_owner';
 }
 
 export class InvalidConfigurationError extends Error {

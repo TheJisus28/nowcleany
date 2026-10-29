@@ -4,7 +4,6 @@ import { ProductModule } from '../product/index.js';
 import { ProductionModule } from '../production/index.js';
 import { PurchasingModule } from '../purchasing/index.js';
 import { SalesModule } from '../sales/index.js';
-import { PlanningPermissions } from './permissions.js';
 import { PlanningController } from './planning/planning.controller.js';
 import { PlanningService } from './planning/planning.service.js';
 
@@ -12,6 +11,6 @@ import { PlanningService } from './planning/planning.service.js';
 @Module({
   imports: [ProductModule, InventoryModule, SalesModule, ProductionModule, PurchasingModule],
   controllers: [PlanningController],
-  providers: [PlanningPermissions, PlanningService],
+  providers: [PlanningService],
 })
 export class PlanningModule {}

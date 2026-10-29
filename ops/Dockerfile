@@ -1,9 +1,8 @@
 # syntax=docker/dockerfile:1
-# One image, three entry points (API, worker, migrations). Build from the repo root:
+# One image, two entry points (API and migrations). Build from the repo root:
 #   docker build -f ops/Dockerfile -t scip-api .
 #   docker run --env-file .env -p 3000:3000 scip-api                     # API
-#   docker run --env-file .env scip-api dist/worker.js                   # worker
-#   docker run --env-file .env scip-api dist/migrate.js --seed           # migrations + seeds
+#   docker run --env-file .env scip-api dist/migrate.js --seed           # schema + seeds
 # Production never runs `pnpm install`: dependencies are frozen in this image.
 
 ARG BUILD_IMAGE=node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea
