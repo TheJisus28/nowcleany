@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@fastify/helmet": "13.2.0",
-    "@fastify/static": "10.1.7",
+    "@fastify/static": "10.1.8",
     "@nestjs-cls/transactional": "4.0.1",
     "@nestjs-cls/transactional-adapter-kysely": "2.0.1",
     "@nestjs/common": "12.2.0",
