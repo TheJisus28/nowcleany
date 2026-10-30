@@ -173,6 +173,17 @@ export class SalesOrdersService {
         'Este pedido se despacha completo: el consolidado no autorizó despacho parcial.',
       );
     }
+    // What the plant hands over moves from the plant warehouse to dispatch, where the shipment takes it.
+    await this.inventory.handOver({
+      note: `Alistamiento ${orderLabel(order.number)}`,
+      lines: order.lines
+        .filter((line) => (ready.get(line.productId) ?? 0n) > 0n)
+        .map((line) => ({
+          productId: line.productId,
+          quantity: toQuantityDto(ready.get(line.productId) ?? 0n, line.unit).quantity,
+          unit: line.unit,
+        })),
+    });
     await this.orders.markReady(
       id,
       order.status,

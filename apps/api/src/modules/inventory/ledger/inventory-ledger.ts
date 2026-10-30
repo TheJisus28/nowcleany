@@ -58,6 +58,19 @@ export class InventoryLedger {
     });
   }
 
+  /** The plant hands an order's goods over to the dispatch warehouse. */
+  async handOver(command: { lines: readonly QuantityInput[]; note: string }): Promise<void> {
+    this.currentActor.requirePermission('sales-orders:prepare');
+    for (const line of command.lines) {
+      await this.stock.transfer({
+        line,
+        fromCode: 'PLANTA',
+        toCode: 'DESPACHO',
+        note: command.note,
+      });
+    }
+  }
+
   receive(command: {
     idempotencyKey: string;
     lines: readonly QuantityInput[];

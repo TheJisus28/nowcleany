@@ -7,6 +7,7 @@ export const ACTION_LABELS: Partial<Record<string, string>> = {
   prioritized: 'Priorizó',
   invoiced: 'Facturó',
   ready: 'Alistó',
+  prepared: 'Alistó',
   dispatched: 'Despachó',
   delivered: 'Entregó',
   cancelled: 'Anuló',
