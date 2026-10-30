@@ -84,7 +84,7 @@ funcional detallado: `docs/alcance-scip.md`; por qué se simplificó: `docs/adr/
 - Política en `pnpm-workspace.yaml` (en pnpm 11+ `.npmrc` solo acepta registro y autenticación):
   `saveExact`, `strictDepBuilds` + `allowBuilds` (scripts de instalación bloqueados salvo lista mínima),
   `minimumReleaseAge`, `trustPolicy: no-downgrade`, `blockExoticSubdeps`, `engineStrict`.
-- Lockfile versionado; `pnpm install --frozen-lockfile` en CI; `pnpm audit` en CI; Dependabot.
+- Lockfile versionado; `pnpm install --frozen-lockfile`. Sin CI/CD: se verifica en local (`pnpm verify`) y la demo se despliega en Dokploy (`ops/compose.deploy.yaml`).
 - En producción no se ejecuta `pnpm install`: se compila una imagen y se despliega.
 
 ## Estructura

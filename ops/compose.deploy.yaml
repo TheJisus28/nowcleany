@@ -1,0 +1,78 @@
+# Demo deployment (Dokploy): PostgreSQL, schema + demo data on the first run, API and panels.
+# The variables come from the Dokploy environment (never from the repository). To start over with
+# fresh demo data, delete the postgres-data volume and deploy again.
+x-api-env: &api-env
+  NODE_ENV: production
+  HTTP_HOST: 0.0.0.0
+  HTTP_PORT: '3000'
+  LOG_LEVEL: info
+  DB_HOST: postgres
+  DB_PORT: '5432'
+  DB_NAME: ${POSTGRES_DB:-nowcleanny}
+  DB_USER: ${POSTGRES_USER:-nowcleanny}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD}
+  DB_POOL_MAX: '10'
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD}
+  ADMIN_NAME: ${ADMIN_NAME:-Administrador}
+  DEMO_PASSWORD: ${DEMO_PASSWORD:?DEMO_PASSWORD}
+  MAPBOX_PUBLIC_TOKEN: ${MAPBOX_PUBLIC_TOKEN:-}
+  MAPBOX_GEOCODING_TOKEN: ${MAPBOX_GEOCODING_TOKEN:-}
+
+services:
+  postgres:
+    image: postgres:18.6-alpine@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nowcleanny}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-nowcleanny}
+      TZ: UTC
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Creates the schema and loads the demo data only on an empty database; then exits.
+  migrate:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    command: ['dist/migrate.js', '--showcase']
+    environment: *api-env
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    restart: unless-stopped
+    environment: *api-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ..
+      dockerfile: ops/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - default
+      - dokploy-network
+
+volumes:
+  postgres-data:
+
+networks:
+  dokploy-network:
+    external: true

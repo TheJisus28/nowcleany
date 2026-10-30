@@ -28,8 +28,9 @@ try {
   const exists = await sql<{
     exists: boolean;
   }>`SELECT to_regclass('public.products') IS NOT NULL AS exists`.execute(db);
-  if (exists.rows[0]?.exists) {
-    logger.info('El esquema ya existe.');
+  const created = !exists.rows[0]?.exists;
+  if (!created) {
+    logger.info('El esquema ya existe: no se cargan semillas.');
   } else {
     const schema = await readFile(new URL('./platform/db/schema.sql', import.meta.url), 'utf8');
     await db.transaction().execute((trx) => sql.raw(schema).execute(trx));
@@ -37,7 +38,7 @@ try {
   }
   await db.destroy();
 
-  if (seed) {
+  if (seed && created) {
     const app = await NestFactory.createApplicationContext(SeedModule, { bufferLogs: true });
     app.useLogger(app.get(Logger));
     await runSeeds(app, { demo, showcase });

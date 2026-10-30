@@ -27,7 +27,6 @@ Cada punto tiene el default que se está usando mientras no haya respuesta. Las 
 | T2  | Idioma de los mensajes de log                              | Español; las claves estructuradas (requestId, actorId, module) en inglés.                                                 |
 | T3  | Node 26 pasa a LTS el 2026-10-28                           | Se fija Node 24.22.1 (LTS hoy). Evaluar migración después.                                                                |
 | T4  | GitHub Actions fijadas por tag (`@v5`), no por SHA         | Sin red hacia GitHub no se pueden resolver SHAs; fijarlas por SHA al subir el repo.                                       |
-| T5  | Dependabot vs Renovate                                     | Dependabot (sin app externa). Verificar que soporte el lockfile de pnpm 12.                                               |
 | T6  | Swagger UI sobre Fastify requiere `@fastify/static` (peer) | Se agrega en M1 como consecuencia del stack fijado (@nestjs/swagger + Fastify).                                           |
 | T7  | `minimumReleaseAge`                                        | 1 día (el default de pnpm, explícito). Subirlo a 3–7 días si se quiere más margen.                                        |
 | T8  | Tailwind en el frontend                                    | Agregado al stack por pedido del cliente.                                                                                 |
