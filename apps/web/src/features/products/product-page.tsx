@@ -27,9 +27,9 @@ import {
   ProductionStatusChip,
   PurchaseStatusChip,
 } from '../../components/status';
-import { Button, EmptyState, PageHeader, Panel, QueryView, Spinner } from '../../components/ui';
+import { Button, cn, EmptyState, PageHeader, Panel, QueryView, Spinner } from '../../components/ui';
 import { api } from '../../api/client';
-import { formatDate, formatDecimal, unitLabel } from '../../lib/format';
+import { formatCop, formatDate, formatDecimal, unitLabel } from '../../lib/format';
 import { MovementTable } from '../inventory/movement-table';
 import { FormulaSection } from './formula-section';
 import { ProductFormDialog } from './product-form-dialog';
@@ -48,15 +48,19 @@ function ProductView({ product }: { product: Product }) {
   const { has, home } = useAccess();
   const { can } = useSession();
   const raw = product.type === 'RAW_MATERIAL';
+  const bulk = product.type === 'BULK';
   const finished = product.type === 'FINISHED_GOOD';
+  const resale = product.type === 'RESALE';
+  const made = bulk || finished;
 
   const sections = {
-    orders: finished && (has('summary') || has('sales') || has('home') || has('plant')),
-    production: !raw && has('plant'),
-    purchases: raw && (has('purchasing') || (has('inventory') && can('purchasing:receive'))),
+    orders: (finished || resale) && (has('summary') || has('sales') || has('home') || has('plant')),
+    production: made && has('plant'),
+    purchases: (raw || resale) && (has('purchasing') || has('monthlyPlan') || has('receiving')),
     kardex: has('inventory'),
-    formula: !raw && (has('catalog') || has('plant')),
-    whereUsed: !finished && (has('catalog') || has('plant') || has('purchasing')),
+    formula: made && (has('catalog') || has('plant')),
+    whereUsed: (raw || bulk) && (has('catalog') || has('plant') || has('purchasing')),
+    pricing: !bulk,
   };
   const fallback = has('catalog') ? '/catalogo' : has('inventory') ? '/inventario' : home;
 
@@ -94,6 +98,7 @@ function ProductView({ product }: { product: Product }) {
             {sections.kardex ? <KardexSection product={product} /> : null}
           </div>
           <div className="flex flex-col gap-6">
+            {sections.pricing ? <PricingSection product={product} /> : null}
             {sections.formula ? <FormulaSection product={product} /> : null}
             {sections.whereUsed ? <WhereUsedSection product={product} /> : null}
           </div>
@@ -101,6 +106,7 @@ function ProductView({ product }: { product: Product }) {
       ) : (
         // Formulation only sees how the product is made: give it the full width.
         <div className="grid max-w-4xl gap-6">
+          {sections.pricing ? <PricingSection product={product} /> : null}
           {sections.formula ? <FormulaSection product={product} /> : null}
           {sections.whereUsed ? <WhereUsedSection product={product} /> : null}
         </div>
@@ -109,7 +115,7 @@ function ProductView({ product }: { product: Product }) {
   );
 }
 
-/** Edit name and batch size, or deactivate (products are never deleted: history points to them). */
+/** Edit name, batch size, price and cost, or deactivate (products are never deleted: history points to them). */
 function ProductActions({ product }: { product: Product }) {
   const [editing, setEditing] = useState(false);
   const toggle = useAction(
@@ -191,10 +197,13 @@ function StockStrip({ product }: { product: Product }) {
 
 function PlanningStat({ product }: { product: Product }) {
   const { has } = useAccess();
+  const purchasable = product.type === 'RAW_MATERIAL' || product.type === 'RESALE';
+  const made = product.type === 'BULK' || product.type === 'FINISHED_GOOD';
   if (product.type === 'FINISHED_GOOD' && (has('summary') || has('sales') || has('home')))
     return <PromisableStat product={product} />;
-  if (product.type === 'RAW_MATERIAL' && has('purchasing')) return <ToBuyStat product={product} />;
-  if (product.type !== 'RAW_MATERIAL' && has('plant')) return <ToMakeStat product={product} />;
+  if (purchasable && (has('purchasing') || has('monthlyPlan')))
+    return <ToBuyStat product={product} />;
+  if (made && has('plant')) return <ToMakeStat product={product} />;
   return null;
 }
 
@@ -238,13 +247,16 @@ function ToMakeStat({ product }: { product: Product }) {
 }
 
 function OrdersSection({ product }: { product: Product }) {
-  const orders = useOrders({ productId: product.id, status: 'DRAFT,CONFIRMED' });
+  const orders = useOrders({
+    productId: product.id,
+    status: 'DRAFT,CONFIRMED,INVOICED,READY,PARTIAL',
+  });
   const quantityOf = (order: SalesOrder) =>
-    order.lines.find((line) => line.productId === product.id)?.quantity;
+    order.lines.find((line) => line.productId === product.id)?.pending;
   return (
     <Panel
-      title="Preventas abiertas que lo piden"
-      description="Confirmadas y borradores, por fecha de entrega."
+      title="Pedidos abiertos que lo piden"
+      description="Borradores y pedidos que aún no se despachan completos, por fecha de entrega."
       flush
     >
       <QueryView query={orders}>
@@ -255,7 +267,7 @@ function OrdersSection({ product }: { product: Product }) {
               (a.estimatedDeliveryDate ?? '9').localeCompare(b.estimatedDeliveryDate ?? '9'),
             )}
             rowKey={(row) => row.id}
-            empty={<EmptyState icon={<Tags />} title="Nadie lo tiene en una preventa abierta" />}
+            empty={<EmptyState icon={<Tags />} title="Nadie lo tiene en un pedido abierto" />}
             columns={[
               {
                 key: 'order',
@@ -288,7 +300,7 @@ function OrdersSection({ product }: { product: Product }) {
               },
               {
                 key: 'quantity',
-                header: 'Cantidad',
+                header: 'Por despachar',
                 align: 'right',
                 render: (row) => {
                   const quantity = quantityOf(row);
@@ -369,7 +381,11 @@ function PurchasesSection({ product }: { product: Product }) {
   const lineOf = (order: PurchaseOrder) =>
     order.lines.find((line) => line.productId === product.id);
   return (
-    <Panel title="Compras" description="Pedidos a proveedores que incluyen este insumo." flush>
+    <Panel
+      title="Compras"
+      description={`Órdenes a proveedores que incluyen este ${product.type === 'RESALE' ? 'producto' : 'insumo'}.`}
+      flush
+    >
       <QueryView query={orders}>
         {(rows) => (
           <DataTable<PurchaseOrder>
@@ -377,7 +393,7 @@ function PurchasesSection({ product }: { product: Product }) {
             rows={rows.slice(0, 15)}
             rowKey={(row) => row.id}
             empty={
-              <EmptyState icon={<ShoppingCart />} title="Todavía no se ha pedido este insumo" />
+              <EmptyState icon={<ShoppingCart />} title="Todavía no se ha pedido a un proveedor" />
             }
             columns={[
               {
@@ -394,21 +410,39 @@ function PurchasesSection({ product }: { product: Product }) {
               },
               {
                 key: 'quantity',
-                header: 'Cantidad',
+                header: 'Recibido / pedido',
                 align: 'right',
                 render: (row) => {
                   const line = lineOf(row);
-                  return line ? <Qty value={line.receivedQuantity ?? line.quantity} /> : '—';
+                  return line ? (
+                    <span className="whitespace-nowrap">
+                      <Qty value={line.received} dimZero />
+                      <span className="text-ink-3"> / </span>
+                      <Qty value={line.quantity} emphasis />
+                    </span>
+                  ) : (
+                    '—'
+                  );
+                },
+              },
+              {
+                key: 'cost',
+                header: 'Costo',
+                align: 'right',
+                hideOnMobile: true,
+                render: (row) => {
+                  const line = lineOf(row);
+                  return line ? formatCop(line.unitCost) : '—';
                 },
               },
               {
                 key: 'date',
                 header: 'Llega',
                 render: (row) =>
-                  row.status === 'OPEN' ? (
-                    <DueDate date={row.expectedDate} />
+                  row.status === 'OPEN' || row.status === 'PARTIAL' ? (
+                    <DueDate date={row.expectedDate} lateLabel="No ha llegado" />
                   ) : (
-                    formatDate(row.receivedAt ?? row.expectedDate)
+                    formatDate(row.receivedAt ?? row.cancelledAt ?? row.expectedDate)
                   ),
               },
               {
@@ -431,6 +465,52 @@ function KardexSection({ product }: { product: Product }) {
       <QueryView query={movements}>
         {(rows) => <MovementTable rows={rows} showProduct={false} />}
       </QueryView>
+    </Panel>
+  );
+}
+
+/** Sale price and purchase cost per stock unit (and the gross margin of resale goods). */
+function PricingSection({ product }: { product: Product }) {
+  const unit = unitLabel(product.stockUnit);
+  const sold = product.type === 'FINISHED_GOOD' || product.type === 'RESALE';
+  const bought = product.type === 'RAW_MATERIAL' || product.type === 'RESALE';
+  const margin =
+    product.type === 'RESALE' && product.price && product.cost && Number(product.price) > 0
+      ? Math.round(((Number(product.price) - Number(product.cost)) / Number(product.price)) * 100)
+      : null;
+  const value = (amount: string | null) =>
+    amount ? (
+      <span className="text-[22px] leading-tight font-semibold tabular-nums">
+        {formatCop(amount)}
+        <span className="ml-1 text-[13px] font-normal text-ink-3">por {unit}</span>
+      </span>
+    ) : (
+      <span className="text-sm text-ink-3">Sin definir</span>
+    );
+  return (
+    <Panel title="Precio y costo" description="En pesos por unidad de inventario, antes de IVA.">
+      <dl className="grid gap-4">
+        {sold ? (
+          <div>
+            <dt className="text-[13px] text-ink-2">Precio de venta</dt>
+            <dd className="mt-0.5">{value(product.price)}</dd>
+          </div>
+        ) : null}
+        {bought ? (
+          <div>
+            <dt className="text-[13px] text-ink-2">Costo de compra</dt>
+            <dd className="mt-0.5">{value(product.cost)}</dd>
+          </div>
+        ) : null}
+        {margin !== null ? (
+          <div>
+            <dt className="text-[13px] text-ink-2">Margen bruto</dt>
+            <dd className={cn('mt-0.5 text-lg font-semibold', margin < 0 && 'text-critical')}>
+              {margin} %
+            </dd>
+          </div>
+        ) : null}
+      </dl>
     </Panel>
   );
 }

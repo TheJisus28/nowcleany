@@ -125,3 +125,33 @@ export function roundUpDecimal(value: string, digits = 2): string {
   const decimals = (digits > 0 ? scaled.slice(-digits) : '').replace(/0+$/, '');
   return `${negative ? '-' : ''}${integer}${decimals ? `.${decimals}` : ''}`;
 }
+
+/** Pesos as integer strings ("1234567") → "$ 1.234.567". */
+export function formatCop(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '—';
+  const negative = value.startsWith('-');
+  return `${negative ? '−' : ''}$ ${formatDecimal(negative ? value.slice(1) : value)}`;
+}
+
+/** "$ 12,4 M" / "$ 850 mil" for headline figures (exact value goes in a tooltip or table). */
+export function formatCopShort(value: string | null | undefined): string {
+  if (!value) return '—';
+  const amount = Number(value);
+  const sign = amount < 0 ? '−' : '';
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000_000)
+    return `${sign}$ ${(abs / 1_000_000_000).toLocaleString('es-CO', { maximumFractionDigits: 1 })} mil M`;
+  if (abs >= 1_000_000)
+    return `${sign}$ ${(abs / 1_000_000).toLocaleString('es-CO', { maximumFractionDigits: 1 })} M`;
+  if (abs >= 1_000) return `${sign}$ ${Math.round(abs / 1_000).toLocaleString('es-CO')} mil`;
+  return `${sign}$ ${abs.toLocaleString('es-CO')}`;
+}
+
+/** "2026-11" → "noviembre de 2026". */
+export function monthLabel(month: string): string {
+  return new Date(`${month}-15T12:00:00Z`).toLocaleDateString('es-CO', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}

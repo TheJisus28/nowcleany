@@ -11,7 +11,7 @@ export interface Ref {
   name: string;
 }
 
-export type ProductType = 'RAW_MATERIAL' | 'BULK' | 'FINISHED_GOOD';
+export type ProductType = 'RAW_MATERIAL' | 'BULK' | 'FINISHED_GOOD' | 'RESALE';
 export type CoverageStatus = 'COVERED' | 'NEEDS_PRODUCTION' | 'SHORT';
 
 export interface Profile {
@@ -39,6 +39,9 @@ export interface Product {
   typeLabel: string;
   stockUnit: string;
   batchCapacity: Q | null;
+  /** Pesos per stock unit, integer strings. */
+  price: string | null;
+  cost: string | null;
   active: boolean;
   activeFormulaVersion: number | null;
   hasDraftFormula: boolean;
@@ -201,7 +204,15 @@ export interface Place {
   longitude: number;
 }
 
-export type OrderStatus = 'DRAFT' | 'CONFIRMED' | 'DISPATCHED' | 'CANCELLED';
+export type OrderStatus =
+  | 'DRAFT'
+  | 'CONFIRMED'
+  | 'INVOICED'
+  | 'READY'
+  | 'PARTIAL'
+  | 'DISPATCHED'
+  | 'DELIVERED'
+  | 'CANCELLED';
 
 export interface SalesOrder {
   id: string;
@@ -209,6 +220,10 @@ export interface SalesOrder {
   label: string;
   status: OrderStatus;
   statusLabel: string;
+  /** Who must act next; null when the flow ended. */
+  nextStep: string | null;
+  priority: number | null;
+  allowPartial: boolean;
   customer: { id: string; name: string; documentType: DocumentType; documentNumber: string };
   branch: { id: string; name: string; address: string | null; city: string | null };
   seller: { id: string; name: string };
@@ -216,12 +231,28 @@ export interface SalesOrder {
   notes: string | null;
   createdAt: string;
   confirmedAt: string | null;
+  invoicedAt: string | null;
+  invoicedBy: string | null;
+  readyAt: string | null;
+  readyBy: string | null;
   dispatchedAt: string | null;
   dispatchedBy: string | null;
+  deliveredAt: string | null;
+  receivedBy: string | null;
   cancelledAt: string | null;
   cancelledBy: string | null;
   cancelReason: string | null;
-  lines: { productId: string; productCode: string; productName: string; quantity: Q }[];
+  lines: {
+    productId: string;
+    productCode: string;
+    productName: string;
+    quantity: Q;
+    /** Handed over by plant, waiting for a guide. */
+    ready: Q;
+    dispatched: Q;
+    /** Still to ship. */
+    pending: Q;
+  }[];
 }
 
 export interface Material {
@@ -255,27 +286,207 @@ export interface ProductionOrder {
   materials?: Material[];
 }
 
+export type PurchaseStatus = 'OPEN' | 'PARTIAL' | 'RECEIVED' | 'CLOSED' | 'CANCELLED';
+
 export interface PurchaseOrder {
   id: string;
   label: string;
   supplier: { id: string; name: string };
   expectedDate: string | null;
-  status: 'OPEN' | 'RECEIVED' | 'CANCELLED';
+  status: PurchaseStatus;
   statusLabel: string;
   notes: string | null;
-  receiptDocument: string | null;
   createdBy: string;
   createdAt: string;
   receivedAt: string | null;
-  receivedBy: string | null;
   cancelledAt: string | null;
+  /** Pesos before VAT. */
+  total: string;
   lines: {
     productId: string;
     productCode: string;
     productName: string;
     quantity: Q;
-    receivedQuantity: Q | null;
+    received: Q;
+    pending: Q;
+    unitCost: string;
+    amount: string;
   }[];
+}
+
+export interface SupplierInvoice {
+  id: string;
+  purchaseOrder: { id: string; label: string };
+  supplier: { id: string; name: string };
+  documentNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  subtotal: string;
+  tax: string;
+  total: string;
+  paid: string;
+  balance: string;
+  overdue: boolean;
+  receivedBy: string;
+  createdAt: string;
+  lines: {
+    productId: string;
+    productCode: string;
+    productName: string;
+    quantity: Q;
+    unitCost: string;
+    amount: string;
+  }[];
+  payments?: {
+    id: string;
+    amount: string;
+    paidOn: string;
+    methodLabel: string;
+    reference: string | null;
+    recordedBy: string;
+  }[];
+}
+
+export type CollectionStatus = 'PAID' | 'PARTIAL' | 'PENDING' | 'OVERDUE';
+export type PaymentMethod = 'TRANSFER' | 'CASH' | 'DEPOSIT' | 'CHECK';
+
+export interface Invoice {
+  id: string;
+  label: string;
+  order: { id: string; label: string };
+  customer: { id: string; name: string; document: string };
+  branchName: string;
+  seller: { id: string; name: string };
+  issuedAt: string;
+  issuedBy: string;
+  dueDate: string;
+  subtotal: string;
+  tax: string;
+  total: string;
+  paid: string;
+  balance: string;
+  status: CollectionStatus;
+  statusLabel: string;
+  aging: string | null;
+  agingLabel: string | null;
+  /** Something was invoiced before it existed (to make or to buy). */
+  hasPending: boolean;
+  lines: {
+    productId: string;
+    productCode: string;
+    productName: string;
+    quantity: Q;
+    unitPrice: string;
+    amount: string;
+    fromStock: Q;
+    pending: Q;
+  }[];
+  payments?: {
+    id: string;
+    amount: string;
+    paidOn: string;
+    method: PaymentMethod;
+    methodLabel: string;
+    reference: string | null;
+    recordedBy: string;
+  }[];
+}
+
+export type ShipmentStatus = 'PLANNED' | 'IN_TRANSIT' | 'DELIVERED';
+
+export interface Shipment {
+  id: string;
+  label: string;
+  carrier: string;
+  vehiclePlate: string;
+  driverName: string;
+  route: string | null;
+  scheduledDate: string;
+  status: ShipmentStatus;
+  statusLabel: string;
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+  dispatchedAt: string | null;
+  dispatchedBy: string | null;
+  deliveredAt: string | null;
+  orders: {
+    orderId: string;
+    orderLabel: string;
+    customer: { id: string; name: string };
+    branch: { name: string; address: string | null; city: string | null };
+    /** The guide carries only part of the order. */
+    partial: boolean;
+    deliveredAt: string | null;
+    receivedBy: string | null;
+    lines: { productId: string; productCode: string; productName: string; quantity: Q }[];
+  }[];
+}
+
+export interface MonthlyPurchase {
+  month: string;
+  basedOn: string;
+  products: {
+    product: Ref;
+    type: ProductType;
+    typeLabel: string;
+    lastMonth: Q;
+    average3: Q;
+    plan: Q;
+    planSetBy: string | null;
+  }[];
+  purchases: {
+    product: Ref;
+    type: ProductType;
+    typeLabel: string;
+    monthNeed: Q;
+    onHand: Q;
+    onOrder: Q;
+    urgent: Q;
+    suggested: Q;
+    unitCost: string | null;
+    estimatedCost: string;
+    usedBy: Ref[];
+  }[];
+  estimatedCost: string;
+}
+
+export interface AgingReport {
+  total: string;
+  overdue: string;
+  buckets: { bucket: string; label: string; amount: string; documents: number }[];
+  parties: { id: string; name: string; balance: string; overdue: string; documents: number }[];
+}
+
+export interface FinanceSummary {
+  generatedAt: string;
+  period: { from: string; to: string };
+  receivables: AgingReport;
+  payables: AgingReport;
+  movements: {
+    date: string;
+    direction: 'IN' | 'OUT';
+    party: string;
+    document: string;
+    method: string;
+    reference: string | null;
+    amount: string;
+    recordedBy: string;
+  }[];
+  totals: { collected: string; paid: string; net: string };
+  months: { month: string; invoiced: string; collected: string; bought: string; paid: string }[];
+}
+
+export interface TrailEntry {
+  id: string;
+  entityType: string;
+  entityTypeLabel: string;
+  entityId: string;
+  label: string;
+  action: string;
+  summary: string;
+  actor: { id: string; name: string; role: string | null };
+  occurredAt: string;
 }
 
 export interface PlanningSummary {

@@ -37,21 +37,27 @@ Para empezar de cero en desarrollo: `docker compose down -v` (borra la base loca
 
 Contraseña de todos: el valor de `DEMO_PASSWORD` en `.env` (por defecto `Demo.Scip.2026`).
 
-| Correo                         | Rol          | Para ver                                      |
-| ------------------------------ | ------------ | --------------------------------------------- |
-| `gerencia@nowcleany.local`     | Gerencia     | Reporte de sobreventa y todos los paneles     |
-| `vendedor.a@nowcleany.local`   | Ventas       | Preventas de Andrea Ruiz (vendedor A)         |
-| `vendedor.b@nowcleany.local`   | Ventas       | Bernardo Díaz (vendedor B)                    |
-| `vendedor.c@nowcleany.local`   | Ventas       | Camila Torres (vendedor C)                    |
-| `vendedor.d@nowcleany.local`   | Ventas       | Diego Romero (solo con `pnpm db:showcase`)    |
-| `planta@nowcleany.local`       | Planta       | Qué producir y envasar; órdenes de producción |
-| `compras@nowcleany.local`      | Compras      | Qué comprar; órdenes de compra                |
-| `bodega@nowcleany.local`       | Bodega       | Recepciones, traslados y despachos            |
-| `formulacion@nowcleany.local`  | Formulador   | Productos y borradores de fórmula             |
-| `jefe.tecnico@nowcleany.local` | Jefe técnico | Publicación de fórmulas (cuatro ojos)         |
+Cada rol hace su paso del flujo, lo autoriza y lo pasa al siguiente (todo queda en la traza):
 
-Los datos de demo son ilustrativos y reproducen el ejemplo de la propuesta: 2.950 cajas de cloro 00224
-vendidas por tres vendedores, capacidad para 2.000 con las materias primas disponibles y 950 sin cobertura.
+| Correo                        | Rol                 | Para ver                                                   |
+| ----------------------------- | ------------------- | ---------------------------------------------------------- |
+| `gerencia@nowcleany.local`    | Gerencia            | Tablero, todos los módulos y la traza; publica fórmulas    |
+| `vendedor.a@nowcleany.local`  | Vendedor            | Cartera, visitas y preventas de Andrea Ruiz (vendedor A)   |
+| `vendedor.b@nowcleany.local`  | Vendedor            | Bernardo Díaz (vendedor B)                                 |
+| `vendedor.c@nowcleany.local`  | Vendedor            | Camila Torres (vendedor C)                                 |
+| `vendedor.d@nowcleany.local`  | Vendedor            | Mateo Romero (solo con `pnpm db:showcase`)                 |
+| `consolidado@nowcleany.local` | Consolidado (Diego) | Consolida las preventas y factura, aunque falte stock      |
+| `planta@nowcleany.local`      | Planta              | Pedidos por alistar, producción, envasado y merma          |
+| `logistica@nowcleany.local`   | Logística           | Guías, despacho parcial o completo y entregas              |
+| `compras@nowcleany.local`     | Compras (Alfonso)   | Plan del mes, compra urgente y órdenes de compra           |
+| `recepcion@nowcleany.local`   | Recepción (Silvia)  | Ingresa las facturas de proveedor y con ellas la mercancía |
+| `contable@nowcleany.local`    | Contable            | Cobros, pagos a proveedores, reporte financiero y traza    |
+| `admin@nowcleany.local`       | Administrador       | Todo, incluidos los usuarios (contraseña `ADMIN_PASSWORD`) |
+
+Los datos de demo son ilustrativos: seis meses de ventas facturadas, entregadas y cobradas, compras recibidas
+y pagadas, y la operación de hoy con algo pendiente en la bandeja de cada rol. Incluyen el ejemplo de la
+propuesta: 2.950 cajas de cloro 00224 vendidas por tres vendedores, capacidad para 2.000 con las materias
+primas disponibles y 950 sin cobertura, esperando que el consolidado las facture.
 
 ## Comandos
 

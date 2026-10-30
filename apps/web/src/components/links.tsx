@@ -10,6 +10,8 @@ const PATHS: Record<Entity, (id: string) => string> = {
   customer: (id) => `/clientes/${id}`,
   'production-order': (id) => `/planta/ordenes/${id}`,
   'purchase-order': (id) => `/compras/ordenes/${id}`,
+  invoice: (id) => `/facturas/${id}`,
+  shipment: (id) => `/logistica/guias/${id}`,
 };
 
 export function pathTo(entity: Entity, id: string): string {

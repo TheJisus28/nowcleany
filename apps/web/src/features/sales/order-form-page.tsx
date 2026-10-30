@@ -111,7 +111,7 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
     {
       success: (saved) =>
         saved.status === 'CONFIRMED'
-          ? `${saved.label} confirmada`
+          ? `${saved.label} enviada al consolidado`
           : `${saved.label} guardada como borrador`,
     },
   );
@@ -138,7 +138,7 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
       </Link>
       <PageHeader
         title={order ? `Editar ${order.label}` : 'Nueva preventa'}
-        description="La preventa no se bloquea por falta de stock: al confirmarla, planta y compras ven de inmediato lo que hay que producir y comprar."
+        description="La preventa no se bloquea por falta de stock: al enviarla, el consolidado la factura y planta y compras ven de inmediato lo que hay que producir y comprar."
       />
 
       <form
@@ -223,7 +223,7 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
                 )}
               </Field>
               <Field
-                label="Fecha estimada de entrega"
+                label="Fecha prometida al cliente"
                 hint="Define la prioridad frente a las demás preventas."
               >
                 {(props) => (
@@ -364,8 +364,8 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
         <aside className="lg:sticky lg:top-8 lg:self-start">
           <Panel title="Guardar">
             <p className="text-sm text-ink-2">
-              En borrador no compromete stock ni cuenta para planta y compras. Al confirmar se
-              reserva el producto y la preventa entra a la planeación.
+              En borrador no compromete producto ni cuenta para planta y compras. Al enviarla, el
+              consolidado la factura y entra a la planeación.
             </p>
             <div className="mt-5 flex flex-col gap-2">
               <Button
@@ -376,7 +376,7 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
                   submit(event, true);
                 }}
               >
-                Guardar y confirmar
+                Guardar y enviar al consolidado
               </Button>
               <Button
                 type="submit"

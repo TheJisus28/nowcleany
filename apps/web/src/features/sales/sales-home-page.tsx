@@ -49,7 +49,7 @@ export function SalesHomePage() {
       <div className="flex flex-col gap-6">
         <Panel
           title="Mis entregas"
-          description="Confirmadas, en el orden en que planta las atiende: primero la entrega más cercana."
+          description="Enviadas al consolidado, en el orden en que se atienden: primero la prioridad del consolidado y la entrega más cercana."
           actions={
             <Link to="/ventas" className="text-sm font-medium text-brand hover:underline">
               Ver todas mis preventas
@@ -62,8 +62,8 @@ export function SalesHomePage() {
 
         {drafts.data && drafts.data.length > 0 ? (
           <Panel
-            title="Borradores por confirmar"
-            description="No comprometen producto ni cuentan para planta y compras hasta que los confirmes."
+            title="Borradores por enviar"
+            description="No comprometen producto ni cuentan para planta y compras hasta que los envíes al consolidado."
             flush
           >
             <DraftsTable rows={drafts.data} />
@@ -116,7 +116,7 @@ function SellerKpis({ rows, drafts }: { rows: OrderCoverage[]; drafts: SalesOrde
         value={drafts?.length ?? '—'}
         icon={CircleDashed}
         tone="neutral"
-        hint="No cuentan hasta que los confirmes"
+        hint="No cuentan hasta que los envíes"
       />
     </div>
   );
@@ -132,8 +132,8 @@ function DeliveriesTable({ rows }: { rows: OrderCoverage[] }) {
       empty={
         <EmptyState
           icon={<ClipboardList />}
-          title="No tienes preventas confirmadas por entregar"
-          description="Cuando confirmes una preventa, aquí verás si se puede cumplir a tiempo."
+          title="No tienes preventas enviadas por entregar"
+          description="Cuando envíes una preventa al consolidado, aquí verás si se puede cumplir a tiempo."
         />
       }
       columns={[

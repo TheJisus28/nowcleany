@@ -5,8 +5,11 @@ import type {
   AvailabilityRow,
   BulkNeed,
   Customer,
+  FinanceSummary,
+  Invoice,
   Formula,
   MapConfig,
+  MonthlyPurchase,
   Movement,
   OrderCoverage,
   OversellRow,
@@ -18,10 +21,13 @@ import type {
   PurchaseOrder,
   Role,
   SalesOrder,
+  Shipment,
   Seller,
   StockAllocationRow,
   StockStatus,
   Supplier,
+  SupplierInvoice,
+  TrailEntry,
   User,
   Visit,
   Warehouse,
@@ -270,6 +276,107 @@ export const useSuppliers = (q?: string, enabled = true) =>
     queryKey: ['suppliers', q],
     queryFn: () => api.get<Supplier[]>(`/v1/suppliers${query({ q })}`),
     enabled,
+  });
+
+export const useSupplierInvoices = (
+  filter: {
+    purchaseOrderId?: string | undefined;
+    supplierId?: string | undefined;
+    open?: boolean;
+  } = {},
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['supplier-invoices', filter],
+    queryFn: () => api.get<SupplierInvoice[]>(`/v1/supplier-invoices${query(filter)}`),
+    enabled,
+  });
+
+export const useSupplierInvoice = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['supplier-invoice', id],
+    queryFn: () => api.get<SupplierInvoice>(`/v1/supplier-invoices/${id ?? ''}`),
+    enabled: Boolean(id),
+  });
+
+/** Purchasing's month (?month=2026-11; the month being planned by default). */
+export const useMonthlyPurchase = (month?: string) =>
+  useQuery({
+    queryKey: ['monthly-purchase', month],
+    queryFn: () => api.get<MonthlyPurchase>(`/v1/planning/monthly-purchase${query({ month })}`),
+  });
+
+// --- billing, logistics, audit ------------------------------------------------------------------
+
+export const useInvoices = (
+  filter: {
+    q?: string | undefined;
+    customerId?: string | undefined;
+    open?: boolean;
+    limit?: string;
+  } = {},
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['invoices', filter],
+    queryFn: () => api.get<Invoice[]>(`/v1/invoices${query(filter)}`),
+    enabled,
+  });
+
+export const useInvoice = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['invoice', id],
+    queryFn: () => api.get<Invoice>(`/v1/invoices/${id ?? ''}`),
+    enabled: Boolean(id),
+  });
+
+/** The invoice of an order, if it was invoiced (empty list otherwise). */
+export const useOrderInvoice = (orderId: string | undefined, enabled = true) =>
+  useQuery({
+    queryKey: ['invoices', 'order', orderId],
+    queryFn: () => api.get<Invoice[]>(`/v1/invoices${query({ orderId })}`),
+    enabled: Boolean(orderId) && enabled,
+  });
+
+export const useShipments = (
+  filter: { status?: string | undefined; orderId?: string | undefined } = {},
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['shipments', filter],
+    queryFn: () => api.get<Shipment[]>(`/v1/shipments${query(filter)}`),
+    enabled,
+  });
+
+export const useShipment = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['shipment', id],
+    queryFn: () => api.get<Shipment>(`/v1/shipments/${id ?? ''}`),
+    enabled: Boolean(id),
+  });
+
+export const useFinance = (period: { from?: string | undefined; to?: string | undefined } = {}) =>
+  useQuery({
+    queryKey: ['finance', period],
+    queryFn: () => api.get<FinanceSummary>(`/v1/finance/summary${query(period)}`),
+  });
+
+export const useTrail = (filter: {
+  entityType?: string | undefined;
+  q?: string | undefined;
+  from?: string | undefined;
+}) =>
+  useQuery({
+    queryKey: ['trail', filter],
+    queryFn: () => api.get<TrailEntry[]>(`/v1/trail${query(filter)}`),
+  });
+
+/** An order's timeline: who did and authorized each step. */
+export const useOrderHistory = (orderId: string | undefined) =>
+  useQuery({
+    queryKey: ['order-history', orderId],
+    queryFn: () => api.get<TrailEntry[]>(`/v1/sales-orders/${orderId ?? ''}/history`),
+    enabled: Boolean(orderId),
   });
 
 // --- identity -------------------------------------------------------------------------------

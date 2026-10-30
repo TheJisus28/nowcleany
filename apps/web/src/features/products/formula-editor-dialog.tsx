@@ -12,12 +12,14 @@ const ALLOWED: Record<ProductType, readonly ProductType[]> = {
   RAW_MATERIAL: [],
   BULK: ['RAW_MATERIAL'],
   FINISHED_GOOD: ['BULK', 'RAW_MATERIAL'],
+  RESALE: [],
 };
 
 const GROUP_LABELS: Record<ProductType, string> = {
   BULK: 'Granel',
   RAW_MATERIAL: 'Materias primas',
   FINISHED_GOOD: 'Terminados',
+  RESALE: 'Mercancía de reventa',
 };
 
 interface LineDraft {

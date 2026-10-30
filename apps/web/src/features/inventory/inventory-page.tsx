@@ -2,35 +2,33 @@ import {
   ArrowRightLeft,
   Droplets,
   FileUp,
-  PackageCheck,
+  Info,
   PackagePlus,
   Plus,
   Scale,
   Search,
   Trash2,
   TriangleAlert,
-  Truck,
   Warehouse,
 } from 'lucide-react';
 import { type ChangeEvent, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { ApiError, api } from '../../api/client';
 import {
   useAction,
   useMovements,
-  useOrders,
   useProducts,
-  usePurchaseOrders,
   useStockStatus,
   useWarehouses,
 } from '../../api/hooks';
-import type { PurchaseOrder, SalesOrder, StockStatus } from '../../api/types';
+import type { StockStatus } from '../../api/types';
+import { useAccess } from '../../app/access';
 import { useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
 import { Dialog } from '../../components/dialog';
-import { EntityLink, pathTo, ProductCell } from '../../components/links';
+import { pathTo, ProductCell } from '../../components/links';
 import { Qty } from '../../components/qty';
-import { Chip, DueDate } from '../../components/status';
+import { Chip } from '../../components/status';
 import {
   Button,
   EmptyState,
@@ -44,7 +42,6 @@ import {
   Textarea,
 } from '../../components/ui';
 import { formatDecimal, parseDecimalInput, unitLabel } from '../../lib/format';
-import { ReceiveDialog } from '../purchasing/receive-dialog';
 import { MovementTable } from './movement-table';
 
 const TYPES = [
@@ -52,49 +49,36 @@ const TYPES = [
   { value: 'RAW_MATERIAL', label: 'Materias primas' },
   { value: 'BULK', label: 'Granel' },
   { value: 'FINISHED_GOOD', label: 'Terminados' },
+  { value: 'RESALE', label: 'Reventa' },
 ] as const;
 
-type Tab = 'existencias' | 'por-recibir' | 'por-despachar' | 'movimientos';
+type Tab = 'existencias' | 'movimientos';
 type DialogKind = 'receipt' | 'transfer' | 'adjust' | 'waste' | 'load' | null;
+
+const TABS: readonly { value: Tab; label: string }[] = [
+  { value: 'existencias', label: 'Existencias' },
+  { value: 'movimientos', label: 'Movimientos' },
+];
 
 export function InventoryPage() {
   const { can } = useSession();
-  const canReceive = can('purchasing:receive');
-  const canDispatch = can('sales-orders:dispatch');
   const [params, setParams] = useSearchParams();
   const [dialog, setDialog] = useState<DialogKind>(null);
   const close = () => {
     setDialog(null);
   };
-  // Counts on the tabs, so the day's warehouse work is visible from any tab.
-  const arriving = usePurchaseOrders('OPEN', undefined, canReceive);
-  const toDispatch = useOrders({ status: 'CONFIRMED' }, canDispatch);
-
-  const tabs: { value: Tab; label: string }[] = [
-    { value: 'existencias', label: 'Existencias' },
-    ...(canReceive
-      ? [{ value: 'por-recibir' as const, label: withCount('Por recibir', arriving.data) }]
-      : []),
-    ...(canDispatch
-      ? [{ value: 'por-despachar' as const, label: withCount('Por despachar', toDispatch.data) }]
-      : []),
-    { value: 'movimientos', label: 'Movimientos' },
-  ];
-  const requested = params.get('vista');
-  const tab: Tab =
-    tabs.find((option) => option.value === requested)?.value ??
-    (canDispatch ? 'por-despachar' : 'existencias');
+  const tab: Tab = params.get('vista') === 'movimientos' ? 'movimientos' : 'existencias';
 
   return (
     <>
       <PageHeader
         title="Inventario"
-        description="Existencias por bodega, lo comprometido en preventas, lo que llega y lo que sale."
+        description="Existencias por bodega, lo comprometido en pedidos y cada movimiento del kardex."
         actions={
           <>
             {can('inventory:receive') ? (
               <Button
-                variant={canReceive ? 'secondary' : 'primary'}
+                variant="secondary"
                 icon={<PackagePlus className="size-4" />}
                 onClick={() => {
                   setDialog('receipt');
@@ -151,20 +135,20 @@ export function InventoryPage() {
         }
       />
 
+      <WhereOperationsLive />
+
       <div className="mb-4 overflow-x-auto">
         <Segmented
           label="Vista"
           value={tab}
           onChange={(value) => {
-            setParams({ vista: value }, { replace: true });
+            setParams(value === 'existencias' ? {} : { vista: value }, { replace: true });
           }}
-          options={tabs}
+          options={TABS}
         />
       </div>
 
       {tab === 'existencias' ? <StockTab /> : null}
-      {tab === 'por-recibir' ? <ReceiveTab orders={arriving} /> : null}
-      {tab === 'por-despachar' ? <DispatchTab orders={toDispatch} /> : null}
       {tab === 'movimientos' ? <MovementsTab /> : null}
 
       {dialog === 'receipt' ? <ReceiptDialog onClose={close} /> : null}
@@ -176,8 +160,41 @@ export function InventoryPage() {
   );
 }
 
-function withCount(label: string, rows: readonly unknown[] | undefined): string {
-  return rows && rows.length > 0 ? `${label} · ${String(rows.length)}` : label;
+/** Goods in and out are operated where they happen: receiving enters invoices, logistics ships. */
+function WhereOperationsLive() {
+  const { has } = useAccess();
+  const receiving = has('receiving');
+  const shipments = has('shipments');
+  const link =
+    'font-medium text-brand underline decoration-brand/40 underline-offset-[3px] hover:decoration-brand';
+  return (
+    <p className="mb-5 flex items-start gap-2.5 rounded-[10px] border border-line bg-brand-soft/40 px-4 py-3 text-[13.5px] text-ink-2">
+      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-brand" />
+      <span>
+        Las compras entran al inventario cuando recepción ingresa la factura del proveedor
+        {receiving ? (
+          <>
+            {' '}
+            en{' '}
+            <Link to="/recepcion" className={link}>
+              Recepción de facturas
+            </Link>
+          </>
+        ) : null}
+        , y el producto sale cuando logística despacha la guía
+        {shipments ? (
+          <>
+            {' '}
+            en{' '}
+            <Link to="/logistica" className={link}>
+              Logística y guías
+            </Link>
+          </>
+        ) : null}
+        . Aquí ves el resultado: existencias y kardex.
+      </span>
+    </p>
+  );
 }
 
 function StockTab() {
@@ -284,177 +301,6 @@ function StockTab() {
   );
 }
 
-interface ListQuery<T> {
-  data: T[] | undefined;
-  isPending: boolean;
-  error: unknown;
-  refetch: () => unknown;
-}
-
-function ReceiveTab({ orders }: { orders: ListQuery<PurchaseOrder> }) {
-  const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
-  return (
-    <Panel
-      title="Compras por recibir"
-      description="Lo que compras pidió a proveedores. Al recibir, registra lo que llegó de verdad."
-      flush
-    >
-      <QueryView query={orders}>
-        {(rows) => (
-          <DataTable<PurchaseOrder>
-            label="Por recibir"
-            rows={[...rows].sort((a, b) =>
-              (a.expectedDate ?? '9').localeCompare(b.expectedDate ?? '9'),
-            )}
-            rowKey={(row) => row.id}
-            empty={<EmptyState icon={<PackageCheck />} title="No hay compras en camino" />}
-            columns={[
-              {
-                key: 'label',
-                header: 'Orden',
-                render: (row) => (
-                  <span>
-                    <EntityLink to="purchase-order" id={row.id} className="font-medium">
-                      {row.label}
-                    </EntityLink>
-                    <span className="block text-[12.5px] text-ink-3">{row.supplier.name}</span>
-                  </span>
-                ),
-              },
-              {
-                key: 'expected',
-                header: 'Llega',
-                render: (row) => <DueDate date={row.expectedDate} />,
-              },
-              {
-                key: 'lines',
-                header: 'Insumos',
-                render: (row) => (
-                  <ul className="text-[13px]">
-                    {row.lines.map((line) => (
-                      <li key={line.productId}>
-                        <EntityLink to="product" id={line.productId}>
-                          {line.productName}
-                        </EntityLink>
-                        : <Qty value={line.quantity} />
-                      </li>
-                    ))}
-                  </ul>
-                ),
-              },
-              {
-                key: 'action',
-                header: '',
-                align: 'right',
-                render: (row) => (
-                  <Button
-                    size="sm"
-                    icon={<PackageCheck className="size-3.5" />}
-                    onClick={() => {
-                      setReceiving(row);
-                    }}
-                  >
-                    Recibir
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        )}
-      </QueryView>
-      {receiving ? (
-        <ReceiveDialog
-          order={receiving}
-          onClose={() => {
-            setReceiving(null);
-          }}
-        />
-      ) : null}
-    </Panel>
-  );
-}
-
-function DispatchTab({ orders }: { orders: ListQuery<SalesOrder> }) {
-  const dispatch = useAction(
-    (id: string) => api.post<SalesOrder>(`/v1/sales-orders/${id}/dispatch`),
-    {
-      success: (order) => `${order.label} despachada`,
-    },
-  );
-  return (
-    <Panel
-      title="Preventas confirmadas por despachar"
-      description="Primero la entrega más cercana. Al despachar sale el producto de la bodega de despacho."
-      flush
-    >
-      <QueryView query={orders}>
-        {(rows) => (
-          <DataTable<SalesOrder>
-            label="Por despachar"
-            rows={[...rows].sort((a, b) =>
-              (a.estimatedDeliveryDate ?? '9').localeCompare(b.estimatedDeliveryDate ?? '9'),
-            )}
-            rowKey={(row) => row.id}
-            empty={<EmptyState icon={<Truck />} title="No hay preventas por despachar" />}
-            columns={[
-              {
-                key: 'label',
-                header: 'Preventa',
-                render: (row) => (
-                  <span>
-                    <EntityLink to="order" id={row.id} className="font-medium">
-                      {row.label}
-                    </EntityLink>
-                    <span className="block text-[12.5px] text-ink-3">{row.customer.name}</span>
-                  </span>
-                ),
-              },
-              {
-                key: 'delivery',
-                header: 'Entrega',
-                render: (row) => <DueDate date={row.estimatedDeliveryDate} />,
-              },
-              {
-                key: 'products',
-                header: 'Productos',
-                render: (row) => (
-                  <ul className="text-[13px]">
-                    {row.lines.map((line) => (
-                      <li key={line.productId}>
-                        <EntityLink to="product" id={line.productId}>
-                          {line.productCode}
-                        </EntityLink>
-                        : <Qty value={line.quantity} />
-                      </li>
-                    ))}
-                  </ul>
-                ),
-              },
-              {
-                key: 'action',
-                header: '',
-                align: 'right',
-                render: (row) => (
-                  <Button
-                    size="sm"
-                    icon={<Truck className="size-3.5" />}
-                    loading={dispatch.isPending && dispatch.variables === row.id}
-                    onClick={() => {
-                      dispatch.mutate(row.id);
-                    }}
-                  >
-                    Despachar
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        )}
-      </QueryView>
-    </Panel>
-  );
-}
-
 const MOVEMENT_TYPES = [
   { value: '', label: 'Todos' },
   { value: 'RECEIPT', label: 'Recepciones' },
@@ -496,15 +342,16 @@ interface Line {
 let lineKey = 1;
 
 function ReceiptDialog({ onClose }: { onClose: () => void }) {
-  const materials = useProducts({ type: 'RAW_MATERIAL', active: true });
+  const products = useProducts({ active: true });
+  const materials = useMemo(
+    () => (products.data ?? []).filter((p) => p.type === 'RAW_MATERIAL' || p.type === 'RESALE'),
+    [products.data],
+  );
   const warehouses = useWarehouses();
   const [warehouse, setWarehouse] = useState('PLANTA');
   const [document, setDocument] = useState('');
   const [lines, setLines] = useState<Line[]>([{ key: lineKey++, productId: '', quantity: '' }]);
-  const units = useMemo(
-    () => new Map((materials.data ?? []).map((m) => [m.id, m.stockUnit])),
-    [materials.data],
-  );
+  const units = useMemo(() => new Map(materials.map((m) => [m.id, m.stockUnit])), [materials]);
   const valid = lines.every(
     (line) => line.productId && Number(parseDecimalInput(line.quantity) ?? 0) > 0,
   );
@@ -526,7 +373,7 @@ function ReceiptDialog({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       size="lg"
       title="Registrar recepción"
-      description="Materia prima que entra a bodega sin orden de compra. Para lo pedido, usa Recibir en Compras."
+      description="Materia prima o mercancía que entra a bodega sin orden de compra. Lo pedido a proveedores entra al ingresar su factura en Recepción."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -577,7 +424,7 @@ function ReceiptDialog({ onClose }: { onClose: () => void }) {
       <ul className="mt-5 flex flex-col gap-3">
         {lines.map((line, index) => (
           <li key={line.key} className="grid grid-cols-[1fr_130px_auto] items-end gap-2">
-            <Field label={`Insumo ${String(index + 1)}`}>
+            <Field label={`Producto ${String(index + 1)}`}>
               {(props) => (
                 <Select
                   {...props}
@@ -590,7 +437,7 @@ function ReceiptDialog({ onClose }: { onClose: () => void }) {
                   }}
                 >
                   <option value="">Elige…</option>
-                  {(materials.data ?? []).map((m) => (
+                  {materials.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.code} · {m.name}
                     </option>
@@ -617,7 +464,7 @@ function ReceiptDialog({ onClose }: { onClose: () => void }) {
             </Field>
             <Button
               variant="ghost"
-              aria-label={`Quitar insumo ${String(index + 1)}`}
+              aria-label={`Quitar producto ${String(index + 1)}`}
               icon={<Trash2 className="size-4" />}
               disabled={lines.length === 1}
               onClick={() => {
@@ -636,7 +483,7 @@ function ReceiptDialog({ onClose }: { onClose: () => void }) {
           setLines((current) => [...current, { key: lineKey++, productId: '', quantity: '' }]);
         }}
       >
-        Agregar insumo
+        Agregar producto
       </Button>
     </Dialog>
   );

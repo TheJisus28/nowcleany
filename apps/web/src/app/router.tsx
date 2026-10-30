@@ -3,21 +3,31 @@ import { createBrowserRouter, Navigate, useLocation } from 'react-router';
 import { useSession } from '../auth/session';
 import { EmptyState, Spinner } from '../components/ui';
 import { LoginPage } from '../features/auth/login-page';
+import { FinancePage } from '../features/accounting/finance-page';
+import { TrailPage } from '../features/accounting/trail-page';
+import { ConsolidationPage } from '../features/billing/consolidation-page';
+import { InvoicePage } from '../features/billing/invoice-page';
+import { InvoicesPage } from '../features/billing/invoices-page';
 import { CatalogPage } from '../features/catalog/catalog-page';
 import { CustomerPage } from '../features/customers/customer-page';
 import { CustomersPage } from '../features/customers/customers-page';
 import { InventoryPage } from '../features/inventory/inventory-page';
+import { ShipmentPage } from '../features/logistics/shipment-page';
+import { ShipmentsPage } from '../features/logistics/shipments-page';
 import { PlantPage } from '../features/plant/plant-page';
 import { ProductionOrderPage } from '../features/plant/production-order-page';
 import { ProductPage } from '../features/products/product-page';
+import { MonthlyPlanPage } from '../features/purchasing/monthly-plan-page';
 import { PurchaseOrderPage } from '../features/purchasing/purchase-order-page';
 import { PurchasingPage } from '../features/purchasing/purchasing-page';
+import { ReceivingPage } from '../features/purchasing/receiving-page';
 import { SuppliersPage } from '../features/purchasing/suppliers-page';
 import { OrderDetailPage } from '../features/sales/order-detail-page';
 import { OrderFormPage } from '../features/sales/order-form-page';
 import { OrdersPage } from '../features/sales/orders-page';
 import { SalesHomePage } from '../features/sales/sales-home-page';
 import { SummaryPage } from '../features/summary/summary-page';
+import { TasksPage } from '../features/tasks/tasks-page';
 import { UsersPage } from '../features/users/users-page';
 import { VisitsPage } from '../features/visits/visits-page';
 import { type Entity, useAccess } from './access';
@@ -90,6 +100,16 @@ export const router = createBrowserRouter([
       { index: true, element: <Home /> },
       { path: 'resumen', element: panel('summary', <SummaryPage />) },
       { path: 'inicio', element: panel('home', <SalesHomePage />) },
+      { path: 'bandeja', element: panel('tasks', <TasksPage />) },
+      { path: 'consolidado', element: panel('consolidation', <ConsolidationPage />) },
+      { path: 'facturas', element: panel('invoices', <InvoicesPage />) },
+      { path: 'facturas/:id', element: entity('invoice', <InvoicePage />) },
+      { path: 'logistica', element: panel('shipments', <ShipmentsPage />) },
+      { path: 'logistica/guias/:id', element: entity('shipment', <ShipmentPage />) },
+      { path: 'compras/plan', element: panel('monthlyPlan', <MonthlyPlanPage />) },
+      { path: 'recepcion', element: panel('receiving', <ReceivingPage />) },
+      { path: 'contabilidad', element: panel('finance', <FinancePage />) },
+      { path: 'traza', element: panel('trail', <TrailPage />) },
       { path: 'ventas', element: panel('sales', <OrdersPage />) },
       { path: 'ventas/nueva', element: panel('sales', <OrderFormPage />, 'sales-orders:write') },
       { path: 'ventas/:id', element: entity('order', <OrderDetailPage />) },

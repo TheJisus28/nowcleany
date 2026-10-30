@@ -70,7 +70,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       initialDate: _delivery.isBefore(today) ? today : _delivery,
       firstDate: today,
       lastDate: today.add(const Duration(days: 365)),
-      helpText: 'Fecha estimada de entrega',
+      helpText: 'Fecha prometida al cliente',
     );
     if (picked != null) setState(() => _delivery = picked);
   }
@@ -206,7 +206,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
                       )
                     : const Icon(Icons.check_rounded),
-                label: const Text('Confirmar preventa'),
+                label: const Text('Enviar al consolidado'),
               ),
               const SizedBox(height: 4),
               TextButton(
@@ -294,7 +294,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.event_rounded, color: BrandColors.navy),
-              title: const Text('Fecha estimada de entrega', style: TextStyle(fontSize: 13, color: BrandColors.muted)),
+              title: const Text('Fecha prometida al cliente', style: TextStyle(fontSize: 13, color: BrandColors.muted)),
               subtitle: Text(
                 formatLongDate(_delivery),
                 style: const TextStyle(fontWeight: FontWeight.w700, color: BrandColors.ink, fontSize: 15),
@@ -509,7 +509,7 @@ class _OrderDone extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                confirmed ? 'Preventa ${order.label} confirmada' : 'Borrador ${order.label} guardado',
+                confirmed ? 'Preventa ${order.label} enviada al consolidado' : 'Borrador ${order.label} guardado',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
               ),
@@ -517,7 +517,7 @@ class _OrderDone extends StatelessWidget {
               Text(
                 confirmed
                     ? 'Planta y compras ya la ven en sus necesidades de producción y de compra.'
-                    : 'Queda como borrador: puedes confirmarla después desde Preventas.',
+                    : 'Queda como borrador: puedes enviarla después desde Preventas.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: BrandColors.muted, height: 1.45),
               ),
@@ -527,7 +527,7 @@ class _OrderDone extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(color: BrandColors.warningSoft, borderRadius: BorderRadius.circular(12)),
                   child: Text(
-                    'No se pudo confirmar: $confirmError',
+                    'No se pudo enviar: $confirmError',
                     style: const TextStyle(color: BrandColors.warning, fontWeight: FontWeight.w600),
                   ),
                 ),

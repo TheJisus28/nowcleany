@@ -92,7 +92,7 @@ class _OrdersTabState extends State<OrdersTab> {
               child: Text(
                 [
                   orders.length == 1 ? '1 preventa' : '${orders.length} preventas',
-                  if (confirmed > 0) confirmed == 1 ? '1 confirmada' : '$confirmed confirmadas',
+                  if (confirmed > 0) confirmed == 1 ? '1 enviada' : '$confirmed enviadas',
                   if (drafts > 0) drafts == 1 ? '1 borrador' : '$drafts borradores',
                 ].join(' · '),
                 style: const TextStyle(color: BrandColors.muted, fontWeight: FontWeight.w600),
@@ -173,8 +173,9 @@ class OrderCard extends StatelessWidget {
 
 Widget orderStatusPill(SalesOrder order) {
   final (Color fg, Color bg) = switch (order.status) {
-    'CONFIRMED' => (BrandColors.info, BrandColors.infoSoft),
-    'DISPATCHED' => (BrandColors.success, BrandColors.successSoft),
+    'CONFIRMED' || 'INVOICED' || 'READY' || 'DISPATCHED' => (BrandColors.info, BrandColors.infoSoft),
+    'PARTIAL' => (BrandColors.warning, BrandColors.warningSoft),
+    'DELIVERED' => (BrandColors.success, BrandColors.successSoft),
     'CANCELLED' => (BrandColors.danger, BrandColors.dangerSoft),
     _ => (BrandColors.muted, BrandColors.neutralSoft),
   };
@@ -279,7 +280,7 @@ class _ConfirmDraftButtonState extends State<_ConfirmDraftButton> {
       final order = await scope.api.confirmOrder(widget.order.id);
       scope.events.changed();
       navigator.pop();
-      messenger.showSnackBar(SnackBar(content: Text('Preventa ${order.label} confirmada.')));
+      messenger.showSnackBar(SnackBar(content: Text('Preventa ${order.label} enviada al consolidado.')));
     } on ApiException catch (error) {
       if (mounted) {
         setState(() => _busy = false);
@@ -295,7 +296,7 @@ class _ConfirmDraftButtonState extends State<_ConfirmDraftButton> {
       icon: _busy
           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
           : const Icon(Icons.check_rounded),
-      label: const Text('Confirmar preventa'),
+      label: const Text('Enviar al consolidado'),
     );
   }
 }

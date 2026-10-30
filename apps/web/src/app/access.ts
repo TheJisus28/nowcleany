@@ -3,15 +3,37 @@ import { useSession } from '../auth/session';
 import { NAV, PANELS_BY_ROLE, type Panel } from './nav';
 
 /** Records that have their own page; links to them render only where the user can open them. */
-export type Entity = 'product' | 'order' | 'customer' | 'production-order' | 'purchase-order';
+export type Entity =
+  'product' | 'order' | 'customer' | 'production-order' | 'purchase-order' | 'invoice' | 'shipment';
 
 /** Panels from which each record is reachable (its page shows only what that panel needs). */
 const ENTITY_PANELS: Record<Entity, readonly Panel[]> = {
-  product: ['summary', 'home', 'sales', 'plant', 'purchasing', 'inventory', 'catalog'],
-  order: ['summary', 'home', 'sales', 'visits', 'plant', 'inventory'],
-  customer: ['summary', 'customers', 'visits'],
+  product: [
+    'summary',
+    'home',
+    'sales',
+    'plant',
+    'purchasing',
+    'monthlyPlan',
+    'inventory',
+    'catalog',
+  ],
+  order: [
+    'summary',
+    'home',
+    'sales',
+    'visits',
+    'consolidation',
+    'invoices',
+    'plant',
+    'shipments',
+    'finance',
+  ],
+  customer: ['summary', 'customers', 'visits', 'consolidation', 'finance'],
   'production-order': ['summary', 'plant'],
-  'purchase-order': ['summary', 'purchasing', 'inventory'],
+  'purchase-order': ['summary', 'purchasing', 'receiving', 'finance'],
+  invoice: ['summary', 'invoices', 'consolidation', 'finance'],
+  shipment: ['summary', 'shipments'],
 };
 
 export interface Access {

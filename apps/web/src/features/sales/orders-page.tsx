@@ -11,8 +11,9 @@ import { EmptyState, Input, PageHeader, Panel, QueryView, Segmented } from '../.
 import { formatDate, formatDecimal, unitLabel } from '../../lib/format';
 
 const STATUS_FILTERS = [
-  { value: 'open', label: 'Abiertas', status: 'DRAFT,CONFIRMED' },
-  { value: 'dispatched', label: 'Despachadas', status: 'DISPATCHED' },
+  { value: 'open', label: 'En curso', status: 'DRAFT,CONFIRMED,INVOICED,READY,PARTIAL' },
+  { value: 'road', label: 'En ruta', status: 'DISPATCHED' },
+  { value: 'delivered', label: 'Entregadas', status: 'DELIVERED' },
   { value: 'cancelled', label: 'Anuladas', status: 'CANCELLED' },
   { value: 'all', label: 'Todas', status: undefined },
 ] as const;
@@ -148,7 +149,7 @@ export function OrdersPage() {
                   key: 'delivery',
                   header: 'Entrega',
                   render: (row) =>
-                    row.status === 'DRAFT' || row.status === 'CONFIRMED' ? (
+                    ['DRAFT', 'CONFIRMED', 'INVOICED', 'READY', 'PARTIAL'].includes(row.status) ? (
                       <DueDate date={row.estimatedDeliveryDate} />
                     ) : (
                       formatDate(row.dispatchedAt ?? row.estimatedDeliveryDate)

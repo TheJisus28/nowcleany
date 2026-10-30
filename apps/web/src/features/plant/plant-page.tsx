@@ -1,9 +1,9 @@
 import { CalendarPlus, CircleCheck, Factory, TriangleAlert } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { api } from '../../api/client';
-import { useAction, useProductionNeeds, useProductionOrders } from '../../api/hooks';
-import type { BulkNeed, PackagingNeed, ProductionOrder, Q, Ref } from '../../api/types';
+import { useAction, useOrders, useProductionNeeds, useProductionOrders } from '../../api/hooks';
+import type { BulkNeed, PackagingNeed, ProductionOrder, Q } from '../../api/types';
 import { useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
 import { Dialog } from '../../components/dialog';
@@ -29,14 +29,10 @@ import {
   todayIso,
   unitLabel,
 } from '../../lib/format';
-
-interface ScheduleTarget {
-  product: Ref;
-  kind: 'BULK' | 'FINISHED_GOOD';
-  suggested: Q;
-}
+import { OrdersToPrepare, type ScheduleTarget } from './orders-to-prepare';
 
 type Scope = 'pending' | 'all';
+type View = 'pedidos' | 'produccion';
 
 /** Earliest delivery among the orders that ask for it: what the plant should do first. */
 const firstDelivery = (need: PackagingNeed): string | null =>
@@ -49,15 +45,49 @@ const byDate = (a: string | null, b: string | null) => (a ?? '9999').localeCompa
 
 export function PlantPage() {
   const needs = useProductionNeeds();
+  const toPrepare = useOrders({ status: 'INVOICED,PARTIAL', limit: '500' });
+  const [params, setParams] = useSearchParams();
+  const view: View = params.get('vista') === 'produccion' ? 'produccion' : 'pedidos';
   const [schedule, setSchedule] = useState<ScheduleTarget | null>(null);
   const [scope, setScope] = useState<Scope>('pending');
+  const toSchedule = needs.data
+    ? [...needs.data.packaging, ...needs.data.bulk].filter(
+        (need) => !isZero(need.pendingToSchedule.quantity),
+      ).length
+    : null;
 
   return (
     <>
       <PageHeader
         title="Planta"
-        description="Qué envasar y qué granel producir para cumplir las preventas confirmadas, primero lo que se entrega antes."
-        actions={
+        description={
+          view === 'pedidos'
+            ? 'Alista lo que existe de cada pedido facturado y entrégalo a despacho; lo que falta se fabrica según la prioridad del consolidado.'
+            : 'Qué envasar y qué granel producir para cumplir los pedidos, primero lo que se entrega antes.'
+        }
+      />
+
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="overflow-x-auto">
+          <Segmented
+            label="Vista"
+            value={view}
+            onChange={(value) => {
+              setParams(value === 'pedidos' ? {} : { vista: value }, { replace: true });
+            }}
+            options={[
+              {
+                value: 'pedidos',
+                label: `Pedidos por alistar${toPrepare.data ? ` · ${String(toPrepare.data.length)}` : ''}`,
+              },
+              {
+                value: 'produccion',
+                label: `Por fabricar${toSchedule ? ` · ${String(toSchedule)}` : ''}`,
+              },
+            ]}
+          />
+        </div>
+        {view === 'produccion' ? (
           <Segmented
             label="Mostrar"
             value={scope}
@@ -67,21 +97,35 @@ export function PlantPage() {
               { value: 'all', label: 'Todo' },
             ]}
           />
-        }
-      />
+        ) : null}
+      </div>
 
-      <QueryView query={needs}>
-        {(data) => (
-          <NeedsTables
-            packaging={data.packaging}
-            bulk={data.bulk}
-            scope={scope}
-            onSchedule={setSchedule}
-          />
-        )}
-      </QueryView>
+      {view === 'pedidos' ? (
+        <QueryView query={toPrepare}>
+          {(orders) => (
+            <OrdersToPrepare
+              orders={orders}
+              packaging={needs.data?.packaging}
+              onSchedule={setSchedule}
+            />
+          )}
+        </QueryView>
+      ) : (
+        <>
+          <QueryView query={needs}>
+            {(data) => (
+              <NeedsTables
+                packaging={data.packaging}
+                bulk={data.bulk}
+                scope={scope}
+                onSchedule={setSchedule}
+              />
+            )}
+          </QueryView>
 
-      <ProductionOrders />
+          <ProductionOrders />
+        </>
+      )}
 
       <ScheduleDialog
         target={schedule}
