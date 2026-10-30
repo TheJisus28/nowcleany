@@ -102,6 +102,27 @@ export class ProductsRepository {
     }
   }
 
+  /**
+   * A unit change needs a product nobody has used yet: no stock movements, formulas, orders or
+   * purchases (their quantities are written in the old unit).
+   */
+  async assertUnused(id: string, code: string): Promise<void> {
+    const used = await sql<{ used: boolean }>`
+      SELECT EXISTS (SELECT 1 FROM stock_movements WHERE product_id = ${id})
+        OR EXISTS (SELECT 1 FROM formulas WHERE product_id = ${id})
+        OR EXISTS (SELECT 1 FROM formula_lines WHERE component_id = ${id})
+        OR EXISTS (SELECT 1 FROM sales_order_lines WHERE product_id = ${id})
+        OR EXISTS (SELECT 1 FROM purchase_order_lines WHERE product_id = ${id})
+        OR EXISTS (SELECT 1 FROM production_orders WHERE product_id = ${id}) AS used
+    `.execute(this.host.tx);
+    if (used.rows[0]?.used) {
+      throw new ConflictError(
+        'product.unit_locked',
+        `No se puede cambiar la unidad de ${code}: ya tiene movimientos o se usa en fórmulas, pedidos u órdenes.`,
+      );
+    }
+  }
+
   /** Fails with a conflict when the product has stock movements or is used by a formula or a document. */
   async remove(id: string, code: string): Promise<void> {
     const moved = await sql<{ moved: boolean }>`
@@ -131,6 +152,7 @@ export class ProductsRepository {
     id: string,
     changes: {
       name?: string;
+      stockUnit?: UnitCode;
       batchCapacity?: bigint | null;
       price?: bigint | null;
       cost?: bigint | null;
@@ -141,6 +163,7 @@ export class ProductsRepository {
       .updateTable('products')
       .set({
         ...(changes.name === undefined ? {} : { name: changes.name }),
+        ...(changes.stockUnit === undefined ? {} : { stock_unit: changes.stockUnit }),
         ...(changes.batchCapacity === undefined ? {} : { batch_capacity: changes.batchCapacity }),
         ...(changes.price === undefined ? {} : { price: changes.price }),
         ...(changes.cost === undefined ? {} : { cost: changes.cost }),

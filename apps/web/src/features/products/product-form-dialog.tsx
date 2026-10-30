@@ -46,7 +46,7 @@ const SOLD: readonly ProductType[] = ['FINISHED_GOOD', 'RESALE'];
 const BOUGHT: readonly ProductType[] = ['RAW_MATERIAL', 'RESALE'];
 
 /**
- * Creates a product (code, type and unit are fixed afterwards) or edits its name, batch size, sale
+ * Creates a product (code and type are fixed afterwards; the unit only while nothing uses it) or edits its name, batch size, sale
  * price and purchase cost.
  */
 export function ProductFormDialog({
@@ -84,6 +84,7 @@ export function ProductFormDialog({
       product
         ? api.patch<Product>(`/v1/products/${product.id}`, {
             name,
+            ...(unit === product.stockUnit ? {} : { stockUnit: unit }),
             ...(product.type === 'BULK' ? { batchCapacity: parsedBatch ?? '' } : {}),
             ...money,
           })
@@ -199,6 +200,28 @@ export function ProductFormDialog({
             </div>
           </>
         )}
+        {product ? (
+          <Field
+            label="Unidad de inventario"
+            hint="Solo se puede cambiar mientras el producto no tenga movimientos."
+          >
+            {(props) => (
+              <Select
+                {...props}
+                value={unit}
+                onChange={(event) => {
+                  setUnit(event.target.value);
+                }}
+              >
+                {UNITS.map((option) => (
+                  <option key={option} value={option}>
+                    {unitLabel(option)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        ) : null}
         <Field label="Nombre">
           {(props) => (
             <Input
@@ -214,7 +237,7 @@ export function ProductFormDialog({
         </Field>
         {(product?.type ?? type) === 'BULK' ? (
           <Field
-            label={`Capacidad máxima de bache (${unitLabel(product?.stockUnit ?? unit)})`}
+            label={`Capacidad máxima de bache (${unitLabel(unit)})`}
             hint="Lo que cabe en el tanque: planta programa en baches de este tamaño."
             error={parsedBatch === null ? 'Escribe una cantidad válida.' : undefined}
           >
@@ -235,7 +258,7 @@ export function ProductFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             {showPrice ? (
               <Field
-                label={`Precio de venta (pesos por ${unitLabel(product?.stockUnit ?? unit)})`}
+                label={`Precio de venta (pesos por ${unitLabel(unit)})`}
                 hint="Antes de impuestos. Con este precio se factura."
                 error={parsedPrice === null ? 'Escribe pesos enteros, p. ej. 12.500.' : undefined}
               >
@@ -257,7 +280,7 @@ export function ProductFormDialog({
             ) : null}
             {showCost ? (
               <Field
-                label={`Costo de compra (pesos por ${unitLabel(product?.stockUnit ?? unit)})`}
+                label={`Costo de compra (pesos por ${unitLabel(unit)})`}
                 hint="Antes de IVA. Prellena las órdenes de compra y el plan del mes."
                 error={parsedCost === null ? 'Escribe pesos enteros, p. ej. 2.400.' : undefined}
               >

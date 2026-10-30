@@ -32,6 +32,8 @@ export interface CreateProductCommand {
 
 export interface UpdateProductCommand {
   readonly name?: string;
+  /** Only while the product has no movements and nothing uses it. */
+  readonly stockUnit?: string;
   /** In the product's stock unit; an empty string clears it. */
   readonly batchCapacity?: string;
   /** Pesos per stock unit; an empty string clears it. */
@@ -75,14 +77,20 @@ export class ProductsService {
   @Transactional()
   async update(id: string, command: UpdateProductCommand): Promise<ProductView> {
     const product = await this.require(id);
+    const unitChanges = command.stockUnit !== undefined && command.stockUnit !== product.stockUnit;
+    if (unitChanges) await this.products.assertUnused(id, product.code);
+    const stockUnit = unitChanges ? (command.stockUnit as UnitCode) : product.stockUnit;
     await this.products.update(id, {
       ...(command.name === undefined ? {} : { name: normalizeName(command.name) }),
+      ...(unitChanges ? { stockUnit } : {}),
+      // The batch capacity is written in the stock unit: a new unit needs it again.
       ...(command.batchCapacity === undefined
-        ? {}
+        ? unitChanges
+          ? { batchCapacity: null }
+          : {}
         : {
             batchCapacity:
-              parseBatchCapacity(product.type, product.stockUnit, command.batchCapacity)?.base ??
-              null,
+              parseBatchCapacity(product.type, stockUnit, command.batchCapacity)?.base ?? null,
           }),
       ...(command.price === undefined ? {} : { price: parseMoney(command.price) }),
       ...(command.cost === undefined ? {} : { cost: parseMoney(command.cost) }),

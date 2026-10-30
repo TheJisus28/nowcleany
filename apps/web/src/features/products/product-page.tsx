@@ -1,4 +1,4 @@
-import { PackageSearch, Pencil, Power, Printer } from 'lucide-react';
+import { PackageSearch, Pencil, Power, Printer, Trash2 } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { api } from '../../api/client';
@@ -79,6 +79,8 @@ function ProductRecord({ product, ids }: { product: Product; ids: string[] | und
   useWorkTab(`${product.code} · ${product.name}`);
   const [editing, setEditing] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const navigate = useNavigate();
   const raw = product.type === 'RAW_MATERIAL';
   const bulk = product.type === 'BULK';
   const finished = product.type === 'FINISHED_GOOD';
@@ -103,6 +105,9 @@ function ProductRecord({ product, ids }: { product: Product; ids: string[] | und
       ? Math.round(((Number(product.price) - Number(product.cost)) / Number(product.price)) * 100)
       : null;
 
+  const remove = useAction(() => api.delete(`/v1/products/${product.id}`), {
+    success: `${product.code} eliminado`,
+  });
   const toggle = useAction(
     () => api.patch<Product>(`/v1/products/${product.id}`, { active: !product.active }),
     {
@@ -146,6 +151,15 @@ function ProductRecord({ product, ids }: { product: Product; ids: string[] | und
                 onClick: () => {
                   if (product.active) setDeactivating(true);
                   else toggle.mutate(undefined);
+                },
+              },
+              {
+                label: 'Eliminar',
+                icon: Trash2,
+                danger: true,
+                hidden: !can('products:write'),
+                onClick: () => {
+                  setRemoving(true);
                 },
               },
               {
@@ -258,6 +272,25 @@ function ProductRecord({ product, ids }: { product: Product; ids: string[] | und
           toggle.mutate(undefined, {
             onSuccess: () => {
               setDeactivating(false);
+            },
+          });
+        }}
+      />
+      <ConfirmDialog
+        open={removing}
+        title={`¿Eliminar ${product.code}?`}
+        description="Solo se puede si no tiene movimientos ni se usa en fórmulas o documentos. No se puede deshacer."
+        confirmLabel="Eliminar"
+        danger
+        loading={remove.isPending}
+        onClose={() => {
+          setRemoving(false);
+        }}
+        onConfirm={() => {
+          remove.mutate(undefined, {
+            onSuccess: () => {
+              setRemoving(false);
+              void navigate(closeTo);
             },
           });
         }}

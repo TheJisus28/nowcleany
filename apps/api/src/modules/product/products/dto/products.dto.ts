@@ -42,6 +42,11 @@ export class UpdateProductDto {
   @MaxLength(160)
   name?: string;
 
+  /** Only while the product has no movements and nothing uses it. */
+  @IsOptional()
+  @IsIn(UNIT_CODES)
+  stockUnit?: string;
+
   /** In the stock unit; "" clears it. */
   @IsOptional()
   @Matches(/^(\d+(\.\d+)?)?$/)
