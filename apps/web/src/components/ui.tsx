@@ -82,10 +82,10 @@ export function Field({
   className?: string;
 }) {
   const id = useId();
-  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+  const describedBy = error ? `${id}-error` : undefined;
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <label htmlFor={id} className="text-[13px] font-medium text-ink-2">
+      <label htmlFor={id} title={hint} className="text-[13px] font-medium text-ink-2">
         {label}
       </label>
       {children({
@@ -96,10 +96,6 @@ export function Field({
       {error ? (
         <p id={`${id}-error`} className="text-[13px] text-critical">
           {error}
-        </p>
-      ) : hint ? (
-        <p id={`${id}-hint`} className="text-[13px] text-ink-3">
-          {hint}
         </p>
       ) : null}
     </div>
@@ -134,12 +130,14 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-2xl">
-        <h1 className="text-[26px] leading-tight font-semibold tracking-[-0.015em] [font-stretch:112%]">
+        <h1
+          title={typeof description === 'string' ? description : undefined}
+          className="text-[21px] leading-tight font-semibold tracking-[-0.01em] [font-stretch:110%]"
+        >
           {title}
         </h1>
-        {description ? <p className="mt-1.5 text-[15px] text-ink-2">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </header>
@@ -168,9 +166,13 @@ export function Panel({
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div>
             {title ? (
-              <h2 className="text-base font-semibold [font-stretch:108%]">{title}</h2>
+              <h2
+                title={typeof description === 'string' ? description : undefined}
+                className="text-base font-semibold [font-stretch:108%]"
+              >
+                {title}
+              </h2>
             ) : null}
-            {description ? <p className="mt-0.5 text-[13px] text-ink-2">{description}</p> : null}
           </div>
           {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
         </div>
@@ -245,8 +247,12 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center px-6 py-12 text-center">
       {icon ? <div className="mb-3 text-ink-3 [&_svg]:size-6">{icon}</div> : null}
-      <p className="font-medium text-ink">{title}</p>
-      {description ? <p className="mt-1 max-w-sm text-sm text-ink-2">{description}</p> : null}
+      <p
+        title={typeof description === 'string' ? description : undefined}
+        className="font-medium text-ink"
+      >
+        {title}
+      </p>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );

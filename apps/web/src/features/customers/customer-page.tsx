@@ -381,19 +381,9 @@ function CustomerRecord({ customer }: { customer: Customer }) {
                   className="h-64 w-full lg:h-full lg:min-h-64"
                   markers={markers}
                 />
-              ) : (
-                <p className="grid h-full min-h-40 place-items-center px-6 text-center text-[13px] text-ink-3">
-                  Ninguna sucursal está ubicada en el mapa. Ubícalas para verificar si las visitas
-                  se hacen en el sitio.
-                </p>
-              )}
+              ) : null}
             </div>
           </div>
-          {canEdit ? (
-            <p className="no-print border-t border-line px-5 py-2 text-[12px] text-ink-3">
-              Enter o doble clic sobre una sucursal para modificarla.
-            </p>
-          ) : null}
         </DocumentSection>
       </DocumentScreen>
 

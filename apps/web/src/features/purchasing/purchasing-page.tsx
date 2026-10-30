@@ -468,6 +468,7 @@ const ORDER_COLUMNS: QueryColumn<PurchaseOrder>[] = [
   },
   {
     key: 'tax',
+    optional: true,
     header: 'IVA',
     align: 'right',
     hideOnMobile: true,
@@ -498,6 +499,7 @@ const ORDER_COLUMNS: QueryColumn<PurchaseOrder>[] = [
   },
   {
     key: 'createdBy',
+    optional: true,
     header: 'Elaboró',
     hideOnMobile: true,
     csv: (row) => row.createdBy,

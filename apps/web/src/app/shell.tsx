@@ -219,7 +219,7 @@ export function Shell() {
 
   return (
     <WorkTabsProvider titleFor={titleFor}>
-      <div className="min-h-screen lg:grid lg:grid-cols-[256px_1fr]">
+      <div className="min-h-screen lg:grid lg:grid-cols-[232px_1fr]">
         <aside className="no-print sticky top-0 hidden h-screen flex-col gap-6 bg-rail px-4 py-5 lg:flex">
           <BrandLockup inverted />
           <div className="-mx-1 flex-1 overflow-y-auto px-1">
@@ -262,8 +262,8 @@ export function Shell() {
             </div>
           </header>
 
-          <main className="px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
-            <div className="mx-auto max-w-[1400px]">
+          <main className="px-3 py-4 sm:px-4 lg:px-5 lg:py-4">
+            <div className="w-full">
               <Outlet />
             </div>
           </main>

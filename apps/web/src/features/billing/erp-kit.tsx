@@ -23,8 +23,12 @@ export function ScreenTitle({
   return (
     <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
       <div className="min-w-0">
-        <h1 className="text-[20px] leading-tight font-semibold [font-stretch:108%]">{title}</h1>
-        {description ? <p className="mt-0.5 text-[13px] text-ink-2">{description}</p> : null}
+        <h1
+          title={typeof description === 'string' ? description : undefined}
+          className="text-[20px] leading-tight font-semibold [font-stretch:108%]"
+        >
+          {title}
+        </h1>
       </div>
       {aside ? <div className="text-[13px] text-ink-2">{aside}</div> : null}
     </div>

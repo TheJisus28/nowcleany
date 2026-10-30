@@ -61,7 +61,7 @@ function CustomerForm({
   onCreated?: (customer: Customer) => void;
 }) {
   const navigate = useNavigate();
-  const { can, profile } = useSession();
+  const { can } = useSession();
   const canAssign = can('customers:assign');
   const sellers = useSellers(canAssign);
   const [documentType, setDocumentType] = useState<DocumentType>(customer?.documentType ?? 'NIT');
@@ -212,10 +212,6 @@ function CustomerForm({
             </Select>
           )}
         </Field>
-      ) : !customer ? (
-        <p className="text-[13px] text-ink-2">
-          El cliente queda en tu cartera ({profile?.fullName ?? 'tú'}).
-        </p>
       ) : null}
       {!customer ? (
         <div className="flex flex-col gap-1.5">

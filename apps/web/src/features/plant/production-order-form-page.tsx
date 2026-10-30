@@ -272,7 +272,7 @@ export function ProductionOrderFormPage() {
               title="Buscar granel o producto terminado"
               items={items}
               value={form.productId || null}
-              placeholder="Código (F2 para buscar)"
+              placeholder="Código"
               onChange={(id) => {
                 setForm((current) => ({
                   ...current,
@@ -448,10 +448,6 @@ export function ProductionOrderFormPage() {
               </tbody>
             </table>
           </div>
-          <p className="no-print px-5 py-2 text-[12px] text-ink-3">
-            Se descuentan al terminar la orden con la cantidad real. Si falta un insumo se puede
-            producir igual: el inventario queda en negativo hasta que llegue la compra.
-          </p>
         </DocumentSection>
       </DocumentScreen>
     </>

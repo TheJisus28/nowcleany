@@ -182,6 +182,7 @@ export function AgingConsultation({
       : []),
     {
       key: 'date',
+      optional: true,
       header: 'Fecha',
       hideOnMobile: true,
       render: (row) => <span className="whitespace-nowrap">{formatDate(row.date)}</span>,

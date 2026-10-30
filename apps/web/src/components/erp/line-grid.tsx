@@ -316,9 +316,6 @@ export function LineGrid({
           </tbody>
         </table>
       </div>
-      <p className="no-print px-5 py-2 text-[12px] text-ink-3">
-        Enter avanza al siguiente campo · F2 busca el producto · Ctrl+Supr quita la línea
-      </p>
       <LookupDialog
         open={lookup !== null}
         title="Buscar producto"

@@ -447,11 +447,6 @@ function PrepareDocument({
               </tbody>
             </table>
           </div>
-          {editable ? (
-            <p className="no-print px-5 py-2 text-[12px] text-ink-3">
-              Enter pasa a la siguiente cantidad · F9 entrega a despacho · Esc cierra
-            </p>
-          ) : null}
         </DocumentSection>
       </DocumentScreen>
 

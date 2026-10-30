@@ -226,6 +226,7 @@ export function KardexPage() {
     },
     {
       key: 'note',
+      optional: true,
       header: 'Nota',
       hideOnMobile: true,
       csv: (row) => row.note ?? '',

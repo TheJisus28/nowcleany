@@ -72,9 +72,6 @@ export function LoginPage() {
           <h1 className="text-[28px] font-semibold tracking-tight [font-stretch:110%]">
             Inicia sesión
           </h1>
-          <p className="mt-1.5 text-ink-2">
-            Usa el correo y la contraseña que te dio el administrador.
-          </p>
 
           <form
             className="mt-8 flex flex-col gap-4"

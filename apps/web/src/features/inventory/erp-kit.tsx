@@ -34,8 +34,12 @@ export function ScreenTitle({
   return (
     <div className="no-print mb-3 flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-[20px] leading-tight font-semibold [font-stretch:108%]">{title}</h1>
-        {subtitle ? <p className="mt-0.5 text-[13px] text-ink-2">{subtitle}</p> : null}
+        <h1
+          title={typeof subtitle === 'string' ? subtitle : undefined}
+          className="text-[20px] leading-tight font-semibold [font-stretch:108%]"
+        >
+          {title}
+        </h1>
       </div>
       {children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
     </div>
@@ -64,9 +68,11 @@ export function QueryPanel({
       )}
     >
       {title ? (
-        <header className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line px-4 py-2.5">
+        <header
+          title={typeof description === 'string' ? description : undefined}
+          className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line px-4 py-2.5"
+        >
           <h2 className="text-[14px] font-semibold">{title}</h2>
-          {description ? <p className="text-[12.5px] text-ink-3">{description}</p> : null}
         </header>
       ) : null}
       {filters}
@@ -214,10 +220,9 @@ export function QtyTotal({ values }: { values: readonly Q[] }) {
   const totals = sumByUnit(values);
   if (totals.length === 0) return <span className="text-ink-3">—</span>;
   return (
-    <span className="whitespace-nowrap">
-      {totals.map((total, index) => (
-        <span key={total.unit}>
-          {index > 0 ? <span className="text-ink-3"> · </span> : null}
+    <span className="inline-flex flex-col items-end">
+      {totals.map((total) => (
+        <span key={total.unit} className="whitespace-nowrap">
           {formatDecimal(roundUpDecimal(total.quantity))}
           <span className="ml-0.5 text-[0.85em] font-normal text-ink-3">
             {unitLabel(total.unit)}
@@ -277,14 +282,15 @@ export function DateCell({
   const days = daysUntil(date);
   const late = pending && days !== null && days < 0;
   return (
-    <span className="whitespace-nowrap">
+    <span
+      title={late ? lateLabel : undefined}
+      className={cn(
+        'inline-flex items-center gap-1 whitespace-nowrap',
+        late && 'font-medium text-critical',
+      )}
+    >
+      {late ? <Clock aria-hidden className="size-3.5" strokeWidth={2.25} /> : null}
       {formatDate(date)}
-      {late ? (
-        <span className="ml-1.5 inline-flex items-center gap-0.5 text-[12px] font-medium text-critical">
-          <Clock aria-hidden className="size-3" strokeWidth={2.25} />
-          {lateLabel}
-        </span>
-      ) : null}
     </span>
   );
 }
@@ -364,8 +370,8 @@ export function DocumentNotice({
 
 /** Header of a read-only grid inside a document (same look as the line grid). */
 export const GRID_HEAD = 'border-y border-line bg-surface-2/70 text-left text-[12px] text-ink-2';
-export const GRID_TH = 'px-2 py-1.5 font-medium whitespace-nowrap';
-export const GRID_TD = 'px-2 py-1.5 align-middle';
+export const GRID_TH = 'px-2 py-1.5 font-medium whitespace-nowrap 2xl:px-3 2xl:py-2';
+export const GRID_TD = 'px-2 py-1.5 align-middle 2xl:px-3 2xl:py-2';
 
 interface QueryState {
   data: unknown;

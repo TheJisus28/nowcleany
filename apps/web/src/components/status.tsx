@@ -187,12 +187,12 @@ export function DueDate({
   if (days !== null && days < 0) {
     return (
       <span
-        title={formatDate(date)}
-        className="inline-flex items-center gap-1 whitespace-nowrap text-critical"
+        title={`${lateLabel} · ${formatDate(date)}`}
+        aria-label={`${lateLabel} ${relativeDays(date).toLowerCase()}`}
+        className="inline-flex items-center gap-0.5 font-medium whitespace-nowrap text-critical"
       >
         <Clock aria-hidden className="size-3.5" strokeWidth={2.25} />
-        <span className="font-medium">{lateLabel}</span>
-        <span className="text-critical/80">· {relativeDays(date).toLowerCase()}</span>
+        {-days} d
       </span>
     );
   }

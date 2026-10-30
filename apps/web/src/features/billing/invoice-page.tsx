@@ -193,12 +193,6 @@ function InvoiceDocument({ invoice }: { invoice: Invoice }) {
               . Precios de lista por unidad; IVA 19 %. Plazo de pago hasta el{' '}
               {formatDate(invoice.dueDate)}.
             </p>
-            {invoice.hasPending ? (
-              <p className="text-ink-2">
-                Se facturó con producto pendiente por fabricar o comprar: sale cuando esté listo, o
-                por partes si se autorizó despacho parcial.
-              </p>
-            ) : null}
           </div>
         }
         totals={[

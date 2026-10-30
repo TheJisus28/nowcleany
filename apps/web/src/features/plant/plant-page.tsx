@@ -128,6 +128,7 @@ export function PlantPage() {
     },
     {
       key: 'lines',
+      optional: true,
       header: 'Productos',
       align: 'right',
       sort: (row) => row.lines.length,
@@ -169,6 +170,7 @@ export function PlantPage() {
     },
     {
       key: 'partial',
+      optional: true,
       header: 'Desp. parcial',
       align: 'center',
       hideOnMobile: true,
@@ -184,6 +186,7 @@ export function PlantPage() {
     },
     {
       key: 'invoiced',
+      optional: true,
       header: 'Facturado',
       hideOnMobile: true,
       sort: (row) => row.order.invoicedAt ?? '',
@@ -199,6 +202,7 @@ export function PlantPage() {
     },
     {
       key: 'seller',
+      optional: true,
       header: 'Vendedor',
       hideOnMobile: true,
       csv: (row) => row.order.seller.name,

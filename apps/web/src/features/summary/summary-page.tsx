@@ -785,11 +785,7 @@ function ProductDetail({ productId }: { productId: string }) {
               ))}
             </ul>
           </div>
-        ) : (
-          <p className="text-sm text-ink-2">
-            Lo vendido se cubre con el stock y lo que se puede fabricar con los insumos de hoy.
-          </p>
-        )}
+        ) : null}
       </div>
     </Panel>
   );

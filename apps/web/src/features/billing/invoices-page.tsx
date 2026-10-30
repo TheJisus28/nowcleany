@@ -117,6 +117,7 @@ export function InvoicesPage() {
     },
     {
       key: 'order',
+      optional: true,
       header: 'Pedido',
       hideOnMobile: true,
       render: (invoice) => (

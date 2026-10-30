@@ -225,7 +225,7 @@ export function PurchaseOrderFormPage() {
               title="Buscar proveedor"
               items={supplierItems}
               value={form.supplierId || null}
-              placeholder="NIT (F2 para buscar)"
+              placeholder="NIT"
               onChange={(id) => {
                 set('supplierId', id);
               }}

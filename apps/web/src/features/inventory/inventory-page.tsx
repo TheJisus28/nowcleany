@@ -288,10 +288,6 @@ export function InventoryPage() {
           )}
         </QueryView>
       </QueryPanel>
-      <p className="no-print -mt-3 text-[12px] text-ink-3">
-        Las compras entran con la entrada de almacén (Compras › Entradas de almacén) y el producto
-        sale cuando logística despacha la remisión.
-      </p>
 
       {loading ? (
         <InitialLoadDialog

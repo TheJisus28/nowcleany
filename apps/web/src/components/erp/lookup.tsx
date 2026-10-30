@@ -1,7 +1,7 @@
 import { Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog } from '../dialog';
-import { cn, Input } from '../ui';
+import { cn } from '../ui';
 
 export interface LookupItem {
   id: string;
@@ -150,7 +150,7 @@ export function LookupField({
   value,
   onChange,
   disabled = false,
-  placeholder = 'Código o NIT (F2 para buscar)',
+  placeholder = 'Código o NIT',
 }: {
   id?: string;
   title: string;
@@ -169,12 +169,13 @@ export function LookupField({
   return (
     <>
       <div className="flex min-w-0 items-center gap-2">
-        <Input
+        <input
           id={id}
           value={text}
           disabled={disabled}
           placeholder={placeholder}
-          className="h-8 w-40 shrink-0 tabular-nums"
+          autoComplete="off"
+          className="h-8 w-36 shrink-0 rounded-[5px] border border-line-strong bg-surface px-2 text-[13.5px] text-ink tabular-nums placeholder:text-ink-3 focus-visible:border-brand disabled:bg-surface-2"
           onChange={(event) => {
             setText(event.target.value);
           }}

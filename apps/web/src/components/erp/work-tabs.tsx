@@ -115,7 +115,7 @@ export function WorkTabsBar() {
   return (
     <nav
       aria-label="Pestañas de trabajo"
-      className="no-print flex min-w-0 flex-1 gap-0.5 self-stretch overflow-x-auto"
+      className="no-print flex min-w-0 flex-1 gap-0.5 self-stretch overflow-hidden"
     >
       {api.tabs.map((tab) => {
         const active = tab.path === current;
@@ -129,13 +129,13 @@ export function WorkTabsBar() {
               }
             }}
             className={cn(
-              'group flex shrink-0 items-center gap-1 self-end rounded-t-md border border-b-0 pr-1 text-[13px]',
+              'group flex max-w-56 min-w-24 shrink items-center gap-1 self-end rounded-t-md border border-b-0 pr-1 text-[13px]',
               active
-                ? 'border-line bg-surface font-medium text-ink'
-                : 'border-transparent text-ink-2 hover:bg-surface-2 hover:text-ink',
+                ? 'border-line border-t-2 border-t-brand bg-surface font-semibold text-ink'
+                : 'border-line-strong bg-surface-2 text-ink hover:bg-surface',
             )}
           >
-            <Link to={tab.path} className="max-w-56 truncate py-2 pl-3" title={tab.title}>
+            <Link to={tab.path} className="min-w-0 flex-1 truncate py-2 pl-3" title={tab.title}>
               {tab.title}
             </Link>
             <button
@@ -143,7 +143,7 @@ export function WorkTabsBar() {
               onClick={() => {
                 closeTab(tab.path);
               }}
-              className="rounded p-0.5 text-ink-3 opacity-60 hover:bg-surface-2 hover:text-ink group-hover:opacity-100"
+              className="shrink-0 rounded p-0.5 text-ink-2 hover:bg-critical-soft hover:text-critical"
               aria-label={`Cerrar ${tab.title}`}
             >
               <X aria-hidden className="size-3" />

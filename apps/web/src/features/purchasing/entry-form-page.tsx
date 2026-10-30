@@ -247,7 +247,7 @@ function EntryDocument({
               title="Buscar orden de compra abierta"
               items={items}
               value={order?.id ?? null}
-              placeholder="OC-… (F2 para buscar)"
+              placeholder="OC-…"
               onChange={onPick}
             />
             {loading ? (

@@ -215,11 +215,6 @@ export function ReceivingPage() {
           </QueryView>
         )}
       </QueryPanel>
-      {view === 'pendientes' && canReceive ? (
-        <p className="no-print -mt-3 text-[12px] text-ink-3">
-          Enter o doble clic sobre una orden abre la entrada de almacén con lo pendiente.
-        </p>
-      ) : null}
     </>
   );
 }

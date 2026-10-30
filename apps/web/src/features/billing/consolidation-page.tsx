@@ -259,6 +259,7 @@ export function ConsolidationPage() {
     },
     {
       key: 'sent',
+      optional: true,
       header: 'Enviado',
       hideOnMobile: true,
       render: (order) => (
@@ -289,6 +290,7 @@ export function ConsolidationPage() {
     },
     {
       key: 'seller',
+      optional: true,
       header: 'Vendedor',
       hideOnMobile: true,
       render: (order) => order.seller.name,

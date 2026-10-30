@@ -112,7 +112,7 @@ export function DocumentToolbar({
       : {}),
   });
   return (
-    <div className="no-print sticky top-12 z-20 -mx-4 mb-4 flex flex-wrap items-center gap-1 border-y border-line bg-surface/95 px-3 py-1.5 backdrop-blur sm:-mx-6 lg:top-14 lg:-mx-10 lg:px-8">
+    <div className="no-print sticky top-[100px] z-20 -mx-3 mb-3 flex flex-wrap items-center gap-1 border-y border-line bg-surface/95 px-3 py-1.5 backdrop-blur sm:-mx-4 lg:top-11 lg:-mx-5 lg:px-4">
       {visible.map((action) => (
         <ActionButton key={action.label} action={action} />
       ))}

@@ -423,12 +423,6 @@ function OrderDocument({ order }: { order: SalesOrder }) {
             rowKey={(line) => line.productId}
             minWidth={fulfilment || lineCoverage ? 900 : 640}
           />
-          {lineCoverage ? (
-            <p className="px-5 py-2 text-[12px] text-ink-3">
-              Cobertura de hoy según la prioridad del consolidado: lo que falta ya aparece en planta
-              (por fabricar) y en compras (por comprar).
-            </p>
-          ) : null}
         </DocumentSection>
       </DocumentScreen>
 

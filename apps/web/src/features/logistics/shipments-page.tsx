@@ -146,6 +146,7 @@ export function ShipmentsPage() {
     },
     {
       key: 'products',
+      optional: true,
       header: 'Productos',
       align: 'right',
       csv: (row) => row.lines.filter((line) => !isZero(line.ready.quantity)).length,
@@ -445,6 +446,7 @@ const GUIDE_COLUMNS: QueryColumn<Shipment>[] = [
   },
   {
     key: 'createdBy',
+    optional: true,
     header: 'Elaboró',
     hideOnMobile: true,
     csv: (row) => row.createdBy,

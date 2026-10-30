@@ -9,7 +9,15 @@ import {
   FileSpreadsheet,
   Printer,
 } from 'lucide-react';
-import { type ReactNode, type SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  type SyntheticEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { cn } from '../ui';
 import { PrintHeader } from './print';
 
@@ -27,6 +35,8 @@ export interface QueryColumn<T> {
   className?: string;
   /** Hidden in the stacked phone layout. */
   hideOnMobile?: boolean;
+  /** Hidden until the user shows it from "Columnas", so the grid fits a laptop screen. */
+  optional?: boolean;
 }
 
 /** The filter strip above a consultation: compact fields and the "Consultar" button. */
@@ -95,6 +105,28 @@ function readPrefs(key: string): ColumnPrefs | null {
   }
 }
 
+function optionalKeys(
+  columns: readonly { key: string; optional?: boolean | undefined }[],
+): string[] {
+  return columns.filter((column) => column.optional).map((column) => column.key);
+}
+
+/** Wide desktop screens show the optional columns too. */
+const WIDE_SCREEN = '(min-width: 1600px)';
+
+function useWideScreen(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const query = window.matchMedia(WIDE_SCREEN);
+      query.addEventListener('change', onChange);
+      return () => {
+        query.removeEventListener('change', onChange);
+      };
+    },
+    () => window.matchMedia(WIDE_SCREEN).matches,
+  );
+}
+
 function writePrefs(key: string, prefs: ColumnPrefs): void {
   try {
     localStorage.setItem(key, JSON.stringify(prefs));
@@ -108,10 +140,12 @@ function ColumnsMenu({
   columns,
   prefs,
   onChange,
+  onReset,
 }: {
-  columns: readonly { key: string; header: string }[];
+  columns: readonly { key: string; header: string; optional?: boolean | undefined }[];
   prefs: ColumnPrefs;
   onChange: (prefs: ColumnPrefs) => void;
+  onReset: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ordered = prefs.order
@@ -190,9 +224,7 @@ function ColumnsMenu({
           <div className="mt-1 flex justify-between border-t border-line px-1.5 pt-1.5">
             <button
               type="button"
-              onClick={() => {
-                onChange({ order: columns.map((column) => column.key), hidden: [] });
-              }}
+              onClick={onReset}
               className="text-[12.5px] text-ink-2 hover:text-ink"
             >
               Restablecer
@@ -277,10 +309,11 @@ export function QueryGrid<T>({
 }) {
   const [sort, setSort] = useState(initialSort ?? null);
   const prefsKey = `scip.grid.${title}`;
-  const [prefs, setPrefs] = useState<ColumnPrefs>(() => {
+  const wide = useWideScreen();
+  const [saved, setSaved] = useState<ColumnPrefs | null>(() => {
     const stored = readPrefs(prefsKey);
+    if (!stored) return null;
     const keys = columns.map((column) => column.key);
-    if (!stored) return { order: keys, hidden: [] };
     // New columns added since the choice was saved go at the end.
     return {
       order: [
@@ -290,9 +323,21 @@ export function QueryGrid<T>({
       hidden: stored.hidden.filter((key) => keys.includes(key)),
     };
   });
+  const prefs = saved ?? {
+    order: columns.map((column) => column.key),
+    hidden: wide ? [] : optionalKeys(columns),
+  };
   const savePrefs = (next: ColumnPrefs) => {
-    setPrefs(next);
+    setSaved(next);
     writePrefs(prefsKey, next);
+  };
+  const resetPrefs = () => {
+    setSaved(null);
+    try {
+      localStorage.removeItem(prefsKey);
+    } catch {
+      // Private mode: nothing was stored.
+    }
   };
   const shown = prefs.order
     .filter((key) => !prefs.hidden.includes(key))
@@ -351,7 +396,7 @@ export function QueryGrid<T>({
         </span>
         {actions ? <div className="flex flex-wrap gap-1.5">{actions}</div> : null}
         <span className="flex-1" />
-        <ColumnsMenu columns={columns} prefs={prefs} onChange={savePrefs} />
+        <ColumnsMenu columns={columns} prefs={prefs} onChange={savePrefs} onReset={resetPrefs} />
         {exportable.length > 0 ? (
           <button
             type="button"
@@ -385,7 +430,10 @@ export function QueryGrid<T>({
       ) : (
         <>
           <div className="hidden overflow-x-auto md:block print:block">
-            <table className="w-full border-collapse text-[13.5px]" aria-label={title}>
+            <table
+              className="w-full border-collapse text-[13px] 2xl:text-[14px]"
+              aria-label={title}
+            >
               <thead className="sticky top-0 z-[1]">
                 <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-2">
                   {selectable ? (
@@ -417,7 +465,7 @@ export function QueryGrid<T>({
                             : undefined
                         }
                         className={cn(
-                          'px-3 py-2 font-medium whitespace-nowrap',
+                          'px-2 py-1.5 align-bottom leading-tight font-medium 2xl:px-3 2xl:py-2',
                           column.align === 'right' && 'text-right',
                           column.align === 'center' && 'text-center',
                         )}
@@ -508,7 +556,7 @@ export function QueryGrid<T>({
                         <td
                           key={column.key}
                           className={cn(
-                            'px-3 py-1.5 align-middle',
+                            'px-2 py-1 align-middle 2xl:px-3 2xl:py-1.5',
                             column.align === 'right' && 'text-right tabular-nums',
                             column.align === 'center' && 'text-center',
                             column.className,
@@ -529,7 +577,7 @@ export function QueryGrid<T>({
                       <td
                         key={column.key}
                         className={cn(
-                          'px-3 py-2',
+                          'px-2 py-1.5 2xl:px-3 2xl:py-2',
                           column.align === 'right' && 'text-right tabular-nums',
                         )}
                       >

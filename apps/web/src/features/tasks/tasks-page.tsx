@@ -332,9 +332,6 @@ export function TasksPage() {
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-semibold [font-stretch:110%]">Pendientes</h1>
-          <p className="text-[13.5px] text-ink-2">
-            Documentos que esperan tu paso. Ábrelos con doble clic o Enter.
-          </p>
         </div>
         <FlowStrip roles={roles} />
       </div>

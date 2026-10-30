@@ -165,9 +165,7 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
     const position = rows.indexOf(row) + 1;
     if (!row.productId) {
       lineErrors[row.key] = 'Elige el producto';
-      messages.push(
-        `Línea ${String(position)}: elige el producto (código y Enter, o F2 para buscar).`,
-      );
+      messages.push(`Línea ${String(position)}: elige el producto.`);
       continue;
     }
     const code = productById.get(row.productId)?.code ?? '';
@@ -185,7 +183,7 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
   }
   if (filled.length === 0) messages.push('Agrega al menos un producto al pedido.');
   const customerError = !customerId
-    ? 'Elige el cliente: escribe su NIT o cédula y Enter, o F2 para buscar.'
+    ? 'Elige el cliente.'
     : customer && !branch
       ? 'El cliente no tiene sucursales activas para entregar.'
       : undefined;
@@ -493,10 +491,6 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
               ))}
             </ul>
           ) : null}
-          <p className="no-print px-5 pb-3 text-[12px] text-ink-3">
-            Disponible = existencia menos lo comprometido en otros pedidos. El pedido no se bloquea
-            por falta de stock: al facturarlo, lo que falte pasa a planta y compras.
-          </p>
         </DocumentSection>
       </DocumentScreen>
 

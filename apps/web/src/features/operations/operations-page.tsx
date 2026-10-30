@@ -244,10 +244,6 @@ function FlowBlock() {
           ],
         ]}
       />
-      <p className="border-t border-line px-4 py-2 text-[12px] text-ink-3">
-        Valor a precio de lista de lo que falta por despachar. Antigüedad desde que el vendedor lo
-        envió.
-      </p>
     </Block>
   );
 }
@@ -509,9 +505,6 @@ export function OperationsPage() {
 
       {configuring ? (
         <section className="no-print mb-4 rounded-[8px] border border-line bg-surface p-3">
-          <p className="mb-2 text-[13px] text-ink-2">
-            Elige qué bloques ves y en qué orden (se recuerda para ti).
-          </p>
           <ul className="grid gap-1 sm:grid-cols-2">
             {prefs.order.map((key, index) => {
               const block = BLOCKS.find((item) => item.key === key);

@@ -56,19 +56,20 @@ export function ratio(part: string, whole: string): number {
 }
 
 const dateFormat = new Intl.DateTimeFormat('es-CO', {
-  day: 'numeric',
-  month: 'short',
+  day: '2-digit',
+  month: '2-digit',
   year: 'numeric',
   timeZone: 'UTC',
 });
 const dateTimeFormat = new Intl.DateTimeFormat('es-CO', {
-  day: 'numeric',
-  month: 'short',
-  hour: 'numeric',
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
   minute: '2-digit',
+  hourCycle: 'h23',
 });
 
-/** "2026-11-03" → "3 nov 2026" (date-only values are calendar dates, not instants). */
+/** "2026-11-03" → "03/11/2026" (date-only values are calendar dates, not instants). */
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
   return dateFormat.format(new Date(`${value.slice(0, 10)}T00:00:00Z`));

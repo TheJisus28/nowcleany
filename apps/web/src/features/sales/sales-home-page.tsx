@@ -329,11 +329,6 @@ function Promisable() {
                   },
                 ]}
               />
-              <p className="border-t border-line px-4 py-3 text-[13px] text-ink-3">
-                Es un estimado por producto: si dos productos usan el mismo insumo, se lo reparten.
-                Puedes vender más; lo que pase de aquí queda como sobreventa y compras lo ve al
-                instante.
-              </p>
             </>
           );
         }}
