@@ -57,7 +57,9 @@ class SellersApi {
     return _products = products;
   }
 
-  Future<SalesOrder> createOrder({
+  /// Creates the order, or replaces a draft's content when [draftId] is given.
+  Future<SalesOrder> saveOrder({
+    String? draftId,
     required String customerId,
     required String branchId,
     String? visitId,
@@ -65,19 +67,19 @@ class SellersApi {
     String? notes,
     required Map<String, int> quantities,
   }) async {
-    final data = await client.post(
-      '/v1/sales-orders',
-      body: {
-        'customerId': customerId,
-        'branchId': branchId,
-        'visitId': ?visitId,
-        'estimatedDeliveryDate': ?estimatedDeliveryDate,
-        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
-        'lines': [
-          for (final entry in quantities.entries) {'productId': entry.key, 'quantity': entry.value.toString()},
-        ],
-      },
-    );
+    final body = {
+      'customerId': customerId,
+      'branchId': branchId,
+      'visitId': ?visitId,
+      'estimatedDeliveryDate': ?estimatedDeliveryDate,
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      'lines': [
+        for (final entry in quantities.entries) {'productId': entry.key, 'quantity': entry.value.toString()},
+      ],
+    };
+    final data = draftId == null
+        ? await client.post('/v1/sales-orders', body: body)
+        : await client.patch('/v1/sales-orders/$draftId', body: body);
     return SalesOrder.fromJson(data as Json);
   }
 

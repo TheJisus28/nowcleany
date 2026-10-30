@@ -44,11 +44,7 @@ class Session extends ChangeNotifier {
   }
 
   Future<void> login(String email, String password) async {
-    final data = await _client.post(
-      '/v1/auth/login',
-      body: {'email': email.trim(), 'password': password},
-      auth: false,
-    );
+    final data = await _client.post('/v1/auth/login', body: {'email': email.trim(), 'password': password}, auth: false);
     await _accept(AuthResult.fromJson(data as Json));
   }
 

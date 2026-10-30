@@ -124,7 +124,11 @@ class MessageView extends StatelessWidget {
             ),
             if (message != null) ...[
               const SizedBox(height: 8),
-              Text(message!, textAlign: TextAlign.center, style: const TextStyle(color: BrandColors.muted, height: 1.4)),
+              Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: BrandColors.muted, height: 1.4),
+              ),
             ],
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 20),
@@ -192,10 +196,7 @@ class InfoRow extends StatelessWidget {
           Icon(icon, size: 18, color: BrandColors.muted),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              text,
-              style: TextStyle(color: muted ? BrandColors.muted : BrandColors.ink, height: 1.35),
-            ),
+            child: Text(text, style: TextStyle(color: muted ? BrandColors.muted : BrandColors.ink, height: 1.35)),
           ),
         ],
       ),
@@ -228,7 +229,10 @@ class SectionLabel extends StatelessWidget {
             ),
           ),
           if (trailing != null)
-            Text(trailing!, style: const TextStyle(color: BrandColors.muted, fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(
+              trailing!,
+              style: const TextStyle(color: BrandColors.muted, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
         ],
       ),
     );

@@ -5,21 +5,44 @@ import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
 import '../orders/new_order_screen.dart';
 import '../visits/record_visit_screen.dart';
+import 'branch_map_screen.dart';
 
 Future<void> startVisit(BuildContext context, Customer customer, Branch branch) {
-  return Navigator.of(
-    context,
-  ).push(MaterialPageRoute<void>(builder: (_) => RecordVisitScreen(customer: customer, branch: branch)));
-}
-
-Future<void> startOrder(BuildContext context, Customer customer, Branch branch, {String? visitId}) {
   return Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => NewOrderScreen(customer: customer, branch: branch, visitId: visitId)),
+    MaterialPageRoute<void>(
+      builder: (_) => RecordVisitScreen(customer: customer, branch: branch),
+    ),
   );
 }
 
-/// Bottom sheet of a branch: customer, branch, address, phone and the two actions.
+/// New order for a branch, or the draft to keep editing.
+Future<void> startOrder(BuildContext context, Customer customer, Branch branch, {String? visitId, SalesOrder? draft}) {
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => NewOrderScreen(customer: customer, branch: branch, visitId: visitId, draft: draft),
+    ),
+  );
+}
+
+Future<void> showBranchOnMap(BuildContext context, Customer customer, Branch branch) {
+  if (!branch.hasLocation) {
+    showMessage(context, 'Esta sucursal no tiene ubicación en el mapa.');
+    return Future.value();
+  }
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => BranchMapScreen(customer: customer, branch: branch),
+    ),
+  );
+}
+
+/// The customer's card: document, phone, the branch address and what the seller can do there.
 Future<void> showBranchSheet(BuildContext context, Customer customer, Branch branch) {
+  void go(BuildContext sheetContext, Future<void> Function() action) {
+    Navigator.pop(sheetContext);
+    action();
+  }
+
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -63,10 +86,7 @@ Future<void> showBranchSheet(BuildContext context, Customer customer, Branch bra
                   Row(
                     children: [
                       Flexible(
-                        child: Text(
-                          branch.name,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                        ),
+                        child: Text(branch.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                       ),
                       if (branch.isMain) ...[
                         const SizedBox(width: 8),
@@ -75,44 +95,49 @@ Future<void> showBranchSheet(BuildContext context, Customer customer, Branch bra
                     ],
                   ),
                   const SizedBox(height: 8),
-                  InfoRow(icon: Icons.place_outlined, text: branch.fullAddress ?? 'Sin dirección registrada', muted: branch.fullAddress == null),
+                  InfoRow(
+                    icon: Icons.place_outlined,
+                    text: branch.fullAddress ?? 'Sin dirección',
+                    muted: branch.fullAddress == null,
+                  ),
                   InfoRow(
                     icon: Icons.phone_outlined,
-                    text: branch.phone ?? customer.phone ?? 'Sin teléfono registrado',
+                    text: branch.phone ?? customer.phone ?? 'Sin teléfono',
                     muted: branch.phone == null && customer.phone == null,
                   ),
-                  if (!branch.hasLocation)
-                    const InfoRow(
-                      icon: Icons.location_off_outlined,
-                      text: 'La sucursal no tiene ubicación: la visita se registra sin medir la distancia.',
-                      muted: true,
-                    ),
                 ],
               ),
             ),
             const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  startVisit(context, customer, branch);
-                },
-                icon: const Icon(Icons.where_to_vote_rounded),
-                label: const Text('Registrar visita'),
+            if (branch.hasLocation) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => go(sheetContext, () => showBranchOnMap(context, customer, branch)),
+                  icon: const Icon(Icons.map_rounded),
+                  label: const Text('Ver en el mapa'),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  startOrder(context, customer, branch);
-                },
-                icon: const Icon(Icons.add_shopping_cart_rounded),
-                label: const Text('Tomar preventa'),
-              ),
+              const SizedBox(height: 10),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => go(sheetContext, () => startVisit(context, customer, branch)),
+                    icon: const Icon(Icons.where_to_vote_rounded),
+                    label: const Text('Registrar visita'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => go(sheetContext, () => startOrder(context, customer, branch)),
+                    icon: const Icon(Icons.add_shopping_cart_rounded),
+                    label: const Text('Tomar preventa'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

@@ -90,7 +90,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Align(alignment: Alignment.centerLeft, child: BrandMark(size: 48, subtitle: 'Ventas')),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: BrandMark(size: 48, subtitle: 'Ventas'),
+                      ),
                       const SizedBox(height: 36),
                       const Text(
                         'Tu cartera, tus visitas\ny tus preventas.',

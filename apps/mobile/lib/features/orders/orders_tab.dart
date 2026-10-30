@@ -6,6 +6,7 @@ import '../../session/app_scope.dart';
 import '../../ui/formatters.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
+import '../customers/branch_actions.dart';
 
 /// The seller's own sales orders.
 class OrdersTab extends StatefulWidget {
@@ -69,7 +70,7 @@ class _OrdersTabState extends State<OrdersTab> {
             MessageView(
               icon: Icons.receipt_long_outlined,
               title: 'Aún no tienes preventas',
-              message: 'Toma una preventa desde el mapa, desde Clientes o al registrar una visita.',
+              message: 'Tómalas desde Clientes, el mapa o una visita.',
             ),
           ],
         ),
@@ -92,7 +93,7 @@ class _OrdersTabState extends State<OrdersTab> {
               child: Text(
                 [
                   orders.length == 1 ? '1 preventa' : '${orders.length} preventas',
-                  if (confirmed > 0) confirmed == 1 ? '1 enviada' : '$confirmed enviadas',
+                  if (confirmed > 0) confirmed == 1 ? '1 guardada' : '$confirmed guardadas',
                   if (drafts > 0) drafts == 1 ? '1 borrador' : '$drafts borradores',
                 ].join(' · '),
                 style: const TextStyle(color: BrandColors.muted, fontWeight: FontWeight.w600),
@@ -142,8 +143,7 @@ class OrderCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(order.customerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              if (order.branchName != null)
-                Text(order.branchName!, style: const TextStyle(color: BrandColors.muted)),
+              if (order.branchName != null) Text(order.branchName!, style: const TextStyle(color: BrandColors.muted)),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -179,7 +179,7 @@ Widget orderStatusPill(SalesOrder order) {
     'CANCELLED' => (BrandColors.danger, BrandColors.dangerSoft),
     _ => (BrandColors.muted, BrandColors.neutralSoft),
   };
-  return Pill(label: order.statusLabel, foreground: fg, background: bg);
+  return Pill(label: order.sellerStatus, foreground: fg, background: bg);
 }
 
 /// Detail of an order: lines, delivery and notes.
@@ -243,7 +243,9 @@ Future<void> showOrderSheet(BuildContext context, SalesOrder order) {
             padding: const EdgeInsets.only(top: 12),
             child: Row(
               children: [
-                const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w800))),
+                const Expanded(
+                  child: Text('Total', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
                 Text(
                   '${formatNumber(order.totalUnits)} und.',
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: BrandColors.navy),
@@ -251,25 +253,46 @@ Future<void> showOrderSheet(BuildContext context, SalesOrder order) {
               ],
             ),
           ),
-          if (order.status == 'DRAFT') ...[const SizedBox(height: 24), _ConfirmDraftButton(order: order)],
+          if (order.isDraft) ...[const SizedBox(height: 24), _DraftActions(order: order)],
         ],
       ),
     ),
   );
 }
 
-/// Confirms a draft from its detail sheet.
-class _ConfirmDraftButton extends StatefulWidget {
-  const _ConfirmDraftButton({required this.order});
+/// A draft from its detail sheet: keep editing it, or save it as an order as it is.
+class _DraftActions extends StatefulWidget {
+  const _DraftActions({required this.order});
 
   final SalesOrder order;
 
   @override
-  State<_ConfirmDraftButton> createState() => _ConfirmDraftButtonState();
+  State<_DraftActions> createState() => _DraftActionsState();
 }
 
-class _ConfirmDraftButtonState extends State<_ConfirmDraftButton> {
+class _DraftActionsState extends State<_DraftActions> {
   bool _busy = false;
+
+  Future<void> _edit() async {
+    setState(() => _busy = true);
+    final scope = AppScope.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      final customer = await scope.api.customer(widget.order.customerId);
+      final branch = customer.branches.firstWhere(
+        (b) => b.id == widget.order.branchId,
+        orElse: () => customer.activeBranches.first,
+      );
+      if (!mounted) return;
+      navigator.pop();
+      await startOrder(navigator.context, customer, branch, draft: widget.order);
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() => _busy = false);
+        showMessage(context, error.message);
+      }
+    }
+  }
 
   Future<void> _confirm() async {
     setState(() => _busy = true);
@@ -280,7 +303,7 @@ class _ConfirmDraftButtonState extends State<_ConfirmDraftButton> {
       final order = await scope.api.confirmOrder(widget.order.id);
       scope.events.changed();
       navigator.pop();
-      messenger.showSnackBar(SnackBar(content: Text('Preventa ${order.label} enviada al consolidado.')));
+      messenger.showSnackBar(SnackBar(content: Text('Preventa ${order.label} guardada.')));
     } on ApiException catch (error) {
       if (mounted) {
         setState(() => _busy = false);
@@ -291,12 +314,27 @@ class _ConfirmDraftButtonState extends State<_ConfirmDraftButton> {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: _busy ? null : _confirm,
-      icon: _busy
-          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-          : const Icon(Icons.check_rounded),
-      label: const Text('Enviar al consolidado'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          onPressed: _busy ? null : _confirm,
+          icon: _busy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+                )
+              : const Icon(Icons.check_rounded),
+          label: const Text('Guardar preventa'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _edit,
+          icon: const Icon(Icons.edit_rounded),
+          label: const Text('Editar'),
+        ),
+      ],
     );
   }
 }

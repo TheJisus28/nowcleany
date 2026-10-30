@@ -8,9 +8,10 @@ import '../../ui/formatters.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
 
-/// Takes a sales order for a customer's branch: finished goods with quantities, delivery date and notes.
+/// Takes a sales order for a customer's branch (or keeps editing a draft): search a product, type the
+/// quantity and it joins the order's list; delivery date and a delivery note.
 class NewOrderScreen extends StatefulWidget {
-  const NewOrderScreen({super.key, required this.customer, required this.branch, this.visitId});
+  const NewOrderScreen({super.key, required this.customer, required this.branch, this.visitId, this.draft});
 
   final Customer customer;
   final Branch branch;
@@ -18,32 +19,49 @@ class NewOrderScreen extends StatefulWidget {
   /// The visit during which the order is taken, if any.
   final String? visitId;
 
+  /// A saved draft to keep editing.
+  final SalesOrder? draft;
+
   @override
   State<NewOrderScreen> createState() => _NewOrderScreenState();
 }
 
 class _NewOrderScreenState extends State<NewOrderScreen> {
   final _search = TextEditingController();
+  final _searchFocus = FocusNode();
   final _notes = TextEditingController();
+
+  /// Product id → units, in the order they were added.
   final Map<String, int> _quantities = {};
   late Branch _branch = widget.branch;
   late DateTime _delivery = dateOnly(DateTime.now()).add(const Duration(days: 7));
+  String? _draftId;
 
   List<Product>? _products;
   String? _productsError;
   bool _saving = false;
-  SalesOrder? _created;
+  SalesOrder? _saved;
   String? _confirmError;
 
   @override
   void initState() {
     super.initState();
+    final draft = widget.draft;
+    if (draft != null) {
+      _draftId = draft.id;
+      _notes.text = draft.notes ?? '';
+      _delivery = parseIsoDate(draft.estimatedDeliveryDate) ?? _delivery;
+      for (final line in draft.lines) {
+        _quantities[line.productId] = parseDecimal(line.quantity).round();
+      }
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadProducts());
   }
 
   @override
   void dispose() {
     _search.dispose();
+    _searchFocus.dispose();
     _notes.dispose();
     super.dispose();
   }
@@ -52,6 +70,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     final active = widget.customer.activeBranches;
     return active.any((b) => b.id == widget.branch.id) ? active : [widget.branch, ...active];
   }
+
+  Map<String, Product> get _byId => {for (final product in _products ?? const <Product>[]) product.id: product};
 
   Future<void> _loadProducts() async {
     setState(() => _productsError = null);
@@ -70,18 +90,25 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       initialDate: _delivery.isBefore(today) ? today : _delivery,
       firstDate: today,
       lastDate: today.add(const Duration(days: 365)),
-      helpText: 'Fecha prometida al cliente',
+      helpText: 'Fecha de entrega',
     );
     if (picked != null) setState(() => _delivery = picked);
   }
 
-  void _setQuantity(String productId, int value) {
+  /// Asks the quantity of a product and puts it in the order (0 removes it).
+  Future<void> _askQuantity(Product product) async {
+    final quantity = await showDialog<int>(
+      context: context,
+      builder: (_) => _QuantityDialog(product: product, initial: _quantities[product.id]),
+    );
+    if (quantity == null || !mounted) return;
     setState(() {
-      if (value <= 0) {
-        _quantities.remove(productId);
+      if (quantity <= 0) {
+        _quantities.remove(product.id);
       } else {
-        _quantities[productId] = value;
+        _quantities[product.id] = quantity;
       }
+      _search.clear();
     });
   }
 
@@ -90,14 +117,15 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   Future<void> _save({required bool confirm}) async {
     if (_saving) return;
     if (_quantities.isEmpty) {
-      showMessage(context, 'Agrega al menos un producto con su cantidad.');
+      showMessage(context, 'Agrega al menos un producto.');
       return;
     }
     FocusScope.of(context).unfocus();
     setState(() => _saving = true);
     final scope = AppScope.of(context);
     try {
-      var order = await scope.api.createOrder(
+      var order = await scope.api.saveOrder(
+        draftId: _draftId,
         customerId: widget.customer.id,
         branchId: _branch.id,
         visitId: widget.visitId,
@@ -105,6 +133,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         notes: _notes.text,
         quantities: Map.of(_quantities),
       );
+      _draftId = order.id;
       String? confirmError;
       if (confirm) {
         try {
@@ -116,7 +145,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       scope.events.changed();
       if (mounted) {
         setState(() {
-          _created = order;
+          _saved = order;
           _confirmError = confirmError;
         });
       }
@@ -129,10 +158,11 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final created = _created;
+    final saved = _saved;
+    final title = widget.draft == null ? 'Nueva preventa' : 'Borrador ${widget.draft!.label}';
     return Scaffold(
-      appBar: AppBar(title: Text(created == null ? 'Tomar preventa' : created.label)),
-      body: created == null ? _buildForm(context) : _OrderDone(order: created, confirmError: _confirmError),
+      appBar: AppBar(title: Text(saved == null ? title : saved.label)),
+      body: saved == null ? _buildForm(context) : _OrderDone(order: saved, confirmError: _confirmError),
     );
   }
 
@@ -148,32 +178,21 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               _buildCustomerCard(),
               const SectionLabel('ENTREGA'),
               _buildDeliveryCard(),
-              SectionLabel('PRODUCTOS', trailing: count == 0 ? null : '$count seleccionados'),
-              TextField(
-                controller: _search,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: 'Buscar producto por nombre o código',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _search.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Limpiar',
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: () => setState(_search.clear),
-                        ),
-                ),
-              ),
+              SectionLabel('PRODUCTOS', trailing: count == 0 ? null : '$count en el pedido'),
+              _buildSearch(),
+              _buildMatches(),
               const SizedBox(height: 10),
-              _buildProducts(),
-              const SectionLabel('NOTAS (OPCIONAL)'),
+              _buildOrderLines(),
+              const SectionLabel('NOTA (OPCIONAL)'),
               TextField(
                 controller: _notes,
                 maxLines: 3,
                 minLines: 2,
                 maxLength: 500,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(hintText: 'Ej.: entregar en la mañana; recibe la señora Marta.'),
+                decoration: const InputDecoration(
+                  hintText: 'Ej.: entrar por la calle 41, portón verde al lado de la droguería.',
+                ),
               ),
             ],
           ),
@@ -206,12 +225,12 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
                       )
                     : const Icon(Icons.check_rounded),
-                label: const Text('Enviar al consolidado'),
+                label: const Text('Guardar preventa'),
               ),
               const SizedBox(height: 4),
               TextButton(
                 onPressed: _saving ? null : () => _save(confirm: false),
-                child: const Text('Guardar borrador'),
+                child: const Text('Guardar como borrador'),
               ),
             ],
           ),
@@ -294,12 +313,15 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.event_rounded, color: BrandColors.navy),
-              title: const Text('Fecha prometida al cliente', style: TextStyle(fontSize: 13, color: BrandColors.muted)),
+              title: const Text('Fecha de entrega', style: TextStyle(fontSize: 13, color: BrandColors.muted)),
               subtitle: Text(
                 formatLongDate(_delivery),
                 style: const TextStyle(fontWeight: FontWeight.w700, color: BrandColors.ink, fontSize: 15),
               ),
-              trailing: const Text('Cambiar', style: TextStyle(color: BrandColors.navy, fontWeight: FontWeight.w700)),
+              trailing: const Text(
+                'Cambiar',
+                style: TextStyle(color: BrandColors.navy, fontWeight: FontWeight.w700),
+              ),
               onTap: _pickDate,
             ),
           ],
@@ -308,54 +330,101 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     );
   }
 
-  Widget _buildProducts() {
+  Widget _buildSearch() {
+    return TextField(
+      controller: _search,
+      focusNode: _searchFocus,
+      onChanged: (_) => setState(() {}),
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: 'Buscar producto por nombre o código',
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: _search.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Limpiar',
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => setState(_search.clear),
+              ),
+      ),
+    );
+  }
+
+  /// Products matching the search (only while typing, so a long catalog never fills the screen).
+  Widget _buildMatches() {
     final products = _products;
     if (_productsError != null && products == null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Text(_productsError!, textAlign: TextAlign.center, style: const TextStyle(color: BrandColors.danger)),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: _loadProducts,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Reintentar'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    if (products == null) {
-      return const Padding(padding: EdgeInsets.all(28), child: LoadingView(label: 'Cargando productos…'));
-    }
-    final query = _search.text.trim().toLowerCase();
-    final visible = query.isEmpty
-        ? products
-        : products.where((p) => p.name.toLowerCase().contains(query) || p.code.toLowerCase().contains(query)).toList();
-    if (visible.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Text(
-          products.isEmpty ? 'No hay productos terminados activos.' : 'Ningún producto coincide con «${_search.text.trim()}».',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: BrandColors.muted),
-        ),
+        padding: const EdgeInsets.only(top: 10),
+        child: MessageView.error(_productsError!, onRetry: _loadProducts),
       );
     }
+    final words = _search.text.trim().toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return const SizedBox.shrink();
+    if (products == null) {
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: LoadingView(label: 'Cargando productos…'),
+      );
+    }
+    final matches = products
+        .where((p) => words.every((w) => '${p.code} ${p.name}'.toLowerCase().contains(w)))
+        .take(8)
+        .toList();
+    return Card(
+      margin: const EdgeInsets.only(top: 6),
+      clipBehavior: Clip.antiAlias,
+      child: matches.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Sin resultados',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: BrandColors.muted),
+              ),
+            )
+          : Column(
+              children: [
+                for (var i = 0; i < matches.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+                  ListTile(
+                    dense: true,
+                    title: Text(matches[i].name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    subtitle: Text('${matches[i].code} · ${unitLabel(matches[i].stockUnit)}'),
+                    trailing: _quantities.containsKey(matches[i].id)
+                        ? Pill(
+                            label: '${formatNumber(_quantities[matches[i].id]!)} und.',
+                            foreground: BrandColors.navy,
+                            background: BrandColors.aquaSoft,
+                          )
+                        : const Icon(Icons.add_circle_outline_rounded, color: BrandColors.navy),
+                    onTap: () => _askQuantity(matches[i]),
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+
+  /// What is already in the order: the last one added first; tap to change the quantity.
+  Widget _buildOrderLines() {
+    if (_quantities.isEmpty) return const SizedBox.shrink();
+    final byId = _byId;
+    final ids = _quantities.keys.toList().reversed.toList();
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          for (var i = 0; i < visible.length; i++) ...[
-            if (i > 0) const Divider(indent: 16, endIndent: 16),
-            _ProductRow(
-              key: ValueKey(visible[i].id),
-              product: visible[i],
-              quantity: _quantities[visible[i].id] ?? 0,
-              onChanged: (value) => _setQuantity(visible[i].id, value),
+          for (var i = 0; i < ids.length; i++) ...[
+            if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+            _OrderLineRow(
+              key: ValueKey(ids[i]),
+              product: byId[ids[i]],
+              productId: ids[i],
+              draftLine: widget.draft?.lines.where((l) => l.productId == ids[i]).firstOrNull,
+              quantity: _quantities[ids[i]]!,
+              onTap: byId[ids[i]] == null ? null : () => _askQuantity(byId[ids[i]]!),
+              onRemove: () => setState(() => _quantities.remove(ids[i])),
             ),
           ],
         ],
@@ -364,62 +433,72 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   }
 }
 
-class _ProductRow extends StatelessWidget {
-  const _ProductRow({super.key, required this.product, required this.quantity, required this.onChanged});
+class _OrderLineRow extends StatelessWidget {
+  const _OrderLineRow({
+    super.key,
+    required this.product,
+    required this.productId,
+    required this.draftLine,
+    required this.quantity,
+    required this.onTap,
+    required this.onRemove,
+  });
 
-  final Product product;
+  final Product? product;
+  final String productId;
+  final OrderLine? draftLine;
   final int quantity;
-  final ValueChanged<int> onChanged;
+  final VoidCallback? onTap;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final selected = quantity > 0;
-    return Container(
-      color: selected ? BrandColors.aquaSoft.withValues(alpha: 0.5) : null,
-      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(product.name, style: TextStyle(fontWeight: selected ? FontWeight.w700 : FontWeight.w600)),
-                Text(
-                  '${product.code} · ${unitLabel(product.stockUnit)}',
-                  style: const TextStyle(color: BrandColors.muted, fontSize: 12),
-                ),
-              ],
+    final name = product?.name ?? draftLine?.productName ?? '';
+    final code = product?.code ?? draftLine?.productCode ?? '';
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 4, 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(code, style: const TextStyle(color: BrandColors.muted, fontSize: 12)),
+                ],
+              ),
             ),
-          ),
-          _QuantityStepper(value: quantity, onChanged: onChanged),
-        ],
+            Text(
+              '${formatNumber(quantity)} und.',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: BrandColors.navy),
+            ),
+            IconButton(
+              tooltip: 'Quitar',
+              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded, color: BrandColors.muted),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// − [n] + with direct typing (whole units).
-class _QuantityStepper extends StatefulWidget {
-  const _QuantityStepper({required this.value, required this.onChanged});
+/// Quantity of one product: numeric keyboard open right away, Enter adds it.
+class _QuantityDialog extends StatefulWidget {
+  const _QuantityDialog({required this.product, required this.initial});
 
-  final int value;
-  final ValueChanged<int> onChanged;
+  final Product product;
+  final int? initial;
 
   @override
-  State<_QuantityStepper> createState() => _QuantityStepperState();
+  State<_QuantityDialog> createState() => _QuantityDialogState();
 }
 
-class _QuantityStepperState extends State<_QuantityStepper> {
-  late final TextEditingController _controller = TextEditingController(text: _text(widget.value));
-
-  static String _text(int value) => value == 0 ? '' : value.toString();
-
-  @override
-  void didUpdateWidget(_QuantityStepper oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final current = int.tryParse(_controller.text) ?? 0;
-    if (current != widget.value) _controller.text = _text(widget.value);
-  }
+class _QuantityDialogState extends State<_QuantityDialog> {
+  late final TextEditingController _controller = TextEditingController(text: widget.initial?.toString() ?? '');
 
   @override
   void dispose() {
@@ -427,51 +506,37 @@ class _QuantityStepperState extends State<_QuantityStepper> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _StepButton(
-          icon: Icons.remove_rounded,
-          onPressed: widget.value > 0 ? () => widget.onChanged(widget.value - 1) : null,
-        ),
-        SizedBox(
-          width: 58,
-          child: TextField(
-            controller: _controller,
-            textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-            decoration: const InputDecoration(
-              hintText: '0',
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-            ),
-            onChanged: (text) => widget.onChanged(int.tryParse(text) ?? 0),
-          ),
-        ),
-        _StepButton(icon: Icons.add_rounded, onPressed: () => widget.onChanged(widget.value + 1)),
-      ],
-    );
+  void _submit() {
+    final value = int.tryParse(_controller.text) ?? 0;
+    if (value <= 0 && widget.initial == null) return;
+    Navigator.pop(context, value);
   }
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({required this.icon, required this.onPressed});
-
-  final IconData icon;
-  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(icon),
-      color: BrandColors.navy,
-      visualDensity: VisualDensity.compact,
-      style: IconButton.styleFrom(disabledForegroundColor: BrandColors.line),
+    final editing = widget.initial != null;
+    return AlertDialog(
+      title: Text(widget.product.name, style: const TextStyle(fontSize: 17)),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        textInputAction: TextInputAction.done,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+        decoration: InputDecoration(labelText: 'Cantidad', suffixText: unitLabel(widget.product.stockUnit)),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        if (editing)
+          TextButton(
+            onPressed: () => Navigator.pop(context, 0),
+            style: TextButton.styleFrom(foregroundColor: BrandColors.danger),
+            child: const Text('Quitar'),
+          ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(onPressed: _submit, child: Text(editing ? 'Cambiar' : 'Agregar')),
+      ],
     );
   }
 }
@@ -484,7 +549,7 @@ class _OrderDone extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final confirmed = order.status == 'CONFIRMED';
+    final saved = !order.isDraft;
     final delivery = parseIsoDate(order.estimatedDeliveryDate);
     return Column(
       children: [
@@ -497,29 +562,21 @@ class _OrderDone extends StatelessWidget {
                   width: 96,
                   height: 96,
                   decoration: BoxDecoration(
-                    color: confirmed ? BrandColors.successSoft : BrandColors.neutralSoft,
+                    color: saved ? BrandColors.successSoft : BrandColors.neutralSoft,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    confirmed ? Icons.check_circle_rounded : Icons.edit_note_rounded,
+                    saved ? Icons.check_circle_rounded : Icons.edit_note_rounded,
                     size: 52,
-                    color: confirmed ? BrandColors.success : BrandColors.navy,
+                    color: saved ? BrandColors.success : BrandColors.navy,
                   ),
                 ),
               ),
               const SizedBox(height: 20),
               Text(
-                confirmed ? 'Preventa ${order.label} enviada al consolidado' : 'Borrador ${order.label} guardado',
+                saved ? 'Preventa ${order.label} guardada' : 'Borrador ${order.label} guardado',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                confirmed
-                    ? 'Planta y compras ya la ven en sus necesidades de producción y de compra.'
-                    : 'Queda como borrador: puedes enviarla después desde Preventas.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: BrandColors.muted, height: 1.45),
               ),
               if (confirmError != null) ...[
                 const SizedBox(height: 14),
@@ -527,7 +584,7 @@ class _OrderDone extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(color: BrandColors.warningSoft, borderRadius: BorderRadius.circular(12)),
                   child: Text(
-                    'No se pudo enviar: $confirmError',
+                    'Quedó como borrador: $confirmError',
                     style: const TextStyle(color: BrandColors.warning, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -543,7 +600,7 @@ class _OrderDone extends StatelessWidget {
                       if (order.branchName != null) InfoRow(icon: Icons.storefront_outlined, text: order.branchName!),
                       InfoRow(
                         icon: Icons.local_shipping_outlined,
-                        text: delivery == null ? 'Sin fecha de entrega' : 'Entrega estimada: ${formatLongDate(delivery)}',
+                        text: delivery == null ? 'Sin fecha de entrega' : 'Entrega: ${formatLongDate(delivery)}',
                       ),
                       const SizedBox(height: 8),
                       const Divider(),
@@ -565,7 +622,9 @@ class _OrderDone extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 8),
                         child: Row(
                           children: [
-                            const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w800))),
+                            const Expanded(
+                              child: Text('Total', style: TextStyle(fontWeight: FontWeight.w800)),
+                            ),
                             Text(
                               '${formatNumber(order.totalUnits)} und.',
                               style: const TextStyle(fontWeight: FontWeight.w800, color: BrandColors.navy),

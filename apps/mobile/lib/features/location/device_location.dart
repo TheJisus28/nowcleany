@@ -59,10 +59,7 @@ abstract final class DeviceLocation {
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 25)),
       );
     } on Exception {
-      throw const LocationFailure(
-        'No logramos ubicarte. Intenta en un lugar más despejado.',
-        LocationFix.retry,
-      );
+      throw const LocationFailure('No logramos ubicarte. Intenta en un lugar más despejado.', LocationFix.retry);
     }
   }
 

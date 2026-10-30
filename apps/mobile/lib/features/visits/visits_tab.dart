@@ -44,9 +44,8 @@ class _VisitsTabState extends State<VisitsTab> {
     });
     final today = dateOnly(DateTime.now());
     try {
-      final visits = await AppScope.of(
-        context,
-      ).api.visits(from: isoDate(today.subtract(const Duration(days: 7))), to: isoDate(today));
+      final visits = await AppScope.of(context).api
+          .visits(from: isoDate(today.subtract(const Duration(days: 7))), to: isoDate(today));
       if (mounted) setState(() => _visits = visits);
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -140,8 +139,14 @@ class _Stat extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color)),
-            Text(label, style: const TextStyle(color: BrandColors.muted, fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(
+              value,
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color),
+            ),
+            Text(
+              label,
+              style: const TextStyle(color: BrandColors.muted, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
           ],
         ),
       ),
@@ -193,10 +198,7 @@ class _VisitCard extends StatelessWidget {
                   ),
                   if (visit.notes != null && visit.notes!.trim().isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text(
-                      visit.notes!,
-                      style: const TextStyle(color: BrandColors.ink, fontSize: 13, height: 1.4),
-                    ),
+                    Text(visit.notes!, style: const TextStyle(color: BrandColors.ink, fontSize: 13, height: 1.4)),
                   ],
                 ],
               ),

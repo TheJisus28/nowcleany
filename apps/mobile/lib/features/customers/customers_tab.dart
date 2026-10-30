@@ -89,10 +89,7 @@ class _CustomersTabState extends State<CustomersTab> with AutomaticKeepAliveClie
                         _onSearchChanged('');
                       },
                     ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
           ),
         ),
@@ -140,7 +137,8 @@ class _CustomersTabState extends State<CustomersTab> with AutomaticKeepAliveClie
                           style: const TextStyle(color: BrandColors.muted, fontWeight: FontWeight.w600),
                         ),
                         const Spacer(),
-                        if (_loading) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        if (_loading)
+                          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                       ],
                     ),
                   );
@@ -165,33 +163,43 @@ class CustomerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: BrandColors.navy,
-                  child: Text(
-                    _initial(customer.name),
-                    style: const TextStyle(color: BrandColors.aqua, fontWeight: FontWeight.w800, fontSize: 17),
+          InkWell(
+            onTap: branches.isEmpty
+                ? null
+                : () => showBranchSheet(
+                    context,
+                    customer,
+                    branches.firstWhere((b) => b.isMain, orElse: () => branches.first),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(customer.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                      const SizedBox(height: 2),
-                      Text(customer.document, style: const TextStyle(color: BrandColors.muted, fontSize: 13)),
-                      if (customer.city != null)
-                        Text(customer.city!, style: const TextStyle(color: BrandColors.muted, fontSize: 13)),
-                    ],
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: BrandColors.navy,
+                    child: Text(
+                      _initial(customer.name),
+                      style: const TextStyle(color: BrandColors.aqua, fontWeight: FontWeight.w800, fontSize: 17),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(customer.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                        const SizedBox(height: 2),
+                        Text(customer.document, style: const TextStyle(color: BrandColors.muted, fontSize: 13)),
+                        if (customer.city != null)
+                          Text(customer.city!, style: const TextStyle(color: BrandColors.muted, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: BrandColors.muted),
+                ],
+              ),
             ),
           ),
           const Divider(),
@@ -252,6 +260,12 @@ class _BranchRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (branch.hasLocation)
+              IconButton(
+                tooltip: 'Ver en el mapa',
+                onPressed: () => showBranchOnMap(context, customer, branch),
+                icon: const Icon(Icons.map_outlined, color: BrandColors.navy),
+              ),
             IconButton(
               tooltip: 'Registrar visita',
               onPressed: () => startVisit(context, customer, branch),

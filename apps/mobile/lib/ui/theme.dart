@@ -78,7 +78,10 @@ ThemeData buildTheme() {
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: BrandColors.line)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: BrandColors.line),
+      ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: BrandColors.line),
@@ -107,7 +110,10 @@ ThemeData buildTheme() {
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: BrandColors.navy, textStyle: const TextStyle(fontWeight: FontWeight.w700)),
+      style: TextButton.styleFrom(
+        foregroundColor: BrandColors.navy,
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+      ),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,

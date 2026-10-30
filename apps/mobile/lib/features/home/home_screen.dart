@@ -74,7 +74,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Icon(Icons.logout_rounded, color: BrandColors.danger, size: 20),
                     SizedBox(width: 12),
-                    Text('Cerrar sesión', style: TextStyle(color: BrandColors.danger, fontWeight: FontWeight.w600)),
+                    Text(
+                      'Cerrar sesión',
+                      style: TextStyle(color: BrandColors.danger, fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),

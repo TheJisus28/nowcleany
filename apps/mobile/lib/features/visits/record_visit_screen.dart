@@ -203,7 +203,9 @@ class _RecordVisitScreenState extends State<RecordVisitScreen> {
     } else {
       content = const SizedBox.shrink();
     }
-    return Card(child: Padding(padding: const EdgeInsets.all(16), child: content));
+    return Card(
+      child: Padding(padding: const EdgeInsets.all(16), child: content),
+    );
   }
 }
 

@@ -288,7 +288,9 @@ class SalesOrder {
     required this.label,
     required this.status,
     required this.statusLabel,
+    required this.customerId,
     required this.customerName,
+    required this.branchId,
     required this.branchName,
     required this.branchAddress,
     required this.estimatedDeliveryDate,
@@ -305,7 +307,9 @@ class SalesOrder {
       label: json['label'] as String,
       status: json['status'] as String,
       statusLabel: json['statusLabel'] as String? ?? json['status'] as String,
+      customerId: customer['id'] as String,
       customerName: customer['name'] as String,
+      branchId: branch?['id'] as String?,
       branchName: branch?['name'] as String?,
       branchAddress: branch == null
           ? null
@@ -321,7 +325,9 @@ class SalesOrder {
   final String label;
   final String status;
   final String statusLabel;
+  final String customerId;
   final String customerName;
+  final String? branchId;
   final String? branchName;
   final String? branchAddress;
   final String? estimatedDeliveryDate;
@@ -330,4 +336,18 @@ class SalesOrder {
   final List<OrderLine> lines;
 
   num get totalUnits => lines.fold<num>(0, (sum, line) => sum + (num.tryParse(line.quantity) ?? 0));
+
+  bool get isDraft => status == 'DRAFT';
+
+  /// The status as the seller says it (the office steps stay out of the app).
+  String get sellerStatus => switch (status) {
+    'DRAFT' => 'Borrador',
+    'CONFIRMED' => 'Guardada',
+    'INVOICED' => 'Facturada',
+    'READY' || 'PARTIAL' => 'En despacho',
+    'DISPATCHED' => 'Despachada',
+    'DELIVERED' => 'Entregada',
+    'CANCELLED' => 'Anulada',
+    _ => statusLabel,
+  };
 }
