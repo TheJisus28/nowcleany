@@ -1,8 +1,8 @@
-import { CircleCheck, FilePlus2, MapPinPlus, Pencil, Printer, X } from 'lucide-react';
+import { CircleCheck, FilePlus2, MapPinPlus, Pencil, Printer, ReceiptText, X } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { useCustomer, useCustomers, useOrderCoverage, useOrders, useVisits } from '../../api/hooks';
-import type { Branch, Customer, SalesOrder, Visit } from '../../api/types';
+import { useParams } from 'react-router';
+import { useCustomer, useCustomers } from '../../api/hooks';
+import type { Branch, Customer } from '../../api/types';
 import { useAccess } from '../../app/access';
 import { useSession } from '../../auth/session';
 import {
@@ -11,24 +11,14 @@ import {
   DocumentToolbar,
   HeaderField,
   HeaderGrid,
-  type QueryColumn,
-  QueryGrid,
   useWorkTab,
 } from '../../components/erp';
-import { EntityLink, pathTo } from '../../components/links';
+import { pathTo } from '../../components/links';
 import { MapView } from '../../components/map/map-view';
 import type { MapMarker } from '../../components/map/types';
-import { Chip, COVERAGE, CoverageChip, OrderStatusChip } from '../../components/status';
+import { Chip } from '../../components/status';
 import { QueryView } from '../../components/ui';
-import { formatDate, todayIso } from '../../lib/format';
-import {
-  colombiaDateTime,
-  colombiaDay,
-  formatUnits,
-  sumQuantities,
-} from '../billing/billing-format';
-import { DocTable, GridTitle } from '../billing/erp-kit';
-import { formatDistance, VisitPlaceChip } from '../visits/visit-place';
+import { DocTable } from '../billing/erp-kit';
 import { BranchDialog } from './branch-dialog';
 import { CustomerFormDialog } from './customer-form-dialog';
 
@@ -57,24 +47,13 @@ function useCustomerNeighbors(customer: Customer) {
   }, [customers.data, customer.id]);
 }
 
-const unitsOf = (order: SalesOrder) =>
-  sumQuantities(order.lines.map((line) => line.quantity.quantity));
-
-/** The customer's record (master data): header fields, branches with their map, orders and visits. */
+/** The customer's record (master data): header fields and branches with their map. */
 function CustomerRecord({ customer }: { customer: Customer }) {
-  const navigate = useNavigate();
   const { can } = useSession();
   const { has } = useAccess();
   const [editing, setEditing] = useState(false);
   const [branchDialog, setBranchDialog] = useState<{ branch?: Branch } | null>(null);
   const neighbors = useCustomerNeighbors(customer);
-  const orders = useOrders({ customerId: customer.id, limit: '200' });
-  const coverage = useOrderCoverage(can('planning:read'));
-  const visits = useVisits({ customerId: customer.id, from: todayIso(-60) }, can('visits:read'));
-  const coverageByOrder = useMemo(
-    () => new Map((coverage.data ?? []).map((row) => [row.orderId, row.status])),
-    [coverage.data],
-  );
   useWorkTab(`${customer.documentNumber} · ${customer.name}`);
 
   const canEdit = can('customers:write');
@@ -100,137 +79,6 @@ function CustomerRecord({ customer }: { customer: Customer }) {
         })),
     [branches, canEdit],
   );
-
-  const orderColumns: QueryColumn<SalesOrder>[] = [
-    {
-      key: 'number',
-      header: 'Número',
-      render: (row) => (
-        <EntityLink to="order" id={row.id} className="font-medium">
-          {row.label}
-        </EntityLink>
-      ),
-      sort: (row) => Number(row.number),
-      csv: (row) => row.label,
-    },
-    {
-      key: 'date',
-      header: 'Fecha',
-      render: (row) => (
-        <span className="whitespace-nowrap">{formatDate(colombiaDay(row.createdAt))}</span>
-      ),
-      sort: (row) => row.createdAt,
-      csv: (row) => colombiaDay(row.createdAt),
-    },
-    {
-      key: 'branch',
-      header: 'Sucursal',
-      render: (row) => row.branch.name,
-      csv: (row) => row.branch.name,
-    },
-    {
-      key: 'seller',
-      header: 'Vendedor',
-      hideOnMobile: true,
-      render: (row) => row.seller.name,
-      csv: (row) => row.seller.name,
-    },
-    {
-      key: 'promised',
-      header: 'Fecha prometida',
-      render: (row) => (
-        <span className="whitespace-nowrap">{formatDate(row.estimatedDeliveryDate)}</span>
-      ),
-      sort: (row) => row.estimatedDeliveryDate ?? '',
-      csv: (row) => row.estimatedDeliveryDate ?? '',
-    },
-    {
-      key: 'status',
-      header: 'Estado',
-      render: (row) => <OrderStatusChip status={row.status} />,
-      csv: (row) => row.statusLabel,
-    },
-    {
-      key: 'coverage',
-      header: 'Cobertura',
-      hideOnMobile: true,
-      render: (row) => {
-        const status = coverageByOrder.get(row.id);
-        return status ? <CoverageChip status={status} /> : <span className="text-ink-3">—</span>;
-      },
-      csv: (row) => {
-        const status = coverageByOrder.get(row.id);
-        return status ? COVERAGE[status].label : '';
-      },
-    },
-    {
-      key: 'units',
-      header: 'Unidades',
-      align: 'right',
-      render: (row) => formatUnits(unitsOf(row)),
-      sort: unitsOf,
-      csv: (row) => formatUnits(unitsOf(row)),
-      total: (list) => formatUnits(list.reduce((sum, row) => sum + unitsOf(row), 0)),
-    },
-  ];
-
-  const visitColumns: QueryColumn<Visit>[] = [
-    {
-      key: 'at',
-      header: 'Fecha y hora',
-      className: 'whitespace-nowrap tabular-nums text-ink-2',
-      render: (row) => colombiaDateTime(row.visitedAt),
-      sort: (row) => row.visitedAt,
-      csv: (row) => colombiaDateTime(row.visitedAt),
-    },
-    {
-      key: 'branch',
-      header: 'Sucursal',
-      render: (row) => row.branch.name,
-      csv: (row) => row.branch.name,
-    },
-    {
-      key: 'seller',
-      header: 'Vendedor',
-      render: (row) => row.seller.name,
-      csv: (row) => row.seller.name,
-    },
-    {
-      key: 'place',
-      header: 'Lugar',
-      render: (row) => <VisitPlaceChip visit={row} />,
-      csv: (row) =>
-        row.onSite === null ? 'Sucursal sin ubicar' : row.onSite ? 'En sitio' : 'Lejos',
-    },
-    {
-      key: 'distance',
-      header: 'Distancia',
-      align: 'right',
-      render: (row) => (row.distanceM === null ? '—' : formatDistance(row.distanceM)),
-      sort: (row) => row.distanceM ?? 0,
-      csv: (row) => (row.distanceM === null ? '' : Math.round(row.distanceM)),
-    },
-    {
-      key: 'order',
-      header: 'Pedido',
-      render: (row) =>
-        row.order ? (
-          <EntityLink to="order" id={row.order.id}>
-            {row.order.label}
-          </EntityLink>
-        ) : (
-          <span className="text-ink-3">—</span>
-        ),
-      csv: (row) => row.order?.label ?? '',
-    },
-    {
-      key: 'notes',
-      header: 'Observaciones',
-      hideOnMobile: true,
-      render: (row) => row.notes ?? <span className="text-ink-3">—</span>,
-      csv: (row) => row.notes ?? '',
-    },
-  ];
 
   return (
     <>
@@ -258,6 +106,11 @@ function CustomerRecord({ customer }: { customer: Customer }) {
             onClick: () => {
               setBranchDialog({});
             },
+          },
+          {
+            label: 'Pedidos',
+            icon: ReceiptText,
+            to: `/ventas?cliente=${encodeURIComponent(customer.name)}`,
           },
           {
             label: 'Imprimir',
@@ -386,47 +239,6 @@ function CustomerRecord({ customer }: { customer: Customer }) {
           </div>
         </DocumentSection>
       </DocumentScreen>
-
-      <GridTitle aside="Enter o doble clic abre el pedido">Pedidos del cliente</GridTitle>
-      <QueryView query={orders}>
-        {(rows) => (
-          <QueryGrid
-            title={`Pedidos de ${customer.name}`}
-            exportName="pedidos-del-cliente"
-            columns={orderColumns}
-            rows={rows}
-            rowKey={(row) => row.id}
-            initialSort={{ key: 'number', direction: 'desc' }}
-            pageSize={25}
-            onOpen={(row) => {
-              void navigate(pathTo('order', row.id));
-            }}
-            empty="Este cliente no tiene pedidos."
-          />
-        )}
-      </QueryView>
-
-      {can('visits:read') ? (
-        <>
-          <GridTitle aside="Posición GPS del vendedor comparada con la sucursal">
-            Visitas de los últimos 60 días
-          </GridTitle>
-          <QueryView query={visits}>
-            {(rows) => (
-              <QueryGrid
-                title={`Visitas a ${customer.name}`}
-                exportName="visitas-del-cliente"
-                columns={visitColumns}
-                rows={rows}
-                rowKey={(row) => row.id}
-                initialSort={{ key: 'at', direction: 'desc' }}
-                pageSize={25}
-                empty="Sin visitas registradas en los últimos 60 días."
-              />
-            )}
-          </QueryView>
-        </>
-      ) : null}
 
       <CustomerFormDialog
         open={editing}

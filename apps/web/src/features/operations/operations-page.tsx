@@ -13,7 +13,6 @@ import {
   usePurchaseOrders,
   useStockStatus,
   useSupplierInvoices,
-  useTrail,
 } from '../../api/hooks';
 import type { OrderStatus, SalesOrder } from '../../api/types';
 import { useProfile } from '../../auth/session';
@@ -29,7 +28,6 @@ const BLOCKS = [
   { key: 'production', label: 'Producción' },
   { key: 'money', label: 'Cartera y pagos' },
   { key: 'stock', label: 'Inventario' },
-  { key: 'activity', label: 'Actividad reciente (auditoría)' },
 ] as const;
 type BlockKey = (typeof BLOCKS)[number]['key'];
 
@@ -404,48 +402,12 @@ function StockBlock() {
   );
 }
 
-function ActivityBlock() {
-  const trail = useTrail({ from: todayIso().slice(0, 8) + '01' });
-  return (
-    <Block
-      title="Actividad reciente (auditoría)"
-      detail={{ to: '/traza', label: 'Auditoría completa' }}
-      wide
-    >
-      <Table
-        head={[
-          { label: 'Fecha y hora' },
-          { label: 'Documento' },
-          { label: 'Quién' },
-          { label: 'Qué hizo' },
-        ]}
-        rows={(trail.data ?? []).slice(0, 12).map((entry) => [
-          <span key="t" className="whitespace-nowrap text-ink-2 tabular-nums">
-            {formatDateTime(entry.occurredAt)}
-          </span>,
-          <span key="d" className="whitespace-nowrap">
-            {entry.label}
-          </span>,
-          <span key="a" className="whitespace-nowrap">
-            {entry.actor.name}
-            {entry.actor.role ? <span className="text-ink-3"> ({entry.actor.role})</span> : null}
-          </span>,
-          <span key="s" className="text-ink-2">
-            {entry.summary}
-          </span>,
-        ])}
-      />
-    </Block>
-  );
-}
-
 const RENDER: Record<BlockKey, () => ReactNode> = {
   flow: () => <FlowBlock />,
   purchasing: () => <PurchasingBlock />,
   production: () => <ProductionBlock />,
   money: () => <MoneyBlock />,
   stock: () => <StockBlock />,
-  activity: () => <ActivityBlock />,
 };
 
 /** The whole operation at a glance: every actor and what is waiting in each step of the flow. */
@@ -560,10 +522,7 @@ export function OperationsPage() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         {shown.map((key) => (
-          <div
-            key={key}
-            className={key === 'flow' || key === 'activity' ? 'xl:col-span-2' : undefined}
-          >
+          <div key={key} className={key === 'flow' ? 'xl:col-span-2' : undefined}>
             {RENDER[key]()}
           </div>
         ))}
