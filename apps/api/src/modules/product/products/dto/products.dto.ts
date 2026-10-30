@@ -24,6 +24,16 @@ export class CreateProductDto {
   @IsOptional()
   @Matches(DECIMAL)
   batchCapacity?: string;
+
+  /** Pesos per stock unit (finished goods). */
+  @IsOptional()
+  @Matches(/^\d{1,13}$/)
+  price?: string;
+
+  /** Pesos per stock unit (raw materials). */
+  @IsOptional()
+  @Matches(/^\d{1,13}$/)
+  cost?: string;
 }
 
 export class UpdateProductDto {
@@ -36,6 +46,15 @@ export class UpdateProductDto {
   @IsOptional()
   @Matches(/^(\d+(\.\d+)?)?$/)
   batchCapacity?: string;
+
+  /** Pesos per stock unit; "" clears it. */
+  @IsOptional()
+  @Matches(/^(\d{1,13})?$/)
+  price?: string;
+
+  @IsOptional()
+  @Matches(/^(\d{1,13})?$/)
+  cost?: string;
 
   @IsOptional()
   @IsBoolean()

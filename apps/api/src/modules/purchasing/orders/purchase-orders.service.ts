@@ -3,62 +3,41 @@ import { Transactional } from '@nestjs-cls/transactional';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import {
   NotFoundError,
+  parseMoney,
   Quantity,
-  type QuantityDto,
-  toQuantityDto,
   ValidationError,
 } from '../../../shared-kernel/index.js';
-import { InventoryLedger } from '../../inventory/index.js';
+import { Trail } from '../../audit/index.js';
 import { ProductCatalog } from '../../product/index.js';
 import {
   assertOpen,
-  PURCHASE_STATUS_LABELS,
   type PurchaseStatus,
   purchaseLabel,
   validatePurchaseLines,
 } from '../domain/purchase-order.js';
+import { SuppliersService } from '../suppliers/suppliers.service.js';
+import { type PurchaseOrderView, toPurchaseOrderView } from './purchase-order-view.js';
 import {
   type PurchaseOrderRecord,
   PurchaseOrdersRepository,
 } from './purchase-orders.repository.js';
-import { SuppliersService } from '../suppliers/suppliers.service.js';
-
-export interface PurchaseOrderView {
-  readonly id: string;
-  readonly label: string;
-  readonly supplier: { id: string; name: string };
-  readonly expectedDate: string | null;
-  readonly status: PurchaseStatus;
-  readonly statusLabel: string;
-  readonly notes: string | null;
-  readonly receiptDocument: string | null;
-  readonly createdBy: string;
-  readonly createdAt: string;
-  readonly receivedAt: string | null;
-  readonly receivedBy: string | null;
-  readonly cancelledAt: string | null;
-  readonly lines: readonly {
-    productId: string;
-    productCode: string;
-    productName: string;
-    quantity: QuantityDto;
-    receivedQuantity: QuantityDto | null;
-  }[];
-}
 
 interface LineInput {
   readonly productId: string;
   readonly quantity: string;
   readonly unit?: string;
+  /** Pesos per stock unit; defaults to the product's purchase cost. */
+  readonly unitCost?: string;
 }
 
+/** Purchasing orders from suppliers; receiving enters the supplier invoices against them. */
 @Injectable()
 export class PurchaseOrdersService {
   constructor(
     private readonly orders: PurchaseOrdersRepository,
     private readonly suppliers: SuppliersService,
     private readonly catalog: ProductCatalog,
-    private readonly inventory: InventoryLedger,
+    private readonly trail: Trail,
     private readonly currentActor: CurrentActor,
   ) {}
 
@@ -66,28 +45,34 @@ export class PurchaseOrdersService {
   async list(filter: {
     statuses?: PurchaseStatus[];
     productId?: string;
+    supplierId?: string;
     limit?: number;
   }): Promise<PurchaseOrderView[]> {
     const orders = await this.orders.list({
       limit: filter.limit ?? 100,
       ...(filter.statuses ? { statuses: filter.statuses } : {}),
       ...(filter.productId ? { productId: filter.productId } : {}),
+      ...(filter.supplierId ? { supplierId: filter.supplierId } : {}),
     });
-    return orders.map(toView);
+    return orders.map(toPurchaseOrderView);
   }
 
   @Transactional()
   async get(id: string): Promise<PurchaseOrderView> {
-    return toView(await this.require(id));
+    return toPurchaseOrderView(await this.require(id));
   }
 
   @Transactional()
-  async create(command: {
-    supplierId: string;
-    expectedDate?: string;
-    notes?: string;
-    lines: readonly LineInput[];
-  }): Promise<PurchaseOrderView> {
+  async create(
+    command: {
+      supplierId: string;
+      expectedDate?: string;
+      notes?: string;
+      lines: readonly LineInput[];
+    },
+    /** Seeds backdate history. */
+    at?: Date,
+  ): Promise<PurchaseOrderView> {
     const products = new Map(
       (await this.catalog.findByIds(command.lines.map((line) => line.productId))).map((p) => [
         p.id,
@@ -98,130 +83,78 @@ export class PurchaseOrdersService {
       const product = products.get(line.productId);
       if (!product)
         throw new ValidationError('purchasing.unknown_product', 'Uno de los productos no existe.');
-      return { product, quantity: Quantity.parse(line.quantity, line.unit ?? product.stockUnit) };
+      const unitCost = line.unitCost === undefined ? product.cost : parseMoney(line.unitCost);
+      return {
+        product,
+        quantity: Quantity.parse(line.quantity, line.unit ?? product.stockUnit),
+        unitCost: unitCost ?? 0n,
+      };
     });
     validatePurchaseLines(lines);
     const actor = this.currentActor.require();
+    const supplier = await this.suppliers.requireActive(command.supplierId);
     const id = await this.orders.insert({
-      supplier: await this.suppliers.requireActive(command.supplierId),
+      supplier,
       expectedDate: command.expectedDate ?? null,
       notes: command.notes?.trim() ? command.notes.trim() : null,
       createdBy: { id: actor.id, name: actor.displayName },
-      lines: lines.map(({ product, quantity }) => ({
+      createdAt: at,
+      lines: lines.map(({ product, quantity, unitCost }) => ({
         productId: product.id,
         productCode: product.code,
         productName: product.name,
         unit: product.stockUnit,
         quantity: quantity.base,
+        unitCost,
       })),
     });
-    return toView(await this.require(id));
+    const order = await this.require(id);
+    const view = toPurchaseOrderView(order);
+    await this.step(
+      order,
+      'ordered',
+      `Pidió a ${supplier.name}: ${order.lines.map((line) => line.productCode).join(', ')}${
+        command.expectedDate ? `, llega el ${command.expectedDate}` : ''
+      }.`,
+      at,
+    );
+    return view;
   }
 
-  /**
-   * Registers the receipt in inventory with the real quantities (inventory's transaction, idempotent
-   * per order) and closes the order. Lines left out are received as ordered.
-   */
-  async receive(
-    id: string,
-    command: { lines?: readonly LineInput[]; document?: string },
-  ): Promise<PurchaseOrderView> {
-    const order = await this.load(id);
-    if (order.status === 'RECEIVED') return toView(order);
-    assertOpen(order.status, 'receive');
-    const received = new Map(order.lines.map((line) => [line.productId, line.quantity]));
-    for (const input of command.lines ?? []) {
-      const line = order.lines.find((l) => l.productId === input.productId);
-      if (!line) {
-        throw new ValidationError(
-          'purchasing.line_not_in_order',
-          'Uno de los productos no está en la orden.',
-        );
-      }
-      const quantity = Quantity.parse(input.quantity, input.unit ?? line.unit);
-      if (quantity.isNegative()) {
-        throw new ValidationError(
-          'purchasing.negative_quantity',
-          'La cantidad recibida no puede ser negativa.',
-        );
-      }
-      received.set(line.productId, quantity.base);
-    }
-    const lines = order.lines
-      .filter((line) => (received.get(line.productId) ?? 0n) > 0n)
-      .map((line) => ({
-        productId: line.productId,
-        quantity: toQuantityDto(received.get(line.productId) ?? 0n, line.unit).quantity,
-        unit: line.unit,
-      }));
-    if (lines.length > 0) {
-      await this.inventory.receive({
-        idempotencyKey: `purchase-order:${order.id}`,
-        lines,
-        reference: {
-          type: 'purchase_order',
-          id: order.id,
-          label: `${purchaseLabel(order.number)} · ${order.supplier.name}`,
-        },
-        ...(command.document ? { note: `Documento del proveedor: ${command.document}` } : {}),
-      });
-    }
-    return this.finishReceipt(id, received, command.document ?? null);
+  /** Purchasing closes a partially received order with what came (the rest will not arrive). */
+  @Transactional()
+  async close(id: string): Promise<PurchaseOrderView> {
+    const order = await this.require(id);
+    assertOpen(order.status, 'close');
+    await this.orders.setStatus(id, 'CLOSED');
+    await this.step(order, 'closed', 'Cerró la orden con lo recibido: el resto ya no llegará.');
+    return this.get(id);
   }
 
   @Transactional()
   async cancel(id: string): Promise<PurchaseOrderView> {
     const order = await this.require(id);
     assertOpen(order.status, 'cancel');
-    await this.orders.markCancelled(id, this.currentActor.require().displayName);
-    return toView(await this.require(id));
+    await this.orders.setStatus(id, 'CANCELLED', this.currentActor.require().displayName);
+    await this.step(order, 'cancelled', 'Anuló la orden de compra.');
+    return this.get(id);
   }
 
-  @Transactional()
-  private load(id: string): Promise<PurchaseOrderRecord> {
-    return this.require(id);
-  }
-
-  @Transactional()
-  private async finishReceipt(
-    id: string,
-    received: ReadonlyMap<string, bigint>,
-    document: string | null,
-  ): Promise<PurchaseOrderView> {
-    await this.orders.markReceived(id, received, this.currentActor.require().displayName, document);
-    return toView(await this.require(id));
-  }
-
-  private async require(id: string): Promise<PurchaseOrderRecord> {
+  async require(id: string): Promise<PurchaseOrderRecord> {
     const order = await this.orders.findById(id);
     if (!order)
       throw new NotFoundError('purchasing.order_not_found', 'La orden de compra no existe.');
     return order;
   }
-}
 
-function toView(order: PurchaseOrderRecord): PurchaseOrderView {
-  return {
-    id: order.id,
-    label: purchaseLabel(order.number),
-    supplier: order.supplier,
-    expectedDate: order.expectedDate,
-    status: order.status,
-    statusLabel: PURCHASE_STATUS_LABELS[order.status],
-    notes: order.notes,
-    receiptDocument: order.receiptDocument,
-    createdBy: order.createdBy.name,
-    createdAt: order.createdAt.toISOString(),
-    receivedAt: order.receivedAt?.toISOString() ?? null,
-    receivedBy: order.receivedByName,
-    cancelledAt: order.cancelledAt?.toISOString() ?? null,
-    lines: order.lines.map((line) => ({
-      productId: line.productId,
-      productCode: line.productCode,
-      productName: line.productName,
-      quantity: toQuantityDto(line.quantity, line.unit),
-      receivedQuantity:
-        line.receivedQuantity === null ? null : toQuantityDto(line.receivedQuantity, line.unit),
-    })),
-  };
+  private step(order: PurchaseOrderRecord, action: string, summary: string, at?: Date) {
+    return this.trail.record({
+      entity: 'purchase_order',
+      id: order.id,
+      label: purchaseLabel(order.number),
+      action,
+      summary,
+      at,
+    });
+  }
 }

@@ -4,7 +4,7 @@ import { Transactional } from '@nestjs-cls/transactional';
 import { NotFoundError, UnauthorizedError } from '../../../shared-kernel/index.js';
 import { type ProfileView, toUserView } from '../users/user-view.js';
 import { UsersRepository } from '../users/users.repository.js';
-import { permissionsOf } from '../access.js';
+import { permissionsOf, roleNameOf } from '../access.js';
 import { AccessTokens } from './access-tokens.js';
 import { PasswordHasher } from './password-hasher.js';
 import { SessionsRepository } from './sessions.repository.js';
@@ -79,7 +79,12 @@ export class AuthService {
       hashToken(refreshToken),
       new Date(Date.now() + SESSION_TTL_MS),
     );
-    const access = this.tokens.sign({ id: user.id, name: user.fullName, permissions });
+    const access = this.tokens.sign({
+      id: user.id,
+      name: user.fullName,
+      permissions,
+      role: roleNameOf(user.roles),
+    });
     return {
       accessToken: access.token,
       expiresIn: access.expiresIn,

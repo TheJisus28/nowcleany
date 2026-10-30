@@ -1,0 +1,68 @@
+// DATOS DE EJEMPLO: precios de venta (al por mayor) y costos de compra ilustrativos, en pesos por unidad de stock.
+
+export const DEMO_PRICES: Readonly<Record<string, string>> = {
+  '00224': '38000',
+  '00225': '3200',
+  '00226': '9800',
+  '00227': '42000',
+  '00310': '14500',
+  '00311': '4800',
+  '00410': '6200',
+  '00411': '19500',
+  '00510': '7400',
+  '00511': '23500',
+  '00610': '4300',
+  '00611': '21000',
+  '00710': '6900',
+  '00810': '8600',
+  '00811': '27500',
+  '01010': '9500',
+  '01011': '7800',
+  '01012': '11500',
+  '01013': '4200',
+  '01014': '3600',
+  '01015': '5400',
+};
+
+const COSTS: Readonly<Record<string, string>> = {
+  'MP-HIPO-15': '2400',
+  'MP-AGUA': '15',
+  'MP-SODA': '5200',
+  'MP-ENV-1L': '420',
+  'MP-ENV-2L': '560',
+  'MP-TAPA-28': '90',
+  'MP-CAJA-6': '1350',
+  'MP-LAS': '9800',
+  'MP-FRAG-LAV': '68000',
+  'MP-COL-VIO': '160',
+  'MP-GALON': '1450',
+  'MP-TAPA-38': '140',
+  'MP-ESTER': '14500',
+  'MP-QUAT': '21000',
+  'MP-FRAG-SUAV': '72000',
+  'MP-BUTIL': '16800',
+  'MP-LAURIL': '11500',
+  'MP-EDTA': '18900',
+  'MP-SAL': '900',
+  'MP-FRAG-LIM': '64000',
+  'MP-FRAG-FLOR': '66000',
+  'MP-COL-AZUL': '150',
+  'MP-COL-AMA': '150',
+  'MP-ALCOHOL': '9800',
+  'MP-ENV-500': '310',
+  'MP-GARRAFA': '7800',
+  'MP-TAPA-GAR': '650',
+  'MP-TAPA-PUSH': '260',
+  'MP-ATOMIZ': '780',
+  '01010': '6200',
+  '01011': '4900',
+  '01012': '7400',
+  '01013': '2500',
+  '01014': '2100',
+  '01015': '3200',
+};
+
+/** Purchase cost of a raw material; labels share one price. */
+export function demoCost(code: string): string | undefined {
+  return COSTS[code] ?? (code.startsWith('MP-ETQ-') ? '95' : undefined);
+}

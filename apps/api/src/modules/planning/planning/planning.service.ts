@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { toQuantityDto } from '../../../shared-kernel/index.js';
+import { amountFor, toQuantityDto } from '../../../shared-kernel/index.js';
 import { InventoryLedger } from '../../inventory/index.js';
 import {
   type Capacity,
@@ -28,6 +28,7 @@ import type {
   Availability,
   BulkNeed,
   MaterialLine,
+  MonthlyPurchase,
   OrderCoverageView,
   OversellReport,
   PackagingNeed,
@@ -442,6 +443,139 @@ export class PlanningService {
     return { generatedAt: new Date().toISOString(), rows };
   }
 
+  /**
+   * Base-unit coverage of each committed order line under the current priority: what the stock covers
+   * and what is still to make or buy (billing snapshots it on the invoice).
+   */
+  async coverageByOrder(): Promise<
+    Map<string, Map<string, { fromStock: bigint; pending: bigint }>>
+  > {
+    const plan = await this.plan(await this.snapshot());
+    const result = new Map<string, Map<string, { fromStock: bigint; pending: bigint }>>();
+    for (const line of plan.coverage) {
+      const lines =
+        result.get(line.orderId) ?? new Map<string, { fromStock: bigint; pending: bigint }>();
+      lines.set(line.productId, {
+        fromStock: line.fromStock,
+        pending: line.quantity - line.fromStock,
+      });
+      result.set(line.orderId, lines);
+    }
+    return result;
+  }
+
+  /**
+   * The month's purchase suggestion: purchasing plans how much of each product it expects to sell (by
+   * default, what was sold last month); finished goods become raw materials through the formulas,
+   * resale goods are bought as they are; stock and what is on its way are discounted.
+   */
+  async monthlyPurchase(month?: string): Promise<MonthlyPurchase> {
+    // By default, the month being planned: this one, or the next once this one is nearly over.
+    const now = new Date(Date.now() - 5 * 3_600_000);
+    if (now.getUTCDate() >= 22) now.setUTCMonth(now.getUTCMonth() + 1, 1);
+    const target = month ?? now.toISOString().slice(0, 7);
+    const start = new Date(`${target}-01T00:00:00-05:00`);
+    const shift = (months: number) => {
+      const date = new Date(start);
+      date.setUTCMonth(date.getUTCMonth() + months);
+      return date;
+    };
+    const snapshot = await this.snapshot();
+    const plan = await this.plan(snapshot);
+    const [lastMonth, lastThree, saved] = await Promise.all([
+      this.sales.soldBetween(shift(-1), start),
+      this.sales.soldBetween(shift(-3), start),
+      this.purchasing.plan(target),
+    ]);
+    const sold1 = new Map(lastMonth.map((row) => [row.productId, row.quantity]));
+    const sold3 = new Map(lastThree.map((row) => [row.productId, row.quantity]));
+    const planned = new Map(saved.map((line) => [line.productId, line]));
+    const onHand = (id: string) => max0(snapshot.onHand.get(id) ?? 0n);
+    const sellable = [...snapshot.products.values()]
+      .filter((p) => p.active && (p.type === 'FINISHED_GOOD' || p.type === 'RESALE'))
+      .sort((a, b) => a.code.localeCompare(b.code));
+    const planOf = (id: string) => planned.get(id)?.quantity ?? sold1.get(id) ?? 0n;
+
+    // Finished goods not in stock must be packaged; the bulk they need, produced; then the chemicals.
+    const toPack = sellable
+      .filter((p) => p.type === 'FINISHED_GOOD')
+      .map((p) => ({ productId: p.id, quantity: net(planOf(p.id), onHand(p.id)) }))
+      .filter((line) => line.quantity > 0n);
+    const level1 = await this.catalog.requirementsFor(toPack);
+    const bulk = level1.needs
+      .filter((need) => snapshot.products.get(need.componentId)?.type === 'BULK')
+      .map((need) => ({
+        productId: need.componentId,
+        quantity: net(need.quantity, onHand(need.componentId)),
+      }))
+      .filter((line) => line.quantity > 0n);
+    const level2 = await this.catalog.requirementsFor(bulk);
+    const need = sumBy(
+      [
+        ...[...level1.needs, ...level2.needs].filter(
+          (item) => snapshot.products.get(item.componentId)?.type === 'RAW_MATERIAL',
+        ),
+        ...sellable
+          .filter((p) => p.type === 'RESALE')
+          .map((p) => ({ componentId: p.id, quantity: planOf(p.id) })),
+      ],
+      (item) => item.componentId,
+      (item) => item.quantity,
+    );
+    const ids = new Set([
+      ...need.keys(),
+      ...[...plan.toBuy].filter(([, q]) => q > 0n).map(([id]) => id),
+    ]);
+    let total = 0n;
+    const purchases = [...ids]
+      .map((id) => {
+        const product = snapshot.products.get(id);
+        const unit = product?.stockUnit ?? 'un';
+        const monthNeed = need.get(id) ?? 0n;
+        const inTransit = plan.onOrder.get(id) ?? 0n;
+        const urgent = plan.toBuy.get(id) ?? 0n;
+        const monthly = net(monthNeed, onHand(id), inTransit);
+        const suggested = monthly > urgent ? monthly : urgent;
+        const cost = product?.cost ?? null;
+        const estimated = cost === null ? 0n : amountFor(suggested, cost, unit);
+        total += estimated;
+        return {
+          product: this.ref(snapshot, id),
+          type: product?.type ?? 'RAW_MATERIAL',
+          typeLabel: PRODUCT_TYPE_LABELS[product?.type ?? 'RAW_MATERIAL'],
+          monthNeed: toQuantityDto(monthNeed, unit),
+          onHand: toQuantityDto(snapshot.onHand.get(id) ?? 0n, unit),
+          onOrder: toQuantityDto(inTransit, unit),
+          urgent: toQuantityDto(urgent, unit),
+          suggested: toQuantityDto(suggested, unit),
+          unitCost: cost?.toString() ?? null,
+          estimatedCost: estimated.toString(),
+          usedBy: [...(plan.usedBy.get(id) ?? [])].map((usedId) => this.ref(snapshot, usedId)),
+          sort: suggested,
+        };
+      })
+      .sort((a, b) =>
+        b.sort > a.sort ? 1 : b.sort < a.sort ? -1 : a.product.code.localeCompare(b.product.code),
+      )
+      .map(({ sort: _sort, ...row }) => row);
+
+    return {
+      month: target,
+      basedOn: shift(-1).toISOString().slice(0, 7),
+      products: sellable.map((p) => ({
+        product: this.ref(snapshot, p.id),
+        type: p.type,
+        typeLabel: PRODUCT_TYPE_LABELS[p.type],
+        lastMonth: toQuantityDto(sold1.get(p.id) ?? 0n, p.stockUnit),
+        average3: toQuantityDto(((sold3.get(p.id) ?? 0n) + 2n) / 3n, p.stockUnit),
+        plan: toQuantityDto(planOf(p.id), p.stockUnit),
+        planSetBy: planned.get(p.id)?.setByName ?? null,
+      })),
+      purchases,
+      estimatedCost: total.toString(),
+    };
+  }
+
   // --- computation ---------------------------------------------------------------------------
 
   private async snapshot(): Promise<Snapshot> {
@@ -453,7 +587,7 @@ export class PlanningService {
       this.purchasing.onOrder(),
     ]);
     const confirmed: DemandLine[] = orders
-      .filter((order) => order.status === 'CONFIRMED')
+      .filter((order) => order.status !== 'DRAFT')
       .flatMap((order) =>
         order.lines.map((line) => ({
           orderId: order.id,
@@ -464,6 +598,7 @@ export class PlanningService {
           sellerName: order.seller.name,
           estimatedDeliveryDate: order.estimatedDeliveryDate,
           confirmedAt: order.confirmedAt,
+          priority: order.priority,
           productId: line.productId,
           quantity: line.quantity,
         })),
@@ -488,7 +623,11 @@ export class PlanningService {
       (line) => line.productId,
       (line) => line.quantity,
     );
-    const toPack = new Map([...demand].map(([id, quantity]) => [id, net(quantity, onHand(id))]));
+    const toPack = new Map(
+      [...demand]
+        .filter(([id]) => typeOf(id) === 'FINISHED_GOOD')
+        .map(([id, quantity]) => [id, net(quantity, onHand(id))]),
+    );
 
     // 2. Packaging needs bulk liquid and packaging materials.
     const level1 = await this.catalog.requirementsFor(
@@ -507,10 +646,17 @@ export class PlanningService {
     const level2 = await this.catalog.requirementsFor(
       [...toProduce].map(([productId, quantity]) => ({ productId, quantity })),
     );
+    // Resale goods are bought as they are sold: their demand is a purchase need too.
+    const resale = [...demand]
+      .filter(([id]) => typeOf(id) === 'RESALE')
+      .map(([componentId, quantity]) => ({ componentId, quantity }));
     const materialsRequired = sumBy(
-      [...level1.needs, ...level2.needs].filter(
-        (need) => typeOf(need.componentId) === 'RAW_MATERIAL',
-      ),
+      [
+        ...[...level1.needs, ...level2.needs].filter(
+          (need) => typeOf(need.componentId) === 'RAW_MATERIAL',
+        ),
+        ...resale,
+      ],
       (need) => need.componentId,
       (need) => need.quantity,
     );

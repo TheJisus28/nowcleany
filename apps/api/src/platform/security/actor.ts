@@ -4,6 +4,8 @@ export interface Actor {
   readonly displayName: string;
   readonly permissions: ReadonlySet<string>;
   readonly system: boolean;
+  /** Business role shown in the trail ("Planta", "Logística"…). */
+  readonly roleName?: string | null;
 }
 
 /** An actor for work nobody clicked (jobs, consumers, seeds); `displayName` is what people read. */

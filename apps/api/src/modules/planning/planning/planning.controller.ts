@@ -1,8 +1,10 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { IsOptional, Matches } from 'class-validator';
 import { Permission } from '../../../platform/security/decorators.js';
 import type {
   Availability,
+  MonthlyPurchase,
   OrderCoverageView,
   OversellReport,
   PlanningSummary,
@@ -11,6 +13,12 @@ import type {
   StockAllocation,
 } from './planning-views.js';
 import { PlanningService } from './planning.service.js';
+
+class MonthQuery {
+  @IsOptional()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/)
+  month?: string;
+}
 
 @ApiTags('planning')
 @ApiBearerAuth()
@@ -61,5 +69,12 @@ export class PlanningController {
   @Get('stock-allocation')
   stockAllocation(): Promise<StockAllocation> {
     return this.planning.stockAllocation();
+  }
+
+  /** Purchasing's month: expected sales and what to buy for them (?month=2026-11). */
+  @Permission('planning:read')
+  @Get('monthly-purchase')
+  monthlyPurchase(@Query() query: MonthQuery): Promise<MonthlyPurchase> {
+    return this.planning.monthlyPurchase(query.month);
   }
 }

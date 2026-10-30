@@ -18,6 +18,7 @@ export class JwtTokenVerifier extends TokenVerifier {
         displayName: claims.name,
         permissions: new Set(claims.perms),
         system: false,
+        roleName: claims.role ?? null,
       };
     });
   }

@@ -12,5 +12,6 @@ import { PlanningService } from './planning/planning.service.js';
   imports: [ProductModule, InventoryModule, SalesModule, ProductionModule, PurchasingModule],
   controllers: [PlanningController],
   providers: [PlanningService],
+  exports: [PlanningService],
 })
 export class PlanningModule {}

@@ -60,6 +60,33 @@ export class OrderDto {
   lines!: OrderLineDto[];
 }
 
+class ReadyLineDto {
+  @IsUUID()
+  productId!: string;
+
+  @Matches(/^\d+(\.\d+)?$/)
+  quantity!: string;
+}
+
+/** What plant hands over; without lines, everything still to ship. */
+export class PrepareOrderDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ReadyLineDto)
+  lines?: ReadyLineDto[];
+}
+
+export class PriorityDto {
+  /** 1 is served first; null clears it. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9999)
+  priority?: number | null;
+}
+
 export class CancelOrderDto {
   @IsString()
   @MaxLength(300)

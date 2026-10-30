@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { type SeedCustomer, type SeedOrder, PortfolioLoader } from './portfolio-loader.js';
+import { PortfolioLoader, type SeedCustomer } from './portfolio-loader.js';
 
-// DATOS DE EJEMPLO de la propuesta SCIP: tres vendedores preventan 1.200 + 800 + 950 = 2.950 cajas de
-// cloro 00224, pero con las materias primas disponibles solo se pueden fabricar 2.000.
+// DATOS DE EJEMPLO de la propuesta SCIP: los clientes de los tres vendedores que preventan 1.200 + 800 +
+// 950 = 2.950 cajas de cloro 00224 (las preventas las carga el módulo demo).
 export const DEMO_CUSTOMERS: readonly SeedCustomer[] = [
   {
     seller: 'a',
@@ -84,27 +84,14 @@ export const DEMO_CUSTOMERS: readonly SeedCustomer[] = [
   },
 ];
 
-const ORDERS: readonly SeedOrder[] = [
-  { customer: '900123456-7', inDays: 9, outcome: 'confirm', lines: [['00224', '1200']] },
-  { customer: '900456789-1', inDays: 11, outcome: 'confirm', lines: [['00224', '800']] },
-  { customer: '800987654-3', inDays: 16, outcome: 'confirm', lines: [['00224', '950']] },
-  { customer: '891080123-5', inDays: 5, outcome: 'confirm', lines: [['00225', '300']] },
-  { customer: '800987654-3', inDays: 14, outcome: 'confirm', lines: [['00310', '400']] },
-  { customer: '900456789-1', inDays: 20, outcome: 'draft', lines: [['00224', '300']] },
-];
-
 @Injectable()
-export class DemoOrdersSeeder {
+export class DemoCustomersSeeder {
   private readonly logger = new Logger('sales');
 
   constructor(private readonly loader: PortfolioLoader) {}
 
   async seed(): Promise<void> {
-    if ((await this.loader.loadCustomers(DEMO_CUSTOMERS)) === 0) {
-      this.logger.log('Los clientes de demo ya existían: no se cargan preventas');
-      return;
-    }
-    await this.loader.loadOrders(ORDERS, '');
-    this.logger.log(`Preventas de demo: ${String(ORDERS.length)}`);
+    const created = await this.loader.loadCustomers(DEMO_CUSTOMERS);
+    this.logger.log(`Clientes de demo: ${String(created)}`);
   }
 }

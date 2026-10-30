@@ -35,6 +35,7 @@ const ALLOWED_COMPONENTS: Record<ProductType, readonly ProductType[]> = {
   RAW_MATERIAL: [],
   BULK: ['RAW_MATERIAL'],
   FINISHED_GOOD: ['BULK', 'RAW_MATERIAL'],
+  RESALE: [],
 };
 
 export function validateFormula(
@@ -46,7 +47,7 @@ export function validateFormula(
   if (allowed.length === 0) {
     throw new ValidationError(
       'formula.not_allowed',
-      'Las materias primas no tienen fórmula; solo los productos a granel y los terminados.',
+      'Las materias primas y la mercancía de reventa no tienen fórmula; solo los productos a granel y los terminados.',
     );
   }
   if (

@@ -7,6 +7,37 @@ export interface ProductRef {
   readonly name: string;
 }
 
+/** Purchasing's month: expected sales per product and what to buy for them. */
+export interface MonthlyPurchase {
+  readonly month: string;
+  readonly basedOn: string;
+  readonly products: readonly {
+    product: ProductRef;
+    type: string;
+    typeLabel: string;
+    lastMonth: QuantityDto;
+    average3: QuantityDto;
+    plan: QuantityDto;
+    /** Who set the plan; null when it is the suggestion (last month's sales). */
+    planSetBy: string | null;
+  }[];
+  readonly purchases: readonly {
+    product: ProductRef;
+    type: string;
+    typeLabel: string;
+    monthNeed: QuantityDto;
+    onHand: QuantityDto;
+    onOrder: QuantityDto;
+    /** What confirmed pre-sales already lack (bought now, before the month plan). */
+    urgent: QuantityDto;
+    suggested: QuantityDto;
+    unitCost: string | null;
+    estimatedCost: string;
+    usedBy: readonly ProductRef[];
+  }[];
+  readonly estimatedCost: string;
+}
+
 export interface MaterialLine extends ProductRef {
   readonly typeLabel: string;
   readonly quantity: QuantityDto;
@@ -164,7 +195,7 @@ export interface Availability {
 
 export interface StockAllocationRow {
   readonly product: ProductRef;
-  readonly type: 'RAW_MATERIAL' | 'BULK' | 'FINISHED_GOOD';
+  readonly type: 'RAW_MATERIAL' | 'BULK' | 'FINISHED_GOOD' | 'RESALE';
   readonly typeLabel: string;
   /** Physical stock (may be negative). */
   readonly onHand: QuantityDto;

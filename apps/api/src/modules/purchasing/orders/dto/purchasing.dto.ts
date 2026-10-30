@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -27,6 +28,11 @@ export class PurchaseLineDto {
   @IsOptional()
   @IsIn(UNIT_CODES)
   unit?: string;
+
+  /** Pesos per stock unit; defaults to the product's purchase cost. */
+  @IsOptional()
+  @Matches(/^\d{1,13}$/)
+  unitCost?: string;
 }
 
 export class CreatePurchaseOrderDto {
@@ -50,20 +56,84 @@ export class CreatePurchaseOrderDto {
   lines!: PurchaseLineDto[];
 }
 
-export class ReceivePurchaseOrderDto {
-  /** Real quantities; lines left out are received as ordered. */
+class InvoiceLineDto {
+  @IsUUID()
+  productId!: string;
+
+  /** What arrived with this invoice, in the product's unit. */
+  @Matches(/^\d+(\.\d+)?$/)
+  quantity!: string;
+
+  /** Pesos per stock unit billed; defaults to the order's agreed cost. */
   @IsOptional()
+  @Matches(/^\d{1,13}$/)
+  unitCost?: string;
+}
+
+/** A supplier invoice entered by receiving: the support document of the goods that arrived. */
+export class SupplierInvoiceDto {
+  @IsString()
+  @MaxLength(40)
+  documentNumber!: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  invoiceDate!: string;
+
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => PurchaseLineDto)
-  lines?: PurchaseLineDto[];
+  @Type(() => InvoiceLineDto)
+  lines!: InvoiceLineDto[];
+}
 
-  /** Supplier invoice or delivery note. */
+export class SupplierPaymentDto {
+  @Matches(/^\d{1,13}$/)
+  amount!: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  paidOn!: string;
+
+  @IsIn(['TRANSFER', 'CASH', 'DEPOSIT', 'CHECK'])
+  method!: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(80)
-  document?: string;
+  reference?: string;
+}
+
+export class SupplierInvoicesQuery {
+  @IsOptional()
+  @IsUUID()
+  purchaseOrderId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  supplierId?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  open?: boolean;
+}
+
+class PlanLineDto {
+  @IsUUID()
+  productId!: string;
+
+  @Matches(/^\d+(\.\d+)?$/)
+  quantity!: string;
+}
+
+export class PurchasePlanDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => PlanLineDto)
+  lines!: PlanLineDto[];
 }
 
 export class ListPurchaseOrdersQuery {
@@ -78,6 +148,10 @@ export class ListPurchaseOrdersQuery {
   @IsOptional()
   @IsUUID()
   productId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  supplierId?: string;
 
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? Number(value) : value))

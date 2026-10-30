@@ -14,6 +14,8 @@ export interface ProductRecord {
   readonly type: ProductType;
   readonly stockUnit: UnitCode;
   readonly batchCapacity: bigint | null;
+  readonly price: bigint | null;
+  readonly cost: bigint | null;
   readonly active: boolean;
   readonly activeFormulaVersion: number | null;
   readonly hasDraftFormula: boolean;
@@ -31,6 +33,8 @@ export interface NewProduct {
   readonly type: ProductType;
   readonly stockUnit: UnitCode;
   readonly batchCapacity: bigint | null;
+  readonly price?: bigint | null;
+  readonly cost?: bigint | null;
 }
 
 @Injectable()
@@ -81,6 +85,8 @@ export class ProductsRepository {
           type: product.type,
           stock_unit: product.stockUnit,
           batch_capacity: product.batchCapacity,
+          price: product.price ?? null,
+          cost: product.cost ?? null,
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -98,13 +104,21 @@ export class ProductsRepository {
 
   async update(
     id: string,
-    changes: { name?: string; batchCapacity?: bigint | null; active?: boolean },
+    changes: {
+      name?: string;
+      batchCapacity?: bigint | null;
+      price?: bigint | null;
+      cost?: bigint | null;
+      active?: boolean;
+    },
   ): Promise<void> {
     await this.host.tx
       .updateTable('products')
       .set({
         ...(changes.name === undefined ? {} : { name: changes.name }),
         ...(changes.batchCapacity === undefined ? {} : { batch_capacity: changes.batchCapacity }),
+        ...(changes.price === undefined ? {} : { price: changes.price }),
+        ...(changes.cost === undefined ? {} : { cost: changes.cost }),
         ...(changes.active === undefined ? {} : { active: changes.active }),
         updated_at: new Date(),
       })
@@ -120,6 +134,8 @@ export class ProductsRepository {
       'p.type',
       'p.stock_unit',
       'p.batch_capacity',
+      'p.price',
+      'p.cost',
       'p.active',
       sql<number | null>`(SELECT f.version FROM formulas f
           WHERE f.product_id = p.id AND f.status = 'ACTIVE')`.as('active_formula_version'),
@@ -136,6 +152,8 @@ function toRecord(row: {
   type: ProductRecord['type'];
   stock_unit: ProductRecord['stockUnit'];
   batch_capacity: bigint | null;
+  price: bigint | null;
+  cost: bigint | null;
   active: boolean;
   active_formula_version: number | null;
   has_draft_formula: boolean;
@@ -147,6 +165,8 @@ function toRecord(row: {
     type: row.type,
     stockUnit: row.stock_unit,
     batchCapacity: row.batch_capacity,
+    price: row.price,
+    cost: row.cost,
     active: row.active,
     activeFormulaVersion: row.active_formula_version,
     hasDraftFormula: row.has_draft_formula,

@@ -6,14 +6,21 @@ import {
   ValidationError,
 } from '../../../shared-kernel/index.js';
 
-export const PRODUCT_TYPES = ['RAW_MATERIAL', 'BULK', 'FINISHED_GOOD'] as const;
+/** RESALE: bought from suppliers and sold as is (brooms, dustpans…), no formula. */
+export const PRODUCT_TYPES = ['RAW_MATERIAL', 'BULK', 'FINISHED_GOOD', 'RESALE'] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
 export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   RAW_MATERIAL: 'Materia prima',
   BULK: 'Granel',
   FINISHED_GOOD: 'Producto terminado',
+  RESALE: 'Mercancía de reventa',
 };
+
+/** What can be sold to customers. */
+export const SELLABLE_TYPES: readonly ProductType[] = ['FINISHED_GOOD', 'RESALE'];
+/** What can be bought from suppliers. */
+export const PURCHASABLE_TYPES: readonly ProductType[] = ['RAW_MATERIAL', 'RESALE'];
 
 const CODE = /^[A-Z0-9][A-Z0-9._-]{0,39}$/;
 
@@ -78,6 +85,10 @@ const TYPE_ALIASES: Record<string, ProductType> = {
   'producto terminado': 'FINISHED_GOOD',
   pt: 'FINISHED_GOOD',
   finished_good: 'FINISHED_GOOD',
+  reventa: 'RESALE',
+  mercancia: 'RESALE',
+  mercancía: 'RESALE',
+  resale: 'RESALE',
 };
 
 const UNIT_ALIASES: Record<string, UnitCode> = {

@@ -1,6 +1,11 @@
 /**
  * Roles and permissions, in code. A route declares `@Permission('<code>')`; a user holds the
  * permissions of their roles (the administrator holds all of them).
+ *
+ * The roles follow the company's flow: each one does its step, authorizes it and passes it on.
+ * Seller (pre-sale) → consolidator (consolidates and invoices) → plant (prepares) → logistics (guide,
+ * dispatch, delivery) → accountant (collections, payments, trail). Purchasing orders from suppliers;
+ * receiving enters each supplier invoice against the order, and with it the goods.
  */
 
 export const ROLES = [
@@ -12,41 +17,70 @@ export const ROLES = [
   {
     code: 'manager',
     name: 'Gerencia',
-    description: 'Ve todos los paneles y el reporte de sobreventa.',
+    description: 'Ve todos los módulos, el tablero y la traza; publica fórmulas.',
   },
   {
-    code: 'formulator',
-    name: 'Formulador',
-    description: 'Define productos y borradores de fórmulas.',
+    code: 'sales',
+    name: 'Vendedor',
+    description: 'Atiende su cartera: visitas, clientes y preventas.',
   },
-  { code: 'technical_lead', name: 'Jefe técnico', description: 'Revisa y publica fórmulas.' },
-  { code: 'sales', name: 'Ventas', description: 'Registra y gestiona preventas.' },
-  { code: 'plant', name: 'Planta', description: 'Programa y registra producción y envasado.' },
+  {
+    code: 'consolidator',
+    name: 'Consolidado y facturación',
+    description: 'Consolida las preventas enviadas y genera las facturas.',
+  },
+  {
+    code: 'plant',
+    name: 'Planta',
+    description: 'Produce, envasa, alista los pedidos y los entrega a despacho.',
+  },
+  {
+    code: 'logistics',
+    name: 'Logística',
+    description: 'Arma las guías, despacha y confirma las entregas.',
+  },
   {
     code: 'purchasing',
     name: 'Compras',
-    description: 'Gestiona órdenes de compra según los faltantes.',
+    description: 'Hace las órdenes de compra a los proveedores con la sugerencia del mes.',
   },
   {
-    code: 'warehouse',
-    name: 'Bodega',
-    description: 'Recepciones, traslados, despachos y ajustes de inventario.',
+    code: 'receiving',
+    name: 'Recepción de compras',
+    description: 'Ingresa las facturas de proveedor y, con ellas, la mercancía que llegó.',
+  },
+  {
+    code: 'accountant',
+    name: 'Contable',
+    description:
+      'Registra cobros a clientes y pagos a proveedores; revisa la traza y los reportes.',
   },
 ] as const;
 
 export type RoleCode = (typeof ROLES)[number]['code'];
 
 const EVERYONE: readonly RoleCode[] = ROLES.map((role) => role.code);
-const READERS: readonly RoleCode[] = [
+/** Everyone who works in the operation (all but admin, who holds everything anyway). */
+const STAFF: readonly RoleCode[] = [
   'manager',
-  'formulator',
-  'technical_lead',
   'sales',
+  'consolidator',
   'plant',
+  'logistics',
   'purchasing',
-  'warehouse',
+  'receiving',
+  'accountant',
 ];
-const OPERATIONS: readonly RoleCode[] = ['manager', 'sales', 'plant', 'purchasing', 'warehouse'];
+/** Roles that see every seller's orders and customers (sellers only see their portfolio). */
+const BACK_OFFICE: readonly RoleCode[] = [
+  'manager',
+  'consolidator',
+  'plant',
+  'logistics',
+  'purchasing',
+  'receiving',
+  'accountant',
+];
 
 export const PERMISSIONS: readonly {
   code: string;
@@ -56,46 +90,44 @@ export const PERMISSIONS: readonly {
   { code: 'profile:read', description: 'Ver su propio perfil y permisos', roles: EVERYONE },
   { code: 'users:read', description: 'Ver usuarios y roles', roles: ['manager'] },
   { code: 'users:manage', description: 'Crear, editar y desactivar usuarios', roles: [] },
-  {
-    code: 'products:read',
-    description: 'Ver productos, fórmulas y requerimientos',
-    roles: READERS,
-  },
+  // Catalog
+  { code: 'products:read', description: 'Ver productos, fórmulas y precios', roles: STAFF },
   {
     code: 'products:write',
-    description: 'Crear, editar, importar y desactivar productos',
-    roles: ['formulator', 'technical_lead'],
+    description: 'Crear, editar, importar y desactivar productos, con precios y costos',
+    roles: ['plant', 'manager'],
   },
   {
     code: 'formulas:draft',
     description: 'Crear y editar borradores de fórmulas',
-    roles: ['formulator', 'technical_lead'],
+    roles: ['plant'],
   },
   {
     code: 'formulas:publish',
     description: 'Publicar fórmulas definidas por otra persona',
-    roles: ['technical_lead'],
+    roles: ['manager'],
   },
   {
     code: 'formulas:publish-own',
     description: 'Publicar fórmulas definidas por uno mismo (excepción a los cuatro ojos)',
     roles: [],
   },
-  { code: 'inventory:read', description: 'Ver existencias, kardex y reservas', roles: READERS },
+  // Inventory
+  { code: 'inventory:read', description: 'Ver existencias y kardex', roles: STAFF },
   {
     code: 'inventory:receive',
-    description: 'Registrar recepciones de materia prima',
-    roles: ['warehouse', 'purchasing'],
+    description: 'Registrar recepciones de mercancía',
+    roles: ['receiving'],
   },
   {
     code: 'inventory:transfer',
     description: 'Trasladar producto entre bodegas (entrega a despacho)',
-    roles: ['warehouse', 'plant'],
+    roles: ['plant', 'logistics'],
   },
   {
     code: 'inventory:adjust',
     description: 'Ajustar existencias por conteo físico (restringido y auditado)',
-    roles: [],
+    roles: ['logistics'],
   },
   {
     code: 'inventory:initial-load',
@@ -105,28 +137,33 @@ export const PERMISSIONS: readonly {
   {
     code: 'inventory:waste',
     description: 'Registrar merma (lo que queda en el tanque, producto dañado)',
-    roles: ['plant', 'warehouse'],
+    roles: ['plant', 'logistics'],
   },
   {
     code: 'inventory:dispatch',
     description: 'Registrar la salida de producto despachado',
-    roles: ['warehouse'],
+    roles: ['logistics'],
   },
   {
     code: 'inventory:produce',
     description: 'Registrar producción y consumos de fórmula',
     roles: ['plant'],
   },
-  { code: 'customers:read', description: 'Ver clientes', roles: ['manager', 'sales', 'warehouse'] },
+  // Sales
+  {
+    code: 'customers:read',
+    description: 'Ver clientes',
+    roles: ['manager', 'sales', 'consolidator', 'logistics', 'accountant'],
+  },
   {
     code: 'customers:read-all',
     description: 'Ver los clientes de todos los vendedores (sin esto, solo su cartera)',
-    roles: ['manager', 'warehouse'],
+    roles: ['manager', 'consolidator', 'logistics', 'accountant'],
   },
   {
     code: 'customers:write',
     description: 'Crear y editar clientes y sucursales',
-    roles: ['sales', 'manager'],
+    roles: ['sales', 'manager', 'consolidator'],
   },
   {
     code: 'customers:assign',
@@ -136,54 +173,33 @@ export const PERMISSIONS: readonly {
   {
     code: 'sales-orders:read',
     description: 'Ver preventas (solo las propias, salvo con read-all)',
-    roles: OPERATIONS,
+    roles: STAFF,
   },
   {
     code: 'sales-orders:read-all',
     description: 'Ver las preventas de todos los vendedores',
-    roles: ['manager', 'plant', 'purchasing', 'warehouse'],
+    roles: BACK_OFFICE,
   },
   {
     code: 'sales-orders:write',
-    description: 'Registrar, confirmar y anular sus propias preventas',
+    description: 'Registrar, enviar y anular sus propias preventas',
     roles: ['sales'],
   },
   {
     code: 'sales-orders:manage-all',
-    description: 'Modificar, confirmar o anular preventas de cualquier vendedor',
+    description: 'Modificar, enviar o anular preventas de cualquier vendedor',
     roles: ['manager'],
   },
   {
-    code: 'sales-orders:dispatch',
-    description: 'Despachar preventas confirmadas',
-    roles: ['warehouse'],
-  },
-  {
-    code: 'production:read',
-    description: 'Ver órdenes de producción y envasado',
-    roles: OPERATIONS,
-  },
-  {
-    code: 'production:write',
-    description: 'Programar, terminar y anular órdenes de producción y envasado',
+    code: 'sales-orders:prepare',
+    description: 'Alistar pedidos facturados y entregarlos a despacho',
     roles: ['plant'],
   },
   {
-    code: 'purchasing:read',
-    description: 'Ver órdenes de compra y lo que está en tránsito',
-    roles: OPERATIONS,
+    code: 'sales-orders:dispatch',
+    description: 'Despachar pedidos y confirmar su entrega',
+    roles: ['logistics'],
   },
-  {
-    code: 'purchasing:write',
-    description: 'Crear y anular órdenes de compra',
-    roles: ['purchasing'],
-  },
-  {
-    code: 'suppliers:read',
-    description: 'Ver proveedores',
-    roles: ['manager', 'purchasing', 'warehouse'],
-  },
-  { code: 'suppliers:write', description: 'Crear y editar proveedores', roles: ['purchasing'] },
   {
     code: 'visits:write',
     description: 'Registrar sus visitas a clientes con el GPS del celular',
@@ -199,15 +215,81 @@ export const PERMISSIONS: readonly {
     description: 'Ver en el mapa las visitas de todos los vendedores',
     roles: ['manager'],
   },
+  // Billing
+  {
+    code: 'invoices:read',
+    description: 'Ver facturas y lo que deben los clientes',
+    roles: ['manager', 'consolidator', 'accountant', 'logistics'],
+  },
+  {
+    code: 'invoices:issue',
+    description: 'Consolidar preventas enviadas y generar sus facturas',
+    roles: ['consolidator'],
+  },
+  {
+    code: 'payments:write',
+    description: 'Registrar pagos de clientes y pagos a proveedores',
+    roles: ['accountant'],
+  },
+  // Logistics
+  {
+    code: 'shipments:read',
+    description: 'Ver guías de despacho',
+    roles: ['manager', 'logistics', 'consolidator', 'accountant', 'plant'],
+  },
+  {
+    code: 'shipments:write',
+    description: 'Armar guías, despachar y confirmar entregas',
+    roles: ['logistics'],
+  },
+  // Production and purchasing
+  { code: 'production:read', description: 'Ver órdenes de producción y envasado', roles: STAFF },
+  {
+    code: 'production:write',
+    description: 'Programar, terminar y anular órdenes de producción y envasado',
+    roles: ['plant'],
+  },
+  {
+    code: 'purchasing:read',
+    description: 'Ver órdenes de compra, lo que está en tránsito y lo que se debe',
+    roles: ['manager', 'purchasing', 'plant', 'receiving', 'accountant'],
+  },
+  {
+    code: 'purchasing:write',
+    description: 'Crear, cerrar y anular órdenes de compra y el plan de compras del mes',
+    roles: ['purchasing'],
+  },
   {
     code: 'purchasing:receive',
-    description: 'Recibir órdenes de compra en bodega',
-    roles: ['warehouse', 'purchasing'],
+    description:
+      'Ingresar facturas de proveedor y la mercancía que llegó contra una orden de compra',
+    roles: ['receiving'],
+  },
+  {
+    code: 'suppliers:read',
+    description: 'Ver proveedores',
+    roles: ['manager', 'purchasing', 'receiving', 'accountant', 'plant'],
+  },
+  {
+    code: 'suppliers:write',
+    description: 'Crear y editar proveedores',
+    roles: ['purchasing'],
   },
   {
     code: 'planning:read',
-    description: 'Ver el reporte de sobreventa y las necesidades de producción y compra',
-    roles: OPERATIONS,
+    description: 'Ver la sobreventa, las necesidades y la sugerencia de compra del mes',
+    roles: STAFF,
+  },
+  {
+    code: 'finance:read',
+    description: 'Ver cuentas por cobrar, cuentas por pagar y el reporte de cobros y pagos',
+    roles: ['manager', 'accountant'],
+  },
+  // Audit
+  {
+    code: 'trail:read',
+    description: 'Ver la traza: quién hizo y autorizó cada paso',
+    roles: ['manager', 'accountant'],
   },
 ];
 
@@ -227,4 +309,10 @@ export function permissionsOf(roles: readonly string[]): string[] {
 
 export function allPermissions(): string[] {
   return [...ALL_CODES];
+}
+
+/** Name of the first business role of a user, for the trail ("Planta", "Logística"…). */
+export function roleNameOf(roles: readonly string[]): string | null {
+  const role = ROLES.find((item) => roles.includes(item.code));
+  return role?.name ?? null;
 }

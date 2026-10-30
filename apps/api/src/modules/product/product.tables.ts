@@ -11,6 +11,8 @@ export interface ProductTables {
     type: ProductType;
     stock_unit: UnitCode;
     batch_capacity: bigint | null;
+    price: bigint | null;
+    cost: bigint | null;
     active: Generated<boolean>;
     created_at: Generated<Date>;
     updated_at: Generated<Date>;

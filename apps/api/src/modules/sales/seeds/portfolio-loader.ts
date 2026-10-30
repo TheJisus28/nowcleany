@@ -36,7 +36,7 @@ export interface SeedCustomer {
   branches: readonly [SeedBranch, ...SeedBranch[]];
 }
 
-export type SeedOutcome = 'confirm' | 'draft' | 'dispatch-today' | 'cancel';
+export type SeedOutcome = 'confirm' | 'draft' | 'cancel';
 
 export interface SeedOrder {
   /** Document number of the customer; the seller is the customer's owner. */
@@ -120,7 +120,8 @@ export class PortfolioLoader {
   }
 
   /** Orders taken by each customer's owner; most of them during a visit at the branch. */
-  async loadOrders(list: readonly SeedOrder[], marker: string): Promise<number> {
+  async loadOrders(list: readonly SeedOrder[]): Promise<string[]> {
+    const ids: string[] = [];
     const sellers = await this.sellers();
     const products = new Map(
       (await this.catalog.findByCodes(list.flatMap((o) => o.lines.map(([code]) => code)))).map(
@@ -165,20 +166,20 @@ export class PortfolioLoader {
           branchId: branch.id,
           ...(visitId ? { visitId } : {}),
           estimatedDeliveryDate: inDays(order.inDays),
-          ...(order.outcome === 'dispatch-today' ? { notes: marker } : {}),
           ...(order.notes ? { notes: order.notes } : {}),
           lines: order.lines.map(([code, quantity]) => ({
             productId: products.get(code) ?? '',
             quantity,
           })),
         });
+        ids.push(created.id);
         if (order.outcome === 'draft') return;
         await this.orders.confirm(created.id);
         if (order.outcome === 'cancel')
           await this.orders.cancel(created.id, order.cancelReason ?? 'Anulada');
       });
     }
-    return list.length;
+    return ids;
   }
 
   /**

@@ -10,6 +10,9 @@ export interface ProductView {
   readonly typeLabel: string;
   readonly stockUnit: UnitCode;
   readonly batchCapacity: QuantityDto | null;
+  /** Pesos per stock unit, as an integer string. */
+  readonly price: string | null;
+  readonly cost: string | null;
   readonly active: boolean;
   readonly activeFormulaVersion: number | null;
   readonly hasDraftFormula: boolean;
@@ -27,6 +30,8 @@ export function toProductView(product: ProductRecord): ProductView {
       product.batchCapacity === null
         ? null
         : toQuantityDto(product.batchCapacity, product.stockUnit),
+    price: product.price?.toString() ?? null,
+    cost: product.cost?.toString() ?? null,
     active: product.active,
     activeFormulaVersion: product.activeFormulaVersion,
     hasDraftFormula: product.hasDraftFormula,

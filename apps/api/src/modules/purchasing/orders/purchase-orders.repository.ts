@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
-import type { Selectable } from 'kysely';
+import { type Selectable, sql } from 'kysely';
 import type { ModuleTransactionHost } from '../../../platform/db/module-transaction.js';
 import type { UnitCode } from '../../../shared-kernel/index.js';
 import type { PurchaseStatus } from '../domain/purchase-order.js';
@@ -13,7 +13,10 @@ export interface PurchaseLineRecord {
   readonly unit: UnitCode;
   /** Base units. */
   readonly quantity: bigint;
-  readonly receivedQuantity: bigint | null;
+  /** Base units received so far (sum of the supplier invoices). */
+  readonly receivedQuantity: bigint;
+  /** Pesos per stock unit agreed with the supplier. */
+  readonly unitCost: bigint;
 }
 
 export interface PurchaseOrderRecord {
@@ -23,11 +26,9 @@ export interface PurchaseOrderRecord {
   readonly expectedDate: string | null;
   readonly status: PurchaseStatus;
   readonly notes: string | null;
-  readonly receiptDocument: string | null;
   readonly createdBy: { id: string; name: string };
   readonly createdAt: Date;
   readonly receivedAt: Date | null;
-  readonly receivedByName: string | null;
   readonly cancelledAt: Date | null;
   readonly cancelledByName: string | null;
   readonly lines: readonly PurchaseLineRecord[];
@@ -38,6 +39,7 @@ export interface NewPurchaseOrder {
   readonly expectedDate: string | null;
   readonly notes: string | null;
   readonly createdBy: { id: string; name: string };
+  readonly createdAt?: Date | undefined;
   readonly lines: readonly Omit<PurchaseLineRecord, 'receivedQuantity'>[];
 }
 
@@ -53,11 +55,13 @@ export class PurchaseOrdersRepository {
   async list(filter: {
     statuses?: readonly PurchaseStatus[];
     productId?: string;
+    supplierId?: string;
     limit: number;
   }): Promise<PurchaseOrderRecord[]> {
     let query = this.host.tx.selectFrom('purchase_orders').selectAll();
     if (filter.statuses && filter.statuses.length > 0)
       query = query.where('status', 'in', filter.statuses);
+    if (filter.supplierId) query = query.where('supplier_id', '=', filter.supplierId);
     const { productId } = filter;
     if (productId)
       query = query.where((eb) =>
@@ -97,6 +101,7 @@ export class PurchaseOrdersRepository {
         received_by_name: null,
         cancelled_at: null,
         cancelled_by_name: null,
+        ...(order.createdAt ? { created_at: order.createdAt, updated_at: order.createdAt } : {}),
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -111,56 +116,49 @@ export class PurchaseOrdersRepository {
           product_name: line.productName,
           unit: line.unit,
           quantity: line.quantity,
-          received_quantity: null,
+          received_quantity: 0n,
+          unit_cost: line.unitCost,
         })),
       )
       .execute();
     return row.id;
   }
 
-  async markReceived(
+  /** A supplier invoice brought these quantities; the order is now partial or fully received. */
+  async addReceived(
     id: string,
     received: ReadonlyMap<string, bigint>,
+    status: PurchaseStatus,
     byName: string,
-    document: string | null,
-  ): Promise<boolean> {
-    const result = await this.host.tx
-      .updateTable('purchase_orders')
-      .set({
-        status: 'RECEIVED',
-        received_at: new Date(),
-        received_by_name: byName,
-        receipt_document: document,
-        updated_at: new Date(),
-      })
-      .where('id', '=', id)
-      .where('status', '=', 'OPEN')
-      .executeTakeFirst();
-    if (result.numUpdatedRows === 0n) return false;
+    at = new Date(),
+  ): Promise<void> {
     for (const [productId, quantity] of received) {
       await this.host.tx
         .updateTable('purchase_order_lines')
-        .set({ received_quantity: quantity })
+        .set({ received_quantity: sql<bigint>`coalesce(received_quantity, 0) + ${quantity}` })
         .where('order_id', '=', id)
         .where('product_id', '=', productId)
         .execute();
     }
-    return true;
+    await this.host.tx
+      .updateTable('purchase_orders')
+      .set({ status, received_at: at, received_by_name: byName, updated_at: at })
+      .where('id', '=', id)
+      .execute();
   }
 
-  async markCancelled(id: string, byName: string): Promise<boolean> {
-    const result = await this.host.tx
+  async setStatus(id: string, status: PurchaseStatus, byName?: string): Promise<void> {
+    await this.host.tx
       .updateTable('purchase_orders')
       .set({
-        status: 'CANCELLED',
-        cancelled_at: new Date(),
-        cancelled_by_name: byName,
+        status,
         updated_at: new Date(),
+        ...(status === 'CANCELLED'
+          ? { cancelled_at: new Date(), cancelled_by_name: byName ?? null }
+          : {}),
       })
       .where('id', '=', id)
-      .where('status', '=', 'OPEN')
-      .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+      .execute();
   }
 
   private async withLines(rows: readonly OrderRow[]): Promise<PurchaseOrderRecord[]> {
@@ -184,7 +182,8 @@ export class PurchaseOrdersRepository {
         productName: line.product_name,
         unit: line.unit as UnitCode,
         quantity: line.quantity,
-        receivedQuantity: line.received_quantity,
+        receivedQuantity: line.received_quantity ?? 0n,
+        unitCost: line.unit_cost,
       });
       byOrder.set(line.order_id, list);
     }
@@ -195,11 +194,9 @@ export class PurchaseOrdersRepository {
       expectedDate: row.expected_date,
       status: row.status,
       notes: row.notes,
-      receiptDocument: row.receipt_document,
       createdBy: { id: row.created_by, name: row.created_by_name },
       createdAt: row.created_at,
       receivedAt: row.received_at,
-      receivedByName: row.received_by_name,
       cancelledAt: row.cancelled_at,
       cancelledByName: row.cancelled_by_name,
       lines: byOrder.get(row.id) ?? [],

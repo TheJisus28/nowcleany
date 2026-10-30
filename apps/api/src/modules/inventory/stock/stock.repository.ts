@@ -191,10 +191,10 @@ export class StockRepository {
   async committed(productIds: readonly string[]): Promise<Map<string, bigint>> {
     if (productIds.length === 0) return new Map();
     const rows = await sql<{ product_id: string; quantity: string }>`
-      SELECT l.product_id, sum(l.quantity)::text AS quantity
+      SELECT l.product_id, sum(l.quantity - l.dispatched_quantity)::text AS quantity
       FROM sales_order_lines l
       JOIN sales_orders o ON o.id = l.order_id
-      WHERE o.status = 'CONFIRMED' AND l.product_id IN (${sql.join(productIds)})
+      WHERE o.status IN ('CONFIRMED', 'INVOICED', 'READY', 'PARTIAL') AND l.product_id IN (${sql.join(productIds)})
       GROUP BY l.product_id`.execute(this.host.tx);
     return new Map(rows.rows.map((row) => [row.product_id, BigInt(row.quantity)]));
   }

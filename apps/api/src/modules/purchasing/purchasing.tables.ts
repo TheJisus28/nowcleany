@@ -41,5 +41,49 @@ export interface PurchasingTables {
     unit: string;
     quantity: bigint;
     received_quantity: bigint | null;
+    unit_cost: Generated<bigint>;
+  };
+  supplier_invoices: {
+    id: Generated<string>;
+    purchase_order_id: string;
+    supplier_id: string;
+    supplier_name: string;
+    document_number: string;
+    invoice_date: string;
+    due_date: string;
+    subtotal: bigint;
+    tax: bigint;
+    total: bigint;
+    paid: Generated<bigint>;
+    received_by_name: string;
+    created_at: Generated<Date>;
+  };
+  supplier_invoice_lines: {
+    supplier_invoice_id: string;
+    line_no: number;
+    product_id: string;
+    product_code: string;
+    product_name: string;
+    unit: string;
+    quantity: bigint;
+    unit_cost: bigint;
+    amount: bigint;
+  };
+  supplier_payments: {
+    id: Generated<string>;
+    supplier_invoice_id: string;
+    amount: bigint;
+    paid_on: string;
+    method: string;
+    reference: string | null;
+    recorded_by_name: string;
+    created_at: Generated<Date>;
+  };
+  purchase_plans: {
+    month: string;
+    product_id: string;
+    quantity: bigint;
+    set_by_name: string;
+    updated_at: Generated<Date>;
   };
 }

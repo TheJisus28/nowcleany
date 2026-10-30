@@ -39,11 +39,19 @@ export interface SalesTables {
     status: OrderStatus;
     estimated_delivery_date: string | null;
     notes: string | null;
+    priority: number | null;
+    allow_partial: Generated<boolean>;
     created_at: Generated<Date>;
     updated_at: Generated<Date>;
     confirmed_at: Date | null;
+    invoiced_at: Date | null;
+    invoiced_by_name: string | null;
+    ready_at: Date | null;
+    ready_by_name: string | null;
     dispatched_at: Date | null;
     dispatched_by_name: string | null;
+    delivered_at: Date | null;
+    received_by: string | null;
     cancelled_at: Date | null;
     cancelled_by_name: string | null;
     cancel_reason: string | null;
@@ -56,6 +64,8 @@ export interface SalesTables {
     product_name: string;
     unit: string;
     quantity: bigint;
+    ready_quantity: Generated<bigint>;
+    dispatched_quantity: Generated<bigint>;
   };
   visits: {
     id: Generated<string>;

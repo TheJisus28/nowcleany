@@ -3,6 +3,7 @@ import type { ProductType } from '../domain/product.js';
 import { FormulasService } from '../formulas/formulas.service.js';
 import { ProductsRepository } from '../products/products.repository.js';
 import { ProductsService } from '../products/products.service.js';
+import { DEMO_PRICES, demoCost } from './demo-prices.js';
 
 export interface SeedProduct {
   code: string;
@@ -34,12 +35,15 @@ export class CatalogLoader {
     );
     for (const product of products) {
       if (existing.has(product.code)) continue;
+      const cost = demoCost(product.code);
       await this.products.create({
         code: product.code,
         name: product.name,
         type: product.type,
         stockUnit: product.unit,
         ...(product.batchCapacity ? { batchCapacity: product.batchCapacity } : {}),
+        ...(DEMO_PRICES[product.code] ? { price: DEMO_PRICES[product.code] } : {}),
+        ...(cost ? { cost } : {}),
       });
     }
     // Formulas may use components loaded earlier (by another seed).

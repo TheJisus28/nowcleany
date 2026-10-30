@@ -15,8 +15,15 @@ funcional detallado: `docs/alcance-scip.md`; por qué se simplificó: `docs/adr/
   (físico − comprometido) es informativo. El físico solo cambia con movimientos reales (despacho, producción…).
 - **Cartera por vendedor**: cada cliente tiene un vendedor; un vendedor no ve clientes, preventas ni visitas de
   otro. Gerencia (y planta, compras, bodega para preventas) ve todo.
-- **Nunca sobreinventario**: la sugerencia de compra es exactamente el faltante neto (sin stock de seguridad ni
-  punto de reorden). Prefieren salir a comprar que tener inventario quieto.
+- **Flujo con autorizaciones**: cada rol hace su paso, lo autoriza y lo pasa al siguiente (todo queda en la
+  traza). Vendedor (preventa con fecha prometida) → consolidado/Diego (factura siempre; lo que el stock no cubre
+  queda pendiente por fabricar o comprar; decide la prioridad y si se permite despacho parcial) → planta (alista
+  lo que existe) → logística (guía, despacho parcial o completo, entrega) → contable (cobros y pagos).
+- **Compras**: Alfonso hace las órdenes de compra con la sugerencia del mes (lo vendido el mes anterior, o su
+  plan, convertido a insumos menos stock y en tránsito) y la compra urgente (faltante de lo ya vendido). Silvia
+  (recepción) ingresa cada factura de proveedor contra la orden: es el soporte para que entre la mercancía; una
+  orden puede recibir varias facturas.
+- Compra y venta: además de lo que fabrican, venden mercancía de reventa (escobas, recogedores…) sin fórmula.
 - Paneles por equipo: Ventas, Planta, Compras, Inventario/Bodega y Gerencia.
 - El frontend es el entregable que verá el cliente: profesional, pulido y responsive.
 - Sin edge cases rebuscados: la solución más simple que resuelva el flujo real.
@@ -44,6 +51,12 @@ funcional detallado: `docs/alcance-scip.md`; por qué se simplificó: `docs/adr/
 | NIT / cédula, razón social, sucursal     | document (`NIT`/`CC`), name, branch                      |
 | cartera, visita (en sitio)               | portfolio, visit (`onSite`)                              |
 | proveedor                                | supplier                                                 |
+| factura de venta / de proveedor          | invoice / supplier invoice                               |
+| cobro / pago                             | payment (customer) / supplier payment                    |
+| guía de despacho                         | shipment                                                 |
+| traza                                    | trail (activity log)                                     |
+| mercancía de reventa                     | `RESALE`                                                 |
+| plan de compras del mes                  | purchase plan                                            |
 | fecha estimada de entrega                | `estimatedDeliveryDate`                                  |
 | orden de producción / envasado           | production order (granel) / production order (terminado) |
 | orden de compra, en tránsito             | purchase order, on order                                 |
@@ -92,7 +105,8 @@ docs/adr/  docs/alcance-scip.md  docs/preguntas-abiertas.md
 ops/       compose, Dockerfile, scripts
 ```
 
-Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing`, `planning`, `maps`.
+Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing`, `planning`, `billing`,
+`logistics`, `audit` (traza), `maps` y `demo` (datos de ejemplo de punta a punta, solo para semillas).
 
 ## Reglas del código
 
@@ -143,8 +157,8 @@ Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing
   entrega, vendedor, fecha estimada de entrega, notas y líneas de terminado. Sin precios en esta fase.
 - Visitas: el vendedor registra su posición GPS en el cliente; se calcula la distancia a la sucursal y si fue
   en sitio (150 m + precisión). Una visita puede quedar ligada a la preventa que se tomó.
-- `DRAFT → CONFIRMED → DISPATCHED | CANCELLED`. Confirmar compromete (no mueve stock, nunca falla), anular
-  deja de comprometer, despachar crea el movimiento de salida.
+- `DRAFT → CONFIRMED (por consolidar) → INVOICED → READY ⇄ PARTIAL → DISPATCHED → DELIVERED | CANCELLED`.
+  Lo comprometido es lo vendido menos lo despachado; solo el despacho (por guía) mueve stock.
 
 **production**
 
@@ -170,10 +184,20 @@ CANCELLED`. Recibir registra la recepción en inventory con las cantidades reale
 - Token público de Mapbox para el mapa del panel (`MAPBOX_PUBLIC_TOKEN`) y búsqueda de direcciones desde el
   servidor (`MAPBOX_GEOCODING_TOKEN`). Los tokens viven en `.env`, nunca en el repositorio.
 
+**billing**
+
+- Facturas de venta (una por preventa, precio del producto + IVA 19 %, plazo 30 días) con la cobertura al facturar
+  (sale del stock / pendiente). Cobros del contable. Reporte financiero: por cobrar, por pagar, cobros y pagos.
+
+**logistics**
+
+- Guías (transportador, placa, conductor, ruta) con lo que planta entregó de cada pedido; despacho y entrega.
+
 **identity**
 
-- users, user_roles, sessions. Roles y permisos en `identity/access.ts`: `admin`, `manager`, `formulator`,
-  `technical_lead`, `sales`, `plant`, `purchasing`, `warehouse`. Login Argon2id, JWT de acceso de 15 min.
+- users, user_roles, sessions. Roles y permisos en `identity/access.ts`: `admin`, `manager`,
+  `sales`, `consolidator`, `plant`, `logistics`, `purchasing`, `receiving`, `accountant`. El rol va en el token
+  (para la traza). Login Argon2id, JWT de acceso de 15 min.
   Admin inicial desde variables de entorno.
 
 ## Comandos

@@ -32,6 +32,8 @@ export interface DemandLine {
   readonly sellerName: string;
   readonly estimatedDeliveryDate: string | null;
   readonly confirmedAt: Date | null;
+  /** Set by the consolidator on invoiced orders: served before everything else (lower first). */
+  readonly priority: number | null;
   readonly productId: string;
   readonly quantity: bigint;
 }
@@ -41,7 +43,7 @@ export type CoverageStatus = 'COVERED' | 'NEEDS_PRODUCTION' | 'SHORT';
 export const COVERAGE_LABELS: Record<CoverageStatus, string> = {
   COVERED: 'Cubierto con stock',
   NEEDS_PRODUCTION: 'Requiere producción',
-  SHORT: 'Faltan insumos',
+  SHORT: 'Falta comprar',
 };
 
 export interface LineCoverage extends DemandLine {
@@ -51,8 +53,16 @@ export interface LineCoverage extends DemandLine {
   readonly status: CoverageStatus;
 }
 
-/** Earliest promised delivery first (orders without a date last), then oldest confirmation. */
+/**
+ * The consolidator's priority first (invoiced orders he ranked), then the earliest promised delivery
+ * (orders without a date last), then the oldest confirmation.
+ */
 export function byPriority(a: DemandLine, b: DemandLine): number {
+  if (a.priority !== b.priority) {
+    if (a.priority === null) return 1;
+    if (b.priority === null) return -1;
+    return a.priority - b.priority;
+  }
   if (a.estimatedDeliveryDate !== b.estimatedDeliveryDate) {
     if (a.estimatedDeliveryDate === null) return 1;
     if (b.estimatedDeliveryDate === null) return -1;

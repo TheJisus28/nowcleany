@@ -3,11 +3,14 @@ import { Transactional } from '@nestjs-cls/transactional';
 import type { Actor } from '../../../platform/security/actor.js';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import {
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   Quantity,
+  toQuantityDto,
   ValidationError,
 } from '../../../shared-kernel/index.js';
+import { Trail } from '../../audit/index.js';
 import { InventoryLedger } from '../../inventory/index.js';
 import { ProductCatalog } from '../../product/index.js';
 import { CustomersService } from '../customers/customers.service.js';
@@ -38,8 +41,10 @@ export interface OrderCommand {
 }
 
 /**
- * Pre-sales. They never touch the physical stock (planning reads them as a projection); a seller sees
- * only their own, whoever holds sales-orders:read-all sees everyone's.
+ * Pre-sales and their flow: the seller sends it, the consolidator invoices it (billing), plant prepares
+ * it, logistics ships and delivers it (logistics). Each step is authorized by its role and written to
+ * the trail in the same transaction. Pre-sales never touch the stock until they are dispatched.
+ * A seller sees only their own orders; whoever holds sales-orders:read-all sees everyone's.
  */
 @Injectable()
 export class SalesOrdersService {
@@ -49,6 +54,7 @@ export class SalesOrdersService {
     private readonly visits: VisitsRepository,
     private readonly catalog: ProductCatalog,
     private readonly inventory: InventoryLedger,
+    private readonly trail: Trail,
     private readonly currentActor: CurrentActor,
   ) {}
 
@@ -79,6 +85,13 @@ export class SalesOrdersService {
     return toOrderView(await this.require(id));
   }
 
+  /** The order's timeline: who did and authorized each step. */
+  @Transactional()
+  async history(id: string) {
+    const order = await this.require(id);
+    return this.trail.of('sales_order', [order.id]);
+  }
+
   @Transactional()
   async create(command: OrderCommand): Promise<SalesOrderView> {
     const actor = this.currentActor.require();
@@ -87,7 +100,13 @@ export class SalesOrdersService {
       name: actor.displayName,
     });
     if (command.visitId) await this.linkVisit(command.visitId, command.customerId, id);
-    return this.get(id);
+    const order = await this.require(id);
+    await this.step(
+      order,
+      'created',
+      `Registró la preventa para ${order.customer.name} (${order.branch.name}).`,
+    );
+    return toOrderView(order);
   }
 
   @Transactional()
@@ -99,30 +118,92 @@ export class SalesOrdersService {
     return this.get(id);
   }
 
-  /** Confirmed: it now counts for planning (what to make and buy). The stock is not touched. */
+  /** Sent to the consolidator: it now counts for planning. The stock is not touched. */
   @Transactional()
   async confirm(id: string): Promise<SalesOrderView> {
     const order = await this.require(id);
     this.assertCanManage(order);
-    if (order.status === 'CONFIRMED') return toOrderView(order);
+    if (order.status !== 'DRAFT') return toOrderView(order);
     assertTransition(order.status, 'CONFIRMED');
     await this.orders.markConfirmed(id);
+    await this.step(order, 'submitted', 'Envió la preventa al consolidado.');
     return this.get(id);
   }
 
-  /** Ships the order: the real stock leaves the dispatch warehouse. */
+  /**
+   * Plant hands over to dispatch what exists of an invoiced order: everything, or (when the consolidator
+   * allowed a partial dispatch) part of it. Quantities per product in the product's unit; by default
+   * everything still to ship.
+   */
   @Transactional()
-  async dispatch(id: string): Promise<SalesOrderView> {
+  async prepare(
+    id: string,
+    quantities?: readonly { productId: string; quantity: string }[],
+    at?: Date,
+  ): Promise<SalesOrderView> {
+    this.currentActor.requirePermission('sales-orders:prepare');
     const order = await this.require(id);
-    if (order.status === 'DISPATCHED') return toOrderView(order);
-    assertTransition(order.status, 'DISPATCHED');
-    await this.inventory.dispatch({
-      idempotencyKey: `sales-order:${order.id}:dispatch`,
-      orderId: order.id,
-      reference: { type: 'sales_order', id: order.id, label: orderLabel(order.number) },
-      lines: order.lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
-    });
-    await this.orders.markDispatched(id, this.currentActor.require().displayName);
+    assertTransition(order.status, 'READY');
+    const ready = new Map<string, bigint>();
+    for (const line of order.lines) {
+      const pending = line.quantity - line.dispatchedQuantity;
+      const asked = quantities?.find((item) => item.productId === line.productId);
+      const quantity = asked ? Quantity.parse(asked.quantity, line.unit).base : pending;
+      if (quantity < 0n || quantity > pending) {
+        throw new ValidationError(
+          'sales.invalid_ready_quantity',
+          `De ${line.productCode} quedan ${toQuantityDto(pending, line.unit).quantity} por despachar.`,
+        );
+      }
+      ready.set(line.productId, quantity);
+    }
+    const total = [...ready.values()].reduce((sum, value) => sum + value, 0n);
+    if (total === 0n) {
+      throw new ValidationError(
+        'sales.nothing_ready',
+        'Indica qué cantidades se entregan a despacho.',
+      );
+    }
+    const complete = order.lines.every(
+      (line) => ready.get(line.productId) === line.quantity - line.dispatchedQuantity,
+    );
+    if (!complete && !order.allowPartial) {
+      throw new ConflictError(
+        'sales.partial_not_allowed',
+        'Este pedido se despacha completo: el consolidado no autorizó despacho parcial.',
+      );
+    }
+    await this.orders.markReady(
+      id,
+      order.status,
+      ready,
+      this.currentActor.require().displayName,
+      at,
+    );
+    await this.step(
+      order,
+      'prepared',
+      complete
+        ? 'Alistó el pedido completo y lo entregó a despacho.'
+        : `Alistó una parte y la entregó a despacho: ${describe(order, ready)}.`,
+      at,
+    );
+    return this.get(id);
+  }
+
+  /** The consolidator decides which invoiced orders get the available stock first. */
+  @Transactional()
+  async setPriority(id: string, priority: number | null): Promise<SalesOrderView> {
+    this.currentActor.requirePermission('invoices:issue');
+    const order = await this.require(id);
+    await this.orders.setPriority(id, priority);
+    await this.step(
+      order,
+      'prioritized',
+      priority === null
+        ? 'Quitó la prioridad del pedido.'
+        : `Puso el pedido en la prioridad ${String(priority)}.`,
+    );
     return this.get(id);
   }
 
@@ -132,11 +213,149 @@ export class SalesOrdersService {
     this.assertCanManage(order);
     assertTransition(order.status, 'CANCELLED');
     const actor = this.currentActor.require();
-    await this.orders.markCancelled(id, actor.displayName, requireCancelReason(reason));
+    const why = requireCancelReason(reason);
+    await this.orders.markCancelled(id, actor.displayName, why);
+    await this.step(order, 'cancelled', `Anuló la preventa: ${why}`);
     return this.get(id);
   }
 
+  // --- steps run by other modules (billing, logistics) -----------------------------------------
+
+  /** Billing issued the invoice of a pre-sale sent to the consolidator. */
+  async markInvoiced(
+    orderId: string,
+    invoice: {
+      label: string;
+      total: string;
+      allowPartial: boolean;
+      priority: number | null;
+      pending: boolean;
+    },
+    at?: Date,
+  ): Promise<void> {
+    const order = await this.load(orderId);
+    assertTransition(order.status, 'INVOICED');
+    await this.orders.markInvoiced(
+      orderId,
+      this.currentActor.require().displayName,
+      { allowPartial: invoice.allowPartial, priority: invoice.priority },
+      at,
+    );
+    const extras = [
+      invoice.pending ? 'con producto pendiente por fabricar o comprar' : null,
+      invoice.allowPartial ? 'autoriza despacho parcial' : null,
+    ].filter(Boolean);
+    await this.step(
+      order,
+      'invoiced',
+      `Consolidó y facturó: ${invoice.label} por ${invoice.total}${extras.length ? ` (${extras.join('; ')})` : ''}.`,
+      at,
+    );
+  }
+
+  /** Logistics dispatched what plant handed over, in a guide: the goods leave the dispatch warehouse. */
+  async markDispatched(
+    orderId: string,
+    shipment: { id: string; label: string; detail: string },
+    at?: Date,
+  ): Promise<{ productId: string; quantity: bigint }[]> {
+    const order = await this.load(orderId);
+    assertTransition(order.status, 'DISPATCHED');
+    const lines = order.lines
+      .filter((line) => line.readyQuantity > 0n)
+      .map((line) => ({ productId: line.productId, quantity: line.readyQuantity }));
+    await this.inventory.dispatch({
+      idempotencyKey: `shipment:${shipment.id}:order:${order.id}`,
+      orderId: order.id,
+      reference: { type: 'sales_order', id: order.id, label: orderLabel(order.number) },
+      lines,
+    });
+    const shipped = new Map(lines.map((line) => [line.productId, line.quantity]));
+    const complete = order.lines.every(
+      (line) => line.dispatchedQuantity + (shipped.get(line.productId) ?? 0n) >= line.quantity,
+    );
+    await this.orders.registerDispatch(
+      orderId,
+      shipped,
+      complete ? 'DISPATCHED' : 'PARTIAL',
+      this.currentActor.require().displayName,
+      at,
+    );
+    await this.step(
+      order,
+      'dispatched',
+      complete
+        ? `Despachó en la guía ${shipment.label} (${shipment.detail}).`
+        : `Despachó una parte en la guía ${shipment.label} (${shipment.detail}): ${describe(order, shipped)}.`,
+      at,
+    );
+    return lines;
+  }
+
+  /** The customer received a guide's goods; the order ends when the last part is delivered. */
+  async noteDelivery(
+    orderId: string,
+    delivery: { receivedBy: string; shipmentLabel: string; final: boolean },
+    at?: Date,
+  ): Promise<void> {
+    const order = await this.load(orderId);
+    if (delivery.final && order.status === 'DISPATCHED') {
+      await this.orders.markDelivered(orderId, delivery.receivedBy, at);
+    }
+    await this.step(
+      order,
+      'delivered',
+      `Confirmó la entrega${delivery.final ? '' : ' parcial'} (${delivery.shipmentLabel}): recibió ${delivery.receivedBy}.`,
+      at,
+    );
+  }
+
+  /** Seeds only: backdates a new order (sales history). */
+  async backdate(orderId: string, at: Date): Promise<void> {
+    await this.orders.backdate(orderId, at);
+  }
+
+  /** Seeds only: a past order shipped and delivered, with its trail, without moving today's stock. */
+  async completeHistory(
+    orderId: string,
+    history: { dispatchedAt: Date; deliveredAt: Date; receivedBy: string; route: string },
+  ): Promise<void> {
+    const order = await this.load(orderId);
+    const byName = this.currentActor.require().displayName;
+    await this.orders.completeHistory(orderId, { ...history, byName });
+    await this.step(
+      order,
+      'dispatched',
+      `Despachó el pedido (${history.route}).`,
+      history.dispatchedAt,
+    );
+    await this.step(
+      order,
+      'delivered',
+      `Confirmó la entrega: recibió ${history.receivedBy}.`,
+      history.deliveredAt,
+    );
+  }
+
+  /** Any order, without the seller filter (callers check their own permission). */
+  async load(id: string): Promise<OrderRecord> {
+    const order = await this.orders.findById(id);
+    if (!order) throw new NotFoundError('sales.order_not_found', 'La preventa no existe.');
+    return order;
+  }
+
   // --- helpers ---------------------------------------------------------------------------
+
+  private step(order: OrderRecord, action: string, summary: string, at?: Date): Promise<void> {
+    return this.trail.record({
+      entity: 'sales_order',
+      id: order.id,
+      label: orderLabel(order.number),
+      action,
+      summary,
+      at,
+    });
+  }
 
   private async content(command: OrderCommand): Promise<OrderContent> {
     // Only customers in the seller's portfolio (or any, with customers:read-all).
@@ -202,6 +421,17 @@ export class SalesOrdersService {
     }
     return order;
   }
+}
+
+/** "00224 × 300, 00226 × 40" for the trail. */
+function describe(order: OrderRecord, quantities: ReadonlyMap<string, bigint>): string {
+  return order.lines
+    .filter((line) => (quantities.get(line.productId) ?? 0n) > 0n)
+    .map(
+      (line) =>
+        `${line.productCode} × ${toQuantityDto(quantities.get(line.productId) ?? 0n, line.unit).quantity}`,
+    )
+    .join(', ');
 }
 
 function seesAll(actor: Actor): boolean {

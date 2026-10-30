@@ -50,3 +50,14 @@ Cada punto tiene el default que se está usando mientras no haya respuesta. Las 
 | N3  | Compras en tránsito                              | Incluidas en versión mínima (orden de compra simple), sin casos rebuscados.     |
 | N5  | Fecha estimada de entrega y cliente en el pedido | Sí; una sola planta de producción.                                              |
 | N8  | ¿Producir descuenta materias primas por fórmula? | Sí (propuesta SCIP): producción descuenta químicos; envasado, granel y empaque. |
+
+## Flujo con autorizaciones (2026-10-29)
+
+| #   | Pregunta                                | Default actual                                                                                            |
+| --- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| F1  | ¿Despacho parcial?                      | Lo autoriza el consolidado (Diego) al facturar, pedido por pedido; si no, se despacha completo.           |
+| F2  | ¿Qué factura se lleva primero el stock? | La prioridad que pone Diego; las que no tienen prioridad van por fecha prometida.                         |
+| F3  | Sugerencia de compra del mes            | Lo facturado el mes anterior por producto, ajustable por compras; desde el día 22 se planea el siguiente. |
+| F4  | IVA y plazos                            | IVA 19 % en ventas y compras; 30 días para cobrar a clientes y para pagar a proveedores.                  |
+| F5  | ¿Quién registra cobros y pagos?         | El rol contable. Silvia (recepción) solo ingresa facturas de proveedor y la mercancía.                    |
+| F6  | Datos de demo                           | Seis meses de historia que no mueven el inventario de hoy; el estado de hoy deja algo en cada bandeja.    |

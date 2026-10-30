@@ -52,6 +52,14 @@ const SUPPLIERS: readonly SupplierCommand[] = [
     email: 'pedidos@solventesnorte.example',
     city: 'Barranquilla',
   },
+  {
+    name: 'Distribuidora Aseo Total S.A.S.',
+    documentNumber: '901778899-3',
+    contact: 'Liliana Arrieta',
+    phone: '604 783 2020',
+    email: 'ventas@aseototal.example',
+    city: 'Montería',
+  },
 ];
 
 /** Finds (or creates, from the example data) a supplier by name for the purchasing seeds. */

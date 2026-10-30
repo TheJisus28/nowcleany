@@ -9,10 +9,10 @@ import { DemoCatalogSeeder } from './modules/product/seeds/demo-catalog.seeder.j
 import { ShowcaseCatalogSeeder } from './modules/product/seeds/showcase-catalog.seeder.js';
 import { DemoProductionSeeder } from './modules/production/seeds/demo-production.seeder.js';
 import { ShowcaseProductionSeeder } from './modules/production/seeds/showcase-production.seeder.js';
-import { DemoPurchasesSeeder } from './modules/purchasing/seeds/demo-purchases.seeder.js';
-import { ShowcasePurchasesSeeder } from './modules/purchasing/seeds/showcase-purchases.seeder.js';
-import { DemoOrdersSeeder } from './modules/sales/seeds/demo-orders.seeder.js';
-import { ShowcaseOrdersSeeder } from './modules/sales/seeds/showcase-orders.seeder.js';
+import { HistorySeeder } from './modules/demo/history.seeder.js';
+import { PipelineSeeder } from './modules/demo/pipeline.seeder.js';
+import { DemoCustomersSeeder } from './modules/sales/seeds/demo-customers.seeder.js';
+import { ShowcaseCustomersSeeder } from './modules/sales/seeds/showcase-customers.seeder.js';
 import { systemActor } from './platform/security/actor.js';
 import { CurrentActor } from './platform/security/current-actor.js';
 
@@ -25,7 +25,7 @@ type Step = readonly [
 
 /**
  * Seeds in order: base (administrator), demo (the proposal's example) and showcase (extra volume).
- * Every step is idempotent. The order matters: products before stock, orders before dispatches.
+ * The order matters: products before stock, customers before orders, history before today.
  */
 const STEPS: readonly Step[] = [
   ['administrador', 'base', (app) => app.get(AdminSeeder).seed()],
@@ -35,14 +35,13 @@ const STEPS: readonly Step[] = [
   ['catálogo ampliado', 'showcase', (app) => app.get(ShowcaseCatalogSeeder).seed()],
   ['inventario de demo', 'demo', (app) => app.get(DemoStockSeeder).seed()],
   ['inventario ampliado', 'showcase', (app) => app.get(ShowcaseStockSeeder).seed()],
-  ['preventas de demo', 'demo', (app) => app.get(DemoOrdersSeeder).seed()],
-  ['preventas adicionales', 'showcase', (app) => app.get(ShowcaseOrdersSeeder).seed()],
+  ['clientes de demo', 'demo', (app) => app.get(DemoCustomersSeeder).seed()],
+  ['clientes adicionales y visitas', 'showcase', (app) => app.get(ShowcaseCustomersSeeder).seed()],
   ['producción de demo', 'demo', (app) => app.get(DemoProductionSeeder).seed()],
-  ['compras de demo', 'demo', (app) => app.get(DemoPurchasesSeeder).seed()],
   ['producción adicional', 'showcase', (app) => app.get(ShowcaseProductionSeeder).seed()],
-  ['compras adicionales', 'showcase', (app) => app.get(ShowcasePurchasesSeeder).seed()],
   ['entrega a despacho', 'showcase', (app) => app.get(ShowcaseStockSeeder).handOver()],
-  ['despachos del día', 'showcase', (app) => app.get(ShowcaseOrdersSeeder).dispatchToday()],
+  ['historia de seis meses', 'showcase', (app) => app.get(HistorySeeder).seed()],
+  ['operación de hoy', 'showcase', (app) => app.get(PipelineSeeder).seed()],
 ];
 
 export async function runSeeds(

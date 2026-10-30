@@ -1,13 +1,32 @@
 import { ConflictError, type Quantity, ValidationError } from '../../../shared-kernel/index.js';
 
-export const PURCHASE_STATUSES = ['OPEN', 'RECEIVED', 'CANCELLED'] as const;
+export const PURCHASE_STATUSES = ['OPEN', 'PARTIAL', 'RECEIVED', 'CLOSED', 'CANCELLED'] as const;
 export type PurchaseStatus = (typeof PURCHASE_STATUSES)[number];
 
 export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
   OPEN: 'En tránsito',
+  PARTIAL: 'Recibida parcial',
   RECEIVED: 'Recibida',
+  CLOSED: 'Cerrada con lo recibido',
   CANCELLED: 'Anulada',
 };
+
+/** Orders still expecting goods: what they lack counts as "on order". */
+export const AWAITING_STATUSES: readonly PurchaseStatus[] = ['OPEN', 'PARTIAL'];
+
+/** Days to pay a supplier invoice. */
+export const SUPPLIER_CREDIT_DAYS = 30;
+
+export function supplierInvoiceDocument(raw: string): string {
+  const text = raw.trim().replace(/\s+/g, ' ').toUpperCase();
+  if (text.length < 1 || text.length > 40) {
+    throw new ValidationError(
+      'purchasing.invalid_invoice_number',
+      'Escribe el número de la factura del proveedor (máximo 40 caracteres).',
+    );
+  }
+  return text;
+}
 
 export function purchaseLabel(number: bigint | number): string {
   return `OC-${number.toString().padStart(5, '0')}`;
@@ -60,7 +79,7 @@ export function normalizeSupplier(input: {
   };
 }
 
-/** Only raw materials are purchased; each once per order, with positive quantities. */
+/** Raw materials and resale goods are purchased; each once per order, with positive quantities. */
 export function validatePurchaseLines(
   lines: readonly {
     product: { id: string; code: string; type: string; active: boolean };
@@ -75,10 +94,10 @@ export function validatePurchaseLines(
   }
   const seen = new Set<string>();
   for (const { product, quantity } of lines) {
-    if (product.type !== 'RAW_MATERIAL') {
+    if (product.type !== 'RAW_MATERIAL' && product.type !== 'RESALE') {
       throw new ValidationError(
-        'purchasing.not_raw_material',
-        `${product.code} no es materia prima; solo se compran materias primas.`,
+        'purchasing.not_purchasable',
+        `${product.code} no se compra: solo se compran materias primas y mercancía de reventa.`,
       );
     }
     if (!product.active) {
@@ -100,13 +119,20 @@ export function validatePurchaseLines(
   }
 }
 
-export function assertOpen(status: PurchaseStatus, action: 'receive' | 'cancel'): void {
-  if (status !== 'OPEN') {
+export function assertOpen(status: PurchaseStatus, action: 'receive' | 'cancel' | 'close'): void {
+  const allowed: Record<typeof action, readonly PurchaseStatus[]> = {
+    receive: ['OPEN', 'PARTIAL'],
+    cancel: ['OPEN'],
+    close: ['PARTIAL'],
+  };
+  if (!allowed[action].includes(status)) {
     throw new ConflictError(
       'purchasing.not_open',
-      action === 'receive'
-        ? 'Solo se puede recibir una orden en tránsito.'
-        : 'Solo se puede anular una orden en tránsito.',
+      {
+        receive: 'Solo se ingresan facturas a una orden en tránsito o recibida parcial.',
+        cancel: 'Solo se puede anular una orden que no ha recibido mercancía.',
+        close: 'Solo se cierra una orden recibida parcial.',
+      }[action],
     );
   }
 }

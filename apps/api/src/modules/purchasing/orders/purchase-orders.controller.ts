@@ -4,15 +4,23 @@ import { Permission } from '../../../platform/security/decorators.js';
 import {
   CreatePurchaseOrderDto,
   ListPurchaseOrdersQuery,
-  ReceivePurchaseOrderDto,
+  SupplierInvoiceDto,
 } from './dto/purchasing.dto.js';
-import { type PurchaseOrderView, PurchaseOrdersService } from './purchase-orders.service.js';
+import type { PurchaseOrderView } from './purchase-order-view.js';
+import { PurchaseOrdersService } from './purchase-orders.service.js';
+import {
+  type SupplierInvoiceView,
+  SupplierInvoicesService,
+} from '../receipts/supplier-invoices.service.js';
 
 @ApiTags('purchasing')
 @ApiBearerAuth()
 @Controller('v1/purchase-orders')
 export class PurchaseOrdersController {
-  constructor(private readonly orders: PurchaseOrdersService) {}
+  constructor(
+    private readonly orders: PurchaseOrdersService,
+    private readonly invoices: SupplierInvoicesService,
+  ) {}
 
   @Permission('purchasing:read')
   @Get()
@@ -20,6 +28,7 @@ export class PurchaseOrdersController {
     return this.orders.list({
       ...(query.status ? { statuses: query.status } : {}),
       ...(query.productId ? { productId: query.productId } : {}),
+      ...(query.supplierId ? { supplierId: query.supplierId } : {}),
       ...(query.limit ? { limit: query.limit } : {}),
     });
   }
@@ -36,14 +45,21 @@ export class PurchaseOrdersController {
     return this.orders.get(id);
   }
 
+  /** Receiving enters a supplier invoice: the goods that came with it go into stock. */
   @Permission('purchasing:receive')
-  @Post(':id/receive')
-  @HttpCode(200)
+  @Post(':id/supplier-invoices')
   receive(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: ReceivePurchaseOrderDto,
-  ): Promise<PurchaseOrderView> {
-    return this.orders.receive(id, body);
+    @Body() body: SupplierInvoiceDto,
+  ): Promise<SupplierInvoiceView> {
+    return this.invoices.register(id, body);
+  }
+
+  @Permission('purchasing:write')
+  @Post(':id/close')
+  @HttpCode(200)
+  close(@Param('id', ParseUUIDPipe) id: string): Promise<PurchaseOrderView> {
+    return this.orders.close(id);
   }
 
   @Permission('purchasing:write')

@@ -18,6 +18,9 @@ export interface ProductSummary {
   readonly active: boolean;
   /** Base units; bulk products only. */
   readonly batchCapacity: bigint | null;
+  /** Pesos per stock unit. */
+  readonly price: bigint | null;
+  readonly cost: bigint | null;
 }
 
 export interface ComponentNeed {
@@ -175,5 +178,7 @@ function toSummary(product: ProductRecord): ProductSummary {
     stockUnit: product.stockUnit,
     active: product.active,
     batchCapacity: product.batchCapacity,
+    price: product.price,
+    cost: product.cost,
   };
 }

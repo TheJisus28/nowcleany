@@ -11,7 +11,13 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Permission } from '../../../platform/security/decorators.js';
-import { CancelOrderDto, ListOrdersQuery, OrderDto } from './dto/orders.dto.js';
+import {
+  CancelOrderDto,
+  ListOrdersQuery,
+  OrderDto,
+  PrepareOrderDto,
+  PriorityDto,
+} from './dto/orders.dto.js';
 import type { SalesOrderView } from './order-view.js';
 import { SalesOrdersService } from './sales-orders.service.js';
 
@@ -59,11 +65,32 @@ export class SalesOrdersController {
     return this.orders.confirm(id);
   }
 
-  @Permission('sales-orders:dispatch')
-  @Post(':id/dispatch')
+  /** Plant prepared the invoiced order and handed it over to dispatch. */
+  @Permission('sales-orders:prepare')
+  @Post(':id/prepare')
   @HttpCode(200)
-  dispatch(@Param('id', ParseUUIDPipe) id: string): Promise<SalesOrderView> {
-    return this.orders.dispatch(id);
+  prepare(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: PrepareOrderDto,
+  ): Promise<SalesOrderView> {
+    return this.orders.prepare(id, body.lines);
+  }
+
+  /** The consolidator's order to share the available stock among invoices. */
+  @Permission('invoices:issue')
+  @Patch(':id/priority')
+  setPriority(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: PriorityDto,
+  ): Promise<SalesOrderView> {
+    return this.orders.setPriority(id, body.priority ?? null);
+  }
+
+  /** Who did and authorized each step. */
+  @Permission('sales-orders:read')
+  @Get(':id/history')
+  history(@Param('id', ParseUUIDPipe) id: string) {
+    return this.orders.history(id);
   }
 
   @Permission('sales-orders:write')

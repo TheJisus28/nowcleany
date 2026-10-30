@@ -16,6 +16,13 @@ const bulk = (code: string, name: string, batchCapacity: string): SeedProduct =>
   unit: 'L',
   batchCapacity,
 });
+/** Bought from suppliers and sold as is: brooms, dustpans, mops, gloves… */
+const resale = (code: string, name: string): SeedProduct => ({
+  code,
+  name,
+  type: 'RESALE',
+  unit: 'un',
+});
 const finished = (code: string, name: string): SeedProduct => ({
   code,
   name,
@@ -70,6 +77,12 @@ export const SHOWCASE_PRODUCTS: readonly SeedProduct[] = [
   finished('00710', 'Limpiavidrios x 500 mL con atomizador'),
   finished('00810', 'Fabulav detergente líquido x 1 L'),
   finished('00811', 'Fabulav detergente líquido x galón'),
+  resale('01010', 'Escoba plástica cerdas suaves'),
+  resale('01011', 'Recogedor con mango largo'),
+  resale('01012', 'Trapero de algodón x 500 g'),
+  resale('01013', 'Guantes de caucho talla M (par)'),
+  resale('01014', 'Esponja doble uso x 3'),
+  resale('01015', 'Bolsas de basura negras x 10'),
 ];
 
 /** One finished good: liters of bulk per unit plus its container, cap and label. */

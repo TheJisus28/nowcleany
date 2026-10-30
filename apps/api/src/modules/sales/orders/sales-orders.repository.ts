@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
 import type { ModuleTransactionHost } from '../../../platform/db/module-transaction.js';
 import type { UnitCode } from '../../../shared-kernel/index.js';
@@ -13,6 +14,9 @@ export interface OrderLineRecord {
   readonly unit: UnitCode;
   /** Base units of the product. */
   readonly quantity: bigint;
+  /** Handed over by plant, waiting for a guide. */
+  readonly readyQuantity: bigint;
+  readonly dispatchedQuantity: bigint;
 }
 
 export interface OrderRecord {
@@ -29,14 +33,30 @@ export interface OrderRecord {
   readonly status: OrderStatus;
   readonly estimatedDeliveryDate: string | null;
   readonly notes: string | null;
+  readonly priority: number | null;
+  readonly allowPartial: boolean;
   readonly createdAt: Date;
   readonly confirmedAt: Date | null;
+  readonly invoicedAt: Date | null;
+  readonly invoicedByName: string | null;
+  readonly readyAt: Date | null;
+  readonly readyByName: string | null;
   readonly dispatchedAt: Date | null;
   readonly dispatchedByName: string | null;
+  readonly deliveredAt: Date | null;
+  readonly receivedBy: string | null;
   readonly cancelledAt: Date | null;
   readonly cancelledByName: string | null;
   readonly cancelReason: string | null;
   readonly lines: readonly OrderLineRecord[];
+}
+
+export interface NewOrderLine {
+  readonly productId: string;
+  readonly productCode: string;
+  readonly productName: string;
+  readonly unit: UnitCode;
+  readonly quantity: bigint;
 }
 
 export interface OrderFilter {
@@ -55,7 +75,7 @@ export interface OrderContent {
   readonly branchId: string;
   readonly estimatedDeliveryDate: string | null;
   readonly notes: string | null;
-  readonly lines: readonly OrderLineRecord[];
+  readonly lines: readonly NewOrderLine[];
 }
 
 @Injectable()
@@ -111,8 +131,14 @@ export class SalesOrdersRepository {
         estimated_delivery_date: content.estimatedDeliveryDate,
         notes: content.notes,
         confirmed_at: null,
+        invoiced_at: null,
+        invoiced_by_name: null,
+        ready_at: null,
+        ready_by_name: null,
         dispatched_at: null,
         dispatched_by_name: null,
+        delivered_at: null,
+        received_by: null,
         cancelled_at: null,
         cancelled_by_name: null,
         cancel_reason: null,
@@ -144,12 +170,139 @@ export class SalesOrdersRepository {
     await this.setStatus(id, 'DRAFT', { status: 'CONFIRMED', confirmed_at: new Date() });
   }
 
-  async markDispatched(id: string, byName: string): Promise<void> {
+  async markInvoiced(
+    id: string,
+    byName: string,
+    options: { allowPartial: boolean; priority: number | null },
+    at = new Date(),
+  ): Promise<void> {
     await this.setStatus(id, 'CONFIRMED', {
-      status: 'DISPATCHED',
-      dispatched_at: new Date(),
+      status: 'INVOICED',
+      invoiced_at: at,
+      invoiced_by_name: byName,
+      allow_partial: options.allowPartial,
+      priority: options.priority,
+    });
+  }
+
+  async setPriority(id: string, priority: number | null): Promise<void> {
+    await this.host.tx
+      .updateTable('sales_orders')
+      .set({ priority, updated_at: new Date() })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** Plant handed over these quantities (per product) to dispatch. */
+  async markReady(
+    id: string,
+    from: OrderStatus,
+    ready: ReadonlyMap<string, bigint>,
+    byName: string,
+    at = new Date(),
+  ): Promise<void> {
+    for (const [productId, quantity] of ready) {
+      await this.host.tx
+        .updateTable('sales_order_lines')
+        .set({ ready_quantity: quantity })
+        .where('order_id', '=', id)
+        .where('product_id', '=', productId)
+        .execute();
+    }
+    await this.setStatus(id, from, { status: 'READY', ready_at: at, ready_by_name: byName });
+  }
+
+  /** A guide took these quantities: they leave "ready" and count as dispatched. */
+  async registerDispatch(
+    id: string,
+    lines: ReadonlyMap<string, bigint>,
+    status: OrderStatus,
+    byName: string,
+    at = new Date(),
+  ): Promise<void> {
+    for (const [productId, quantity] of lines) {
+      await this.host.tx
+        .updateTable('sales_order_lines')
+        .set((eb) => ({
+          dispatched_quantity: eb('dispatched_quantity', '+', quantity),
+          ready_quantity: sql<bigint>`greatest(0, ready_quantity - ${quantity})`,
+        }))
+        .where('order_id', '=', id)
+        .where('product_id', '=', productId)
+        .execute();
+    }
+    await this.setStatus(id, 'READY', {
+      status,
+      dispatched_at: at,
       dispatched_by_name: byName,
     });
+  }
+
+  async markDelivered(id: string, receivedBy: string, at = new Date()): Promise<void> {
+    await this.setStatus(id, 'DISPATCHED', {
+      status: 'DELIVERED',
+      delivered_at: at,
+      received_by: receivedBy,
+    });
+  }
+
+  /** Seeds only: a past order that was dispatched and delivered (today's stock is not touched). */
+  async completeHistory(
+    id: string,
+    history: { dispatchedAt: Date; deliveredAt: Date; byName: string; receivedBy: string },
+  ): Promise<void> {
+    await this.host.tx
+      .updateTable('sales_order_lines')
+      .set((eb) => ({ dispatched_quantity: eb.ref('quantity'), ready_quantity: 0n }))
+      .where('order_id', '=', id)
+      .execute();
+    await this.host.tx
+      .updateTable('sales_orders')
+      .set({
+        status: 'DELIVERED',
+        dispatched_at: history.dispatchedAt,
+        dispatched_by_name: history.byName,
+        delivered_at: history.deliveredAt,
+        received_by: history.receivedBy,
+        updated_at: history.deliveredAt,
+      })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** Seeds only: backdates an order's creation (sales history). */
+  async backdate(id: string, createdAt: Date): Promise<void> {
+    await this.host.tx
+      .updateTable('sales_orders')
+      .set({ created_at: createdAt, confirmed_at: createdAt, updated_at: createdAt })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** Quantities of each product in orders invoiced in [from, to). */
+  async soldBetween(
+    from: Date,
+    to: Date,
+    statuses: readonly OrderStatus[],
+  ): Promise<{ productId: string; quantity: bigint; orders: number }[]> {
+    const rows = await this.host.tx
+      .selectFrom('sales_order_lines as l')
+      .innerJoin('sales_orders as o', 'o.id', 'l.order_id')
+      .select((eb) => [
+        'l.product_id',
+        eb.fn.sum<string>('l.quantity').as('quantity'),
+        eb.fn.count<string>('o.id').distinct().as('orders'),
+      ])
+      .where('o.status', 'in', statuses)
+      .where('o.invoiced_at', '>=', from)
+      .where('o.invoiced_at', '<', to)
+      .groupBy('l.product_id')
+      .execute();
+    return rows.map((row) => ({
+      productId: row.product_id,
+      quantity: BigInt(row.quantity),
+      orders: Number(row.orders),
+    }));
   }
 
   async markCancelled(id: string, byName: string, reason: string): Promise<void> {
@@ -173,8 +326,16 @@ export class SalesOrdersRepository {
     changes: {
       status: OrderStatus;
       confirmed_at?: Date;
+      invoiced_at?: Date;
+      invoiced_by_name?: string;
+      allow_partial?: boolean;
+      priority?: number | null;
+      ready_at?: Date;
+      ready_by_name?: string;
       dispatched_at?: Date;
       dispatched_by_name?: string;
+      delivered_at?: Date;
+      received_by?: string;
     },
   ): Promise<void> {
     await this.host.tx
@@ -206,17 +367,25 @@ export class SalesOrdersRepository {
         'o.status',
         'o.estimated_delivery_date',
         'o.notes',
+        'o.priority',
+        'o.allow_partial',
         'o.created_at',
         'o.confirmed_at',
+        'o.invoiced_at',
+        'o.invoiced_by_name',
+        'o.ready_at',
+        'o.ready_by_name',
         'o.dispatched_at',
         'o.dispatched_by_name',
+        'o.delivered_at',
+        'o.received_by',
         'o.cancelled_at',
         'o.cancelled_by_name',
         'o.cancel_reason',
       ]);
   }
 
-  private async insertLines(orderId: string, lines: readonly OrderLineRecord[]): Promise<void> {
+  private async insertLines(orderId: string, lines: readonly NewOrderLine[]): Promise<void> {
     await this.host.tx
       .insertInto('sales_order_lines')
       .values(
@@ -256,6 +425,8 @@ export class SalesOrdersRepository {
         productName: line.product_name,
         unit: line.unit as UnitCode,
         quantity: line.quantity,
+        readyQuantity: line.ready_quantity,
+        dispatchedQuantity: line.dispatched_quantity,
       });
       byOrder.set(line.order_id, list);
     }
@@ -278,10 +449,18 @@ export class SalesOrdersRepository {
       status: row.status,
       estimatedDeliveryDate: row.estimated_delivery_date,
       notes: row.notes,
+      priority: row.priority,
+      allowPartial: row.allow_partial,
       createdAt: row.created_at,
       confirmedAt: row.confirmed_at,
+      invoicedAt: row.invoiced_at,
+      invoicedByName: row.invoiced_by_name,
+      readyAt: row.ready_at,
+      readyByName: row.ready_by_name,
       dispatchedAt: row.dispatched_at,
       dispatchedByName: row.dispatched_by_name,
+      deliveredAt: row.delivered_at,
+      receivedBy: row.received_by,
       cancelledAt: row.cancelled_at,
       cancelledByName: row.cancelled_by_name,
       cancelReason: row.cancel_reason,

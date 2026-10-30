@@ -5,7 +5,7 @@ import { UsersService } from '../users/users.service.js';
 
 // DATOS DE EJEMPLO: un cuarto vendedor para ver el reparto de ventas con más gente.
 export const SHOWCASE_USERS = [
-  { email: 'vendedor.d@nowcleany.local', fullName: 'Diego Romero', roles: ['sales'] },
+  { email: 'vendedor.d@nowcleany.local', fullName: 'Mateo Romero', roles: ['sales'] },
 ] as const;
 
 @Injectable()

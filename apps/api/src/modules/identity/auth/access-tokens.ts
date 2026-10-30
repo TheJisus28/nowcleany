@@ -13,6 +13,7 @@ export interface AccessClaims {
   readonly sub: string;
   readonly name: string;
   readonly perms: readonly string[];
+  readonly role?: string | null;
   readonly iat: number;
   readonly exp: number;
   readonly iss: string;
@@ -31,7 +32,12 @@ export class AccessTokens {
     this.secret = Buffer.from(secret, 'utf8');
   }
 
-  sign(subject: { id: string; name: string; permissions: readonly string[] }): {
+  sign(subject: {
+    id: string;
+    name: string;
+    permissions: readonly string[];
+    role?: string | null;
+  }): {
     token: string;
     expiresIn: number;
   } {
@@ -40,6 +46,7 @@ export class AccessTokens {
       sub: subject.id,
       name: subject.name,
       perms: [...subject.permissions].sort(),
+      role: subject.role ?? null,
       iat,
       exp: iat + ACCESS_TOKEN_TTL_SECONDS,
       iss: ISSUER,

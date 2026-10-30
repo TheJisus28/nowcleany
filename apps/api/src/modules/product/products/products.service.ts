@@ -4,6 +4,7 @@ import {
   isUnitCode,
   NotFoundError,
   parseCsv,
+  parseMoney,
   normaliseDecimal,
   ValidationError,
   type UnitCode,
@@ -25,12 +26,17 @@ export interface CreateProductCommand {
   readonly type: ProductType;
   readonly stockUnit: string;
   readonly batchCapacity?: string;
+  readonly price?: string;
+  readonly cost?: string;
 }
 
 export interface UpdateProductCommand {
   readonly name?: string;
   /** In the product's stock unit; an empty string clears it. */
   readonly batchCapacity?: string;
+  /** Pesos per stock unit; an empty string clears it. */
+  readonly price?: string;
+  readonly cost?: string;
   readonly active?: boolean;
 }
 
@@ -72,6 +78,8 @@ export class ProductsService {
               parseBatchCapacity(product.type, product.stockUnit, command.batchCapacity)?.base ??
               null,
           }),
+      ...(command.price === undefined ? {} : { price: parseMoney(command.price) }),
+      ...(command.cost === undefined ? {} : { cost: parseMoney(command.cost) }),
       ...(command.active === undefined ? {} : { active: command.active }),
     });
     return toProductView(await this.require(id));
@@ -151,6 +159,8 @@ export class ProductsService {
       stockUnit,
       batchCapacity:
         parseBatchCapacity(command.type, stockUnit, command.batchCapacity)?.base ?? null,
+      price: parseMoney(command.price),
+      cost: parseMoney(command.cost),
     };
   }
 
