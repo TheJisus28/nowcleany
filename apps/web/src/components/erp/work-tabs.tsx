@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { LayoutGrid, X } from 'lucide-react';
 import {
   createContext,
   type ReactNode,
@@ -157,5 +157,9 @@ export function WorkTabsBar() {
 
 /** No screen open: a blank desk until the user opens something from the menu. */
 export function EmptyDesk() {
-  return <div aria-label="Sin pantallas abiertas" className="min-h-[60vh]" />;
+  return (
+    <div aria-label="Sin pantallas abiertas" className="grid min-h-[60vh] place-items-center">
+      <LayoutGrid aria-hidden className="size-16 text-line-strong" strokeWidth={1.25} />
+    </div>
+  );
 }
