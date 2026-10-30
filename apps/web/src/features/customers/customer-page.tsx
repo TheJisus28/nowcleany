@@ -1,43 +1,73 @@
-import { ClipboardList, MapPin, MapPinned, Pencil, Phone, Plus, UserRound } from 'lucide-react';
+import { CircleCheck, FilePlus2, MapPinPlus, Pencil, Printer, X } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { useCustomer, useOrderCoverage, useOrders, useVisits } from '../../api/hooks';
-import type { Branch, Customer, SalesOrder } from '../../api/types';
+import { useNavigate, useParams } from 'react-router';
+import { useCustomer, useCustomers, useOrderCoverage, useOrders, useVisits } from '../../api/hooks';
+import type { Branch, Customer, SalesOrder, Visit } from '../../api/types';
+import { useAccess } from '../../app/access';
 import { useSession } from '../../auth/session';
-import { DataTable } from '../../components/data-table';
-import { BackLink, EntityLink, pathTo } from '../../components/links';
+import {
+  DocumentScreen,
+  DocumentSection,
+  DocumentToolbar,
+  HeaderField,
+  HeaderGrid,
+  type QueryColumn,
+  QueryGrid,
+  useWorkTab,
+} from '../../components/erp';
+import { EntityLink, pathTo } from '../../components/links';
 import { MapView } from '../../components/map/map-view';
 import type { MapMarker } from '../../components/map/types';
-import { CoverageChip, DueDate, OrderStatusChip } from '../../components/status';
-import { Button, EmptyState, PageHeader, Panel, QueryView } from '../../components/ui';
-import { formatDate, formatDecimal, todayIso, unitLabel } from '../../lib/format';
-import { VisitPlaceChip } from '../visits/visit-place';
+import { Chip, COVERAGE, CoverageChip, OrderStatusChip } from '../../components/status';
+import { QueryView } from '../../components/ui';
+import { formatDate, todayIso } from '../../lib/format';
+import {
+  colombiaDateTime,
+  colombiaDay,
+  formatUnits,
+  sumQuantities,
+} from '../billing/billing-format';
+import { DocTable, GridTitle } from '../billing/erp-kit';
+import { formatDistance, VisitPlaceChip } from '../visits/visit-place';
 import { BranchDialog } from './branch-dialog';
 import { CustomerFormDialog } from './customer-form-dialog';
 
 export function CustomerPage() {
   const { id } = useParams();
   const customer = useCustomer(id);
-  return <QueryView query={customer}>{(data) => <CustomerView customer={data} />}</QueryView>;
+  return <QueryView query={customer}>{(data) => <CustomerRecord customer={data} />}</QueryView>;
 }
 
-function Fact({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
-  return (
-    <div className="flex gap-3">
-      <span className="mt-0.5 text-ink-3 [&_svg]:size-4">{icon}</span>
-      <div className="min-w-0">
-        <dt className="text-[12.5px] text-ink-3">{label}</dt>
-        <dd className="text-[14.5px] text-ink">{children}</dd>
-      </div>
-    </div>
-  );
+function Value({ children }: { children: ReactNode }) {
+  return <span className="block py-1">{children}</span>;
 }
 
-function CustomerView({ customer }: { customer: Customer }) {
+/** Previous / next customer in alphabetical order. */
+function useCustomerNeighbors(customer: Customer) {
+  const customers = useCustomers();
+  return useMemo(() => {
+    const sorted = [...(customers.data ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const index = sorted.findIndex((item) => item.id === customer.id);
+    const previous = index > 0 ? sorted[index - 1] : undefined;
+    const next = index >= 0 ? sorted[index + 1] : undefined;
+    return {
+      previous: previous ? pathTo('customer', previous.id) : null,
+      next: next ? pathTo('customer', next.id) : null,
+    };
+  }, [customers.data, customer.id]);
+}
+
+const unitsOf = (order: SalesOrder) =>
+  sumQuantities(order.lines.map((line) => line.quantity.quantity));
+
+/** The customer's record (master data): header fields, branches with their map, orders and visits. */
+function CustomerRecord({ customer }: { customer: Customer }) {
   const navigate = useNavigate();
   const { can } = useSession();
+  const { has } = useAccess();
   const [editing, setEditing] = useState(false);
   const [branchDialog, setBranchDialog] = useState<{ branch?: Branch } | null>(null);
+  const neighbors = useCustomerNeighbors(customer);
   const orders = useOrders({ customerId: customer.id, limit: '200' });
   const coverage = useOrderCoverage(can('planning:read'));
   const visits = useVisits({ customerId: customer.id, from: todayIso(-60) }, can('visits:read'));
@@ -45,6 +75,8 @@ function CustomerView({ customer }: { customer: Customer }) {
     () => new Map((coverage.data ?? []).map((row) => [row.orderId, row.status])),
     [coverage.data],
   );
+  useWorkTab(`${customer.documentNumber} · ${customer.name}`);
+
   const canEdit = can('customers:write');
   const branches = customer.branches;
   const markers = useMemo<MapMarker[]>(
@@ -69,244 +101,341 @@ function CustomerView({ customer }: { customer: Customer }) {
     [branches, canEdit],
   );
 
+  const orderColumns: QueryColumn<SalesOrder>[] = [
+    {
+      key: 'number',
+      header: 'Número',
+      render: (row) => (
+        <EntityLink to="order" id={row.id} className="font-medium">
+          {row.label}
+        </EntityLink>
+      ),
+      sort: (row) => Number(row.number),
+      csv: (row) => row.label,
+    },
+    {
+      key: 'date',
+      header: 'Fecha',
+      render: (row) => (
+        <span className="whitespace-nowrap">{formatDate(colombiaDay(row.createdAt))}</span>
+      ),
+      sort: (row) => row.createdAt,
+      csv: (row) => colombiaDay(row.createdAt),
+    },
+    {
+      key: 'branch',
+      header: 'Sucursal',
+      render: (row) => row.branch.name,
+      csv: (row) => row.branch.name,
+    },
+    {
+      key: 'seller',
+      header: 'Vendedor',
+      hideOnMobile: true,
+      render: (row) => row.seller.name,
+      csv: (row) => row.seller.name,
+    },
+    {
+      key: 'promised',
+      header: 'Fecha prometida',
+      render: (row) => (
+        <span className="whitespace-nowrap">{formatDate(row.estimatedDeliveryDate)}</span>
+      ),
+      sort: (row) => row.estimatedDeliveryDate ?? '',
+      csv: (row) => row.estimatedDeliveryDate ?? '',
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      render: (row) => <OrderStatusChip status={row.status} />,
+      csv: (row) => row.statusLabel,
+    },
+    {
+      key: 'coverage',
+      header: 'Cobertura',
+      hideOnMobile: true,
+      render: (row) => {
+        const status = coverageByOrder.get(row.id);
+        return status ? <CoverageChip status={status} /> : <span className="text-ink-3">—</span>;
+      },
+      csv: (row) => {
+        const status = coverageByOrder.get(row.id);
+        return status ? COVERAGE[status].label : '';
+      },
+    },
+    {
+      key: 'units',
+      header: 'Unidades',
+      align: 'right',
+      render: (row) => formatUnits(unitsOf(row)),
+      sort: unitsOf,
+      csv: (row) => formatUnits(unitsOf(row)),
+      total: (list) => formatUnits(list.reduce((sum, row) => sum + unitsOf(row), 0)),
+    },
+  ];
+
+  const visitColumns: QueryColumn<Visit>[] = [
+    {
+      key: 'at',
+      header: 'Fecha y hora',
+      className: 'whitespace-nowrap tabular-nums text-ink-2',
+      render: (row) => colombiaDateTime(row.visitedAt),
+      sort: (row) => row.visitedAt,
+      csv: (row) => colombiaDateTime(row.visitedAt),
+    },
+    {
+      key: 'branch',
+      header: 'Sucursal',
+      render: (row) => row.branch.name,
+      csv: (row) => row.branch.name,
+    },
+    {
+      key: 'seller',
+      header: 'Vendedor',
+      render: (row) => row.seller.name,
+      csv: (row) => row.seller.name,
+    },
+    {
+      key: 'place',
+      header: 'Lugar',
+      render: (row) => <VisitPlaceChip visit={row} />,
+      csv: (row) =>
+        row.onSite === null ? 'Sucursal sin ubicar' : row.onSite ? 'En sitio' : 'Lejos',
+    },
+    {
+      key: 'distance',
+      header: 'Distancia',
+      align: 'right',
+      render: (row) => (row.distanceM === null ? '—' : formatDistance(row.distanceM)),
+      sort: (row) => row.distanceM ?? 0,
+      csv: (row) => (row.distanceM === null ? '' : Math.round(row.distanceM)),
+    },
+    {
+      key: 'order',
+      header: 'Pedido',
+      render: (row) =>
+        row.order ? (
+          <EntityLink to="order" id={row.order.id}>
+            {row.order.label}
+          </EntityLink>
+        ) : (
+          <span className="text-ink-3">—</span>
+        ),
+      csv: (row) => row.order?.label ?? '',
+    },
+    {
+      key: 'notes',
+      header: 'Observaciones',
+      hideOnMobile: true,
+      render: (row) => row.notes ?? <span className="text-ink-3">—</span>,
+      csv: (row) => row.notes ?? '',
+    },
+  ];
+
   return (
     <>
-      <BackLink fallback="/clientes" label="Clientes" />
-      <PageHeader
-        title={customer.name}
-        description={`${customer.documentTypeLabel} ${customer.documentNumber}${customer.active ? '' : ' · inactivo'}`}
-        actions={
-          <>
-            {canEdit ? (
-              <Button
-                variant="secondary"
-                icon={<Pencil className="size-4" />}
-                onClick={() => {
-                  setEditing(true);
-                }}
-              >
-                Editar
-              </Button>
-            ) : null}
-            {can('sales-orders:write') ? (
-              <Link
-                to={`/ventas/nueva?cliente=${customer.id}`}
-                className="inline-flex h-10 items-center gap-2 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-strong"
-              >
-                <Plus aria-hidden className="size-4" />
-                Nueva preventa
-              </Link>
-            ) : null}
-          </>
-        }
+      <DocumentToolbar
+        actions={[
+          {
+            label: 'Nuevo pedido',
+            icon: FilePlus2,
+            primary: true,
+            to: `/ventas/nueva?cliente=${customer.id}`,
+            hidden: !(can('sales-orders:write') && has('newOrder')),
+          },
+          {
+            label: 'Modificar',
+            icon: Pencil,
+            hidden: !canEdit,
+            onClick: () => {
+              setEditing(true);
+            },
+          },
+          {
+            label: 'Agregar sucursal',
+            icon: MapPinPlus,
+            hidden: !canEdit,
+            onClick: () => {
+              setBranchDialog({});
+            },
+          },
+          {
+            label: 'Imprimir',
+            icon: Printer,
+            shortcut: 'Ctrl+P',
+            onClick: () => {
+              window.print();
+            },
+          },
+        ]}
+        previous={neighbors.previous}
+        next={neighbors.next}
+        closeTo={has('customers') ? '/clientes' : '/'}
       />
-
-      <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-        <Panel title="Datos del cliente">
-          <dl className="flex flex-col gap-4">
-            <Fact icon={<MapPin />} label="Dirección">
-              {[customer.address, customer.city].filter(Boolean).join(', ') || '—'}
-            </Fact>
-            <Fact icon={<Phone />} label="Teléfono">
-              {customer.phone ?? '—'}
-            </Fact>
-            <Fact icon={<UserRound />} label="Vendedor de la cartera">
-              {customer.seller?.name ?? 'Sin asignar'}
-            </Fact>
-          </dl>
-        </Panel>
-
-        <Panel
-          title="Sucursales"
-          description="Adónde se despachan las preventas y dónde se verifican las visitas."
+      <DocumentScreen
+        kind={`Ficha de cliente · ${customer.documentTypeLabel} ${customer.documentNumber}`}
+        number={customer.name}
+        status={
+          customer.active ? (
+            <Chip tone="good" icon={CircleCheck}>
+              Activo
+            </Chip>
+          ) : (
+            <Chip tone="neutral" icon={X}>
+              Inactivo
+            </Chip>
+          )
+        }
+      >
+        <HeaderGrid>
+          <HeaderField label="Tipo de documento">
+            <Value>{customer.documentTypeLabel}</Value>
+          </HeaderField>
+          <HeaderField label="Número de documento">
+            <Value>
+              <span className="tabular-nums">{customer.documentNumber}</span>
+            </Value>
+          </HeaderField>
+          <HeaderField label="Ciudad">
+            <Value>{customer.city ?? '—'}</Value>
+          </HeaderField>
+          <HeaderField label="Teléfono">
+            <Value>{customer.phone ?? '—'}</Value>
+          </HeaderField>
+          <HeaderField label="Dirección" span={2}>
+            <Value>{customer.address ?? '—'}</Value>
+          </HeaderField>
+          <HeaderField label="Vendedor asignado">
+            <Value>{customer.seller?.name ?? 'Sin asignar'}</Value>
+          </HeaderField>
+          <HeaderField label="Sucursales activas">
+            <Value>{branches.filter((branch) => branch.active).length}</Value>
+          </HeaderField>
+        </HeaderGrid>
+        <DocumentSection
+          title="Sucursales (adónde se despacha y dónde se verifican las visitas)"
           flush
-          actions={
-            canEdit ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Plus className="size-3.5" />}
-                onClick={() => {
-                  setBranchDialog({});
-                }}
-              >
-                Agregar sucursal
-              </Button>
-            ) : null
-          }
         >
-          <div className="grid md:grid-cols-[1fr_minmax(0,1.1fr)]">
-            <ul className="divide-y divide-line">
-              {branches.map((branch) => (
-                <li key={branch.id} className="flex items-start gap-3 px-5 py-3.5">
-                  <MapPin
-                    aria-hidden
-                    className={`mt-0.5 size-4 shrink-0 ${branch.latitude === null ? 'text-ink-3' : 'text-brand'}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">
-                      {branch.name}
-                      {branch.isMain ? (
-                        <span className="ml-2 rounded-full bg-brand-soft px-2 py-0.5 text-[11.5px] font-medium text-brand">
-                          Principal
-                        </span>
-                      ) : null}
-                      {branch.active ? null : (
-                        <span className="ml-2 text-[12.5px] font-normal text-ink-3">
-                          (inactiva)
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[13px] text-ink-2">
-                      {[branch.address, branch.city].filter(Boolean).join(', ') || 'Sin dirección'}
-                    </p>
-                    {branch.latitude === null ? (
-                      <p className="text-[12.5px] text-ink-3">Sin ubicar en el mapa</p>
-                    ) : null}
-                  </div>
-                  {canEdit ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Editar sucursal ${branch.name}`}
-                      icon={<Pencil className="size-3.5" />}
-                      onClick={() => {
-                        setBranchDialog({ branch });
-                      }}
-                    />
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-line md:border-t-0 md:border-l">
-              {markers.length > 0 ? (
-                <MapView
-                  label={`Sucursales de ${customer.name}`}
-                  className="h-72 w-full md:h-full md:min-h-72"
-                  markers={markers}
-                />
-              ) : (
-                <EmptyState
-                  icon={<MapPinned />}
-                  title="Ninguna sucursal está ubicada"
-                  description="Ubícalas para ver en el mapa si las visitas se hicieron en el sitio."
-                />
-              )}
-            </div>
-          </div>
-        </Panel>
-      </div>
-
-      <Panel title="Preventas" description="Las más recientes primero." flush className="mt-5">
-        <QueryView query={orders}>
-          {(rows) => (
-            <DataTable<SalesOrder>
-              label="Preventas del cliente"
-              rows={rows}
-              rowKey={(row) => row.id}
-              onRowClick={(row) => {
-                void navigate(pathTo('order', row.id));
-              }}
-              empty={
-                <EmptyState icon={<ClipboardList />} title="Este cliente no tiene preventas" />
-              }
+          <div className="grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <DocTable
+              label={`Sucursales de ${customer.name}`}
+              rows={branches}
+              rowKey={(branch) => branch.id}
+              minWidth={560}
+              {...(canEdit
+                ? {
+                    onOpen: (branch: Branch) => {
+                      setBranchDialog({ branch });
+                    },
+                  }
+                : {})}
+              rowClassName={(branch) => (branch.active ? undefined : 'text-ink-3')}
               columns={[
                 {
-                  key: 'order',
-                  header: 'Preventa',
-                  render: (row) => (
-                    <EntityLink to="order" id={row.id} className="font-medium">
-                      {row.label}
-                    </EntityLink>
-                  ),
-                },
-                { key: 'branch', header: 'Sucursal', render: (row) => row.branch.name },
-                {
-                  key: 'delivery',
-                  header: 'Entrega',
-                  render: (row) =>
-                    row.status === 'CONFIRMED' || row.status === 'DRAFT' ? (
-                      <DueDate date={row.estimatedDeliveryDate} />
-                    ) : (
-                      formatDate(row.dispatchedAt ?? row.estimatedDeliveryDate)
-                    ),
-                },
-                {
-                  key: 'products',
-                  header: 'Productos',
-                  hideOnMobile: true,
-                  render: (row) => (
-                    <span className="text-ink-2">
-                      {row.lines
-                        .map(
-                          (line) =>
-                            `${line.productCode} × ${formatDecimal(line.quantity.quantity)} ${unitLabel(line.quantity.unit)}`,
-                        )
-                        .join(', ')}
+                  key: 'name',
+                  header: 'Sucursal',
+                  render: (branch) => (
+                    <span className="font-medium">
+                      {branch.name}
+                      {branch.isMain ? (
+                        <span className="ml-1.5 text-[12px] font-normal text-ink-3">
+                          (principal)
+                        </span>
+                      ) : null}
                     </span>
                   ),
                 },
                 {
-                  key: 'status',
-                  header: 'Estado',
-                  render: (row) => {
-                    const status = coverageByOrder.get(row.id);
-                    return status ? (
-                      <CoverageChip status={status} />
+                  key: 'address',
+                  header: 'Dirección',
+                  render: (branch) => branch.address ?? '—',
+                },
+                { key: 'city', header: 'Ciudad', render: (branch) => branch.city ?? '—' },
+                {
+                  key: 'phone',
+                  header: 'Teléfono',
+                  className: 'whitespace-nowrap',
+                  render: (branch) => branch.phone ?? '—',
+                },
+                {
+                  key: 'located',
+                  header: 'Mapa',
+                  render: (branch) =>
+                    branch.latitude === null ? (
+                      <span className="text-[#b67d00]">Sin ubicar</span>
                     ) : (
-                      <OrderStatusChip status={row.status} />
-                    );
-                  },
+                      'Ubicada'
+                    ),
+                },
+                {
+                  key: 'active',
+                  header: 'Estado',
+                  render: (branch) => (branch.active ? 'Activa' : 'Inactiva'),
                 },
               ]}
             />
-          )}
-        </QueryView>
-      </Panel>
+            <div className="no-print border-t border-line lg:border-t-0 lg:border-l">
+              {markers.length > 0 ? (
+                <MapView
+                  label={`Sucursales de ${customer.name}`}
+                  className="h-64 w-full lg:h-full lg:min-h-64"
+                  markers={markers}
+                />
+              ) : (
+                <p className="grid h-full min-h-40 place-items-center px-6 text-center text-[13px] text-ink-3">
+                  Ninguna sucursal está ubicada en el mapa. Ubícalas para verificar si las visitas
+                  se hacen en el sitio.
+                </p>
+              )}
+            </div>
+          </div>
+          {canEdit ? (
+            <p className="no-print border-t border-line px-5 py-2 text-[12px] text-ink-3">
+              Enter o doble clic sobre una sucursal para modificarla.
+            </p>
+          ) : null}
+        </DocumentSection>
+      </DocumentScreen>
+
+      <GridTitle aside="Enter o doble clic abre el pedido">Pedidos del cliente</GridTitle>
+      <QueryView query={orders}>
+        {(rows) => (
+          <QueryGrid
+            title={`Pedidos de ${customer.name}`}
+            exportName="pedidos-del-cliente"
+            columns={orderColumns}
+            rows={rows}
+            rowKey={(row) => row.id}
+            initialSort={{ key: 'number', direction: 'desc' }}
+            pageSize={25}
+            onOpen={(row) => {
+              void navigate(pathTo('order', row.id));
+            }}
+            empty="Este cliente no tiene pedidos."
+          />
+        )}
+      </QueryView>
 
       {can('visits:read') ? (
-        <Panel
-          title="Visitas de los últimos 60 días"
-          description="Dónde marcó el vendedor su llegada, comparado con la sucursal."
-          flush
-          className="mt-5"
-        >
+        <>
+          <GridTitle aside="Posición GPS del vendedor comparada con la sucursal">
+            Visitas de los últimos 60 días
+          </GridTitle>
           <QueryView query={visits}>
-            {(rows) =>
-              rows.length === 0 ? (
-                <EmptyState icon={<MapPinned />} title="Sin visitas registradas" />
-              ) : (
-                <ul className="divide-y divide-line">
-                  {rows.slice(0, 12).map((visit) => (
-                    <li
-                      key={visit.id}
-                      className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 text-sm"
-                    >
-                      <span className="w-40 text-ink-2 tabular-nums">
-                        {new Date(visit.visitedAt).toLocaleString('es-CO', {
-                          day: 'numeric',
-                          month: 'short',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                      <span className="min-w-32 flex-1">
-                        {visit.branch.name}
-                        <span className="text-ink-3"> · {visit.seller.name}</span>
-                      </span>
-                      <VisitPlaceChip visit={visit} />
-                      {visit.order ? (
-                        <EntityLink to="order" id={visit.order.id} className="text-[13px]">
-                          {visit.order.label}
-                        </EntityLink>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )
-            }
+            {(rows) => (
+              <QueryGrid
+                title={`Visitas a ${customer.name}`}
+                exportName="visitas-del-cliente"
+                columns={visitColumns}
+                rows={rows}
+                rowKey={(row) => row.id}
+                initialSort={{ key: 'at', direction: 'desc' }}
+                pageSize={25}
+                empty="Sin visitas registradas en los últimos 60 días."
+              />
+            )}
           </QueryView>
-        </Panel>
+        </>
       ) : null}
 
       <CustomerFormDialog

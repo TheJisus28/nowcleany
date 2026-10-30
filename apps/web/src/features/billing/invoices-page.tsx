@@ -1,298 +1,271 @@
-import { CircleDollarSign, Factory, FileText, Search, TriangleAlert, Wallet } from 'lucide-react';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { Factory } from 'lucide-react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useInvoices } from '../../api/hooks';
 import type { Invoice } from '../../api/types';
-import { DataTable } from '../../components/data-table';
-import { Kpi } from '../../components/kpi';
+import {
+  FilterBar,
+  FilterField,
+  type QueryColumn,
+  QueryGrid,
+  useWorkTab,
+} from '../../components/erp';
 import { EntityLink, pathTo } from '../../components/links';
 import { CollectionChip, DueDate } from '../../components/status';
-import { EmptyState, Input, PageHeader, Panel, QueryView, Segmented } from '../../components/ui';
-import { formatCop, formatCopShort, formatDate, isZero, plural, todayIso } from '../../lib/format';
+import { QueryView } from '../../components/ui';
+import { formatDate, todayIso } from '../../lib/format';
 import { colombiaDay, normalizeText, sumPesos } from './billing-format';
+import { FILTER_INPUT, Money, ScreenTitle, useQueryFilters } from './erp-kit';
 
-type Filter = 'all' | 'open' | 'overdue' | 'paid';
+const COLLECTION_FILTERS: readonly {
+  value: string;
+  label: string;
+  matches: (invoice: Invoice) => boolean;
+}[] = [
+  { value: 'all', label: 'Todas', matches: () => true },
+  { value: 'open', label: 'Por cobrar (con saldo)', matches: (i) => i.status !== 'PAID' },
+  { value: 'overdue', label: 'Vencidas', matches: (i) => i.status === 'OVERDUE' },
+  { value: 'partial', label: 'Abonadas', matches: (i) => i.status === 'PARTIAL' },
+  { value: 'paid', label: 'Pagadas', matches: (i) => i.status === 'PAID' },
+];
 
-const MATCHES: Record<Filter, (invoice: Invoice) => boolean> = {
-  all: () => true,
-  open: (invoice) => invoice.status !== 'PAID',
-  overdue: (invoice) => invoice.status === 'OVERDUE',
-  paid: (invoice) => invoice.status === 'PAID',
-};
-
+/** "Facturas de venta": consultation by date, customer and collection status, with totals. */
 export function InvoicesPage() {
-  const invoices = useInvoices({ limit: '1000' });
-  return (
-    <>
-      <PageHeader
-        title="Facturas"
-        description="Las facturas de venta emitidas en el consolidado, con lo cobrado y lo que falta por cobrar."
-      />
-      <QueryView query={invoices}>{(rows) => <InvoicesBoard invoices={rows} />}</QueryView>
-    </>
-  );
-}
-
-function InvoicesBoard({ invoices }: { invoices: Invoice[] }) {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<Filter>('all');
-  const [search, setSearch] = useState('');
-  const query = normalizeText(useDeferredValue(search).trim());
+  useWorkTab('Facturas de venta');
+  const filters = useQueryFilters({
+    desde: todayIso(-90),
+    hasta: todayIso(),
+    cliente: '',
+    cobro: 'all',
+    numero: '',
+  });
+  const { draft, set } = filters;
+  const { desde, hasta, cliente, cobro, numero } = filters.applied;
+  const invoices = useInvoices({ limit: '2000' });
 
-  const sorted = useMemo(
-    () => [...invoices].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt)),
-    [invoices],
-  );
-  const matching = useMemo(
-    () =>
-      query
-        ? sorted.filter((invoice) =>
-            normalizeText(
-              [
-                invoice.label,
-                invoice.customer.name,
-                invoice.customer.document,
-                invoice.order.label,
-                invoice.branchName,
-                invoice.seller.name,
-              ].join(' '),
-            ).includes(query),
-          )
-        : sorted,
-    [sorted, query],
-  );
-  const rows = matching.filter(MATCHES[filter]);
-  const count = (key: Filter) => matching.filter(MATCHES[key]).length;
+  const rows = useMemo(() => {
+    const customer = normalizeText(cliente.trim());
+    const number = normalizeText(numero.trim());
+    const matches =
+      COLLECTION_FILTERS.find((item) => item.value === cobro)?.matches ?? (() => true);
+    return (invoices.data ?? []).filter((invoice) => {
+      const day = colombiaDay(invoice.issuedAt);
+      return (
+        (!desde || day >= desde) &&
+        (!hasta || day <= hasta) &&
+        matches(invoice) &&
+        (!customer ||
+          normalizeText(`${invoice.customer.name} ${invoice.customer.document}`).includes(
+            customer,
+          )) &&
+        (!number || normalizeText(`${invoice.label} ${invoice.order.label}`).includes(number))
+      );
+    });
+  }, [invoices.data, desde, hasta, cliente, cobro, numero]);
 
-  const stats = useMemo(() => {
-    const month = todayIso().slice(0, 7);
-    const thisMonth = invoices.filter(
-      (invoice) => colombiaDay(invoice.issuedAt).slice(0, 7) === month,
-    );
-    const open = invoices.filter(MATCHES.open);
-    const overdue = invoices.filter(MATCHES.overdue);
-    return {
-      invoicedMonth: sumPesos(thisMonth.map((invoice) => invoice.total)).toString(),
-      monthCount: thisMonth.length,
-      receivable: sumPesos(open.map((invoice) => invoice.balance)).toString(),
-      openCount: open.length,
-      overdue: sumPesos(overdue.map((invoice) => invoice.balance)).toString(),
-      overdueCount: overdue.length,
-      withPending: invoices.filter((invoice) => invoice.hasPending && invoice.status !== 'PAID')
-        .length,
-    };
-  }, [invoices]);
-
-  const filters: { value: Filter; label: string }[] = [
-    { value: 'all', label: `Todas (${String(count('all'))})` },
-    { value: 'open', label: `Por cobrar (${String(count('open'))})` },
-    { value: 'overdue', label: `Vencidas (${String(count('overdue'))})` },
-    { value: 'paid', label: `Pagadas (${String(count('paid'))})` },
+  const columns: QueryColumn<Invoice>[] = [
+    {
+      key: 'label',
+      header: 'Factura',
+      render: (invoice) => (
+        <span className="inline-flex items-center gap-1.5">
+          <EntityLink to="invoice" id={invoice.id} className="font-medium">
+            {invoice.label}
+          </EntityLink>
+          {invoice.hasPending ? (
+            <span title="Facturada con producto pendiente por fabricar o comprar">
+              <Factory
+                aria-label="Con producto pendiente"
+                className="size-3.5 text-[#b67d00]"
+                strokeWidth={2.25}
+              />
+            </span>
+          ) : null}
+        </span>
+      ),
+      sort: (invoice) => invoice.label,
+      csv: (invoice) => invoice.label,
+    },
+    {
+      key: 'date',
+      header: 'Fecha',
+      render: (invoice) => (
+        <span className="whitespace-nowrap">{formatDate(colombiaDay(invoice.issuedAt))}</span>
+      ),
+      sort: (invoice) => invoice.issuedAt,
+      csv: (invoice) => colombiaDay(invoice.issuedAt),
+    },
+    {
+      key: 'customer',
+      header: 'Cliente',
+      render: (invoice) => (
+        <EntityLink to="customer" id={invoice.customer.id}>
+          {invoice.customer.name}
+        </EntityLink>
+      ),
+      sort: (invoice) => invoice.customer.name,
+      csv: (invoice) => invoice.customer.name,
+    },
+    {
+      key: 'document',
+      header: 'NIT / C.C.',
+      hideOnMobile: true,
+      className: 'tabular-nums text-ink-2',
+      render: (invoice) => invoice.customer.document,
+      csv: (invoice) => invoice.customer.document,
+    },
+    {
+      key: 'order',
+      header: 'Pedido',
+      hideOnMobile: true,
+      render: (invoice) => (
+        <EntityLink to="order" id={invoice.order.id}>
+          {invoice.order.label}
+        </EntityLink>
+      ),
+      csv: (invoice) => invoice.order.label,
+    },
+    {
+      key: 'seller',
+      header: 'Vendedor',
+      hideOnMobile: true,
+      render: (invoice) => invoice.seller.name,
+      sort: (invoice) => invoice.seller.name,
+      csv: (invoice) => invoice.seller.name,
+    },
+    {
+      key: 'due',
+      header: 'Vence',
+      render: (invoice) =>
+        invoice.status === 'PAID' ? (
+          <span className="whitespace-nowrap text-ink-3">{formatDate(invoice.dueDate)}</span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            {formatDate(invoice.dueDate)}
+            <span className="text-[12px]">
+              <DueDate date={invoice.dueDate} lateLabel="Vencida" />
+            </span>
+          </span>
+        ),
+      sort: (invoice) => invoice.dueDate,
+      csv: (invoice) => invoice.dueDate,
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      align: 'right',
+      render: (invoice) => <Money value={invoice.total} />,
+      sort: (invoice) => Number(invoice.total),
+      csv: (invoice) => invoice.total,
+      total: (list) => <Money value={sumPesos(list.map((invoice) => invoice.total))} />,
+    },
+    {
+      key: 'paid',
+      header: 'Abonos',
+      align: 'right',
+      hideOnMobile: true,
+      render: (invoice) => <Money value={invoice.paid} />,
+      sort: (invoice) => Number(invoice.paid),
+      csv: (invoice) => invoice.paid,
+      total: (list) => <Money value={sumPesos(list.map((invoice) => invoice.paid))} />,
+    },
+    {
+      key: 'balance',
+      header: 'Saldo',
+      align: 'right',
+      render: (invoice) => <Money value={invoice.balance} strong={invoice.status !== 'PAID'} />,
+      sort: (invoice) => Number(invoice.balance),
+      csv: (invoice) => invoice.balance,
+      total: (list) => <Money value={sumPesos(list.map((invoice) => invoice.balance))} strong />,
+    },
+    {
+      key: 'status',
+      header: 'Estado de cobro',
+      render: (invoice) => <CollectionChip status={invoice.status} />,
+      sort: (invoice) => invoice.statusLabel,
+      csv: (invoice) => invoice.statusLabel,
+    },
   ];
 
   return (
     <>
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi
-          label="Facturado este mes"
-          value={
-            <span title={formatCop(stats.invoicedMonth)}>
-              {formatCopShort(stats.invoicedMonth)}
-            </span>
-          }
-          icon={FileText}
-          tone="brand"
-          hint={`${plural(stats.monthCount, 'factura', 'facturas')}, con IVA`}
-        />
-        <Kpi
-          label="Por cobrar"
-          value={
-            <span title={formatCop(stats.receivable)}>{formatCopShort(stats.receivable)}</span>
-          }
-          icon={Wallet}
-          hint={plural(stats.openCount, 'factura abierta', 'facturas abiertas')}
-        />
-        <Kpi
-          label="Vencido"
-          value={<span title={formatCop(stats.overdue)}>{formatCopShort(stats.overdue)}</span>}
-          icon={TriangleAlert}
-          tone={stats.overdueCount > 0 ? 'critical' : 'good'}
-          hint={
-            stats.overdueCount > 0
-              ? plural(stats.overdueCount, 'factura vencida', 'facturas vencidas')
-              : 'Nada vencido'
-          }
-        />
-        <Kpi
-          label="Con producto pendiente"
-          value={stats.withPending}
-          icon={Factory}
-          tone={stats.withPending > 0 ? 'warning' : 'neutral'}
-          hint="Facturadas antes de tener todo el producto"
-        />
-      </div>
-
-      <Panel flush>
-        <div className="flex flex-col gap-3 border-b border-line px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-          <label className="relative block lg:w-80">
-            <span className="sr-only">Buscar factura</span>
-            <Search
-              aria-hidden
-              className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3"
-            />
-            <Input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-              }}
-              placeholder="Número, cliente, NIT o preventa"
-              className="pl-9"
-            />
-          </label>
-          <div className="overflow-x-auto">
-            <Segmented
-              label="Estado de cobro"
-              value={filter}
-              options={filters}
-              onChange={setFilter}
-            />
-          </div>
-        </div>
-        <DataTable<Invoice>
-          label="Facturas"
-          rows={rows}
-          rowKey={(invoice) => invoice.id}
-          onRowClick={(invoice) => {
-            void navigate(pathTo('invoice', invoice.id));
-          }}
-          empty={
-            <EmptyState
-              icon={<CircleDollarSign />}
-              title={
-                invoices.length === 0
-                  ? 'Aún no hay facturas'
-                  : 'Ninguna factura coincide con la búsqueda'
-              }
-              description={
-                invoices.length === 0
-                  ? 'Las facturas se emiten desde el consolidado, al facturar las preventas.'
-                  : 'Prueba con el número (FV-00012), parte del nombre o el documento.'
-              }
-            />
-          }
-          columns={[
-            {
-              key: 'label',
-              header: 'Factura',
-              render: (invoice) => (
-                <span className="inline-flex items-center gap-2">
-                  <EntityLink to="invoice" id={invoice.id} className="font-semibold">
-                    {invoice.label}
-                  </EntityLink>
-                  {invoice.hasPending ? (
-                    <span
-                      title="Tiene producto pendiente por fabricar o comprar"
-                      className="inline-flex"
-                    >
-                      <Factory
-                        aria-label="Con producto pendiente"
-                        className="size-3.5 text-[#b67d00]"
-                        strokeWidth={2.25}
-                      />
-                    </span>
-                  ) : null}
-                </span>
-              ),
-            },
-            {
-              key: 'customer',
-              header: 'Cliente',
-              render: (invoice) => (
-                <span className="block min-w-0">
-                  <EntityLink to="customer" id={invoice.customer.id}>
-                    {invoice.customer.name}
-                  </EntityLink>
-                  <span className="block text-[12.5px] text-ink-3">
-                    {invoice.customer.document}
-                  </span>
-                </span>
-              ),
-            },
-            {
-              key: 'order',
-              header: 'Preventa',
-              hideOnMobile: true,
-              render: (invoice) => (
-                <EntityLink to="order" id={invoice.order.id}>
-                  {invoice.order.label}
-                </EntityLink>
-              ),
-            },
-            {
-              key: 'issued',
-              header: 'Emitida',
-              render: (invoice) => (
-                <span className="whitespace-nowrap">
-                  {formatDate(colombiaDay(invoice.issuedAt))}
-                </span>
-              ),
-            },
-            {
-              key: 'due',
-              header: 'Vence',
-              render: (invoice) =>
-                invoice.status === 'PAID' ? (
-                  <span className="whitespace-nowrap text-ink-3">
-                    {formatDate(invoice.dueDate)}
-                  </span>
-                ) : (
-                  <DueDate date={invoice.dueDate} lateLabel="Vencida" />
-                ),
-            },
-            {
-              key: 'total',
-              header: 'Total',
-              align: 'right',
-              render: (invoice) => (
-                <span className="whitespace-nowrap">{formatCop(invoice.total)}</span>
-              ),
-            },
-            {
-              key: 'balance',
-              header: 'Saldo',
-              align: 'right',
-              render: (invoice) =>
-                isZero(invoice.balance) ? (
-                  <span className="text-ink-3">$ 0</span>
-                ) : (
-                  <span className="font-semibold whitespace-nowrap">
-                    {formatCop(invoice.balance)}
-                  </span>
-                ),
-            },
-            {
-              key: 'status',
-              header: 'Estado',
-              render: (invoice) => <CollectionChip status={invoice.status} />,
-            },
-          ]}
-        />
-        {rows.length > 0 ? (
-          <div className="flex flex-wrap justify-between gap-x-6 gap-y-1 border-t border-line bg-surface-2/50 px-4 py-2.5 text-[13px] text-ink-2">
-            <span>{plural(rows.length, 'factura', 'facturas')}</span>
-            <span className="tabular-nums">
-              Total{' '}
-              <span className="font-semibold text-ink">
-                {formatCop(sumPesos(rows.map((invoice) => invoice.total)).toString())}
-              </span>{' '}
-              · Saldo{' '}
-              <span className="font-semibold text-ink">
-                {formatCop(sumPesos(rows.map((invoice) => invoice.balance)).toString())}
-              </span>
-            </span>
-          </div>
-        ) : null}
-      </Panel>
+      <ScreenTitle
+        title="Facturas de venta"
+        description="Facturas emitidas en Facturación de pedidos, con lo abonado y el saldo por cobrar. Enter o doble clic abre la factura."
+      />
+      <FilterBar onSubmit={filters.submit}>
+        <FilterField label="Desde">
+          <input
+            type="date"
+            value={draft.desde}
+            onChange={(event) => {
+              set('desde', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          />
+        </FilterField>
+        <FilterField label="Hasta">
+          <input
+            type="date"
+            value={draft.hasta}
+            onChange={(event) => {
+              set('hasta', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          />
+        </FilterField>
+        <FilterField label="Cliente (nombre o NIT)">
+          <input
+            value={draft.cliente}
+            onChange={(event) => {
+              set('cliente', event.target.value);
+            }}
+            className={`${FILTER_INPUT} w-52`}
+          />
+        </FilterField>
+        <FilterField label="Estado de cobro">
+          <select
+            value={draft.cobro}
+            onChange={(event) => {
+              set('cobro', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          >
+            {COLLECTION_FILTERS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Número o pedido">
+          <input
+            value={draft.numero}
+            placeholder="FV-00012"
+            onChange={(event) => {
+              set('numero', event.target.value);
+            }}
+            className={`${FILTER_INPUT} w-28`}
+          />
+        </FilterField>
+      </FilterBar>
+      <QueryView query={invoices}>
+        {() => (
+          <QueryGrid
+            title="Facturas de venta"
+            exportName="facturas-de-venta"
+            columns={columns}
+            rows={rows}
+            rowKey={(invoice) => invoice.id}
+            initialSort={{ key: 'label', direction: 'desc' }}
+            onOpen={(invoice) => {
+              void navigate(pathTo('invoice', invoice.id));
+            }}
+            empty="No hay facturas con estos filtros. Amplía el rango de fechas o cambia el estado de cobro."
+          />
+        )}
+      </QueryView>
     </>
   );
 }

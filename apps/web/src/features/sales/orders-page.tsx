@@ -1,198 +1,293 @@
-import { ClipboardList, Plus, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
-import { useOrderCoverage, useOrders } from '../../api/hooks';
+import { FilePlus2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router';
+import { useOrderCoverage, useOrders, useSellers } from '../../api/hooks';
 import type { SalesOrder } from '../../api/types';
-import { useProfile, useSession } from '../../auth/session';
-import { DataTable } from '../../components/data-table';
+import { useAccess } from '../../app/access';
+import { useSession } from '../../auth/session';
+import {
+  DocumentToolbar,
+  FilterBar,
+  FilterField,
+  type QueryColumn,
+  QueryGrid,
+  useWorkTab,
+} from '../../components/erp';
 import { EntityLink } from '../../components/links';
-import { CoverageChip, DueDate, OrderStatusChip } from '../../components/status';
-import { EmptyState, Input, PageHeader, Panel, QueryView, Segmented } from '../../components/ui';
-import { formatDate, formatDecimal, unitLabel } from '../../lib/format';
+import { COVERAGE, CoverageChip, DueDate, OrderStatusChip } from '../../components/status';
+import { QueryView } from '../../components/ui';
+import { formatDate, todayIso } from '../../lib/format';
+import { colombiaDay, formatUnits, normalizeText, sumQuantities } from '../billing/billing-format';
+import { FILTER_INPUT, ScreenTitle, useQueryFilters } from '../billing/erp-kit';
+import { COMMITTED, ORDER_STATUS_OPTIONS, statusesFor } from './order-shared';
 
-const STATUS_FILTERS = [
-  { value: 'open', label: 'En curso', status: 'DRAFT,CONFIRMED,INVOICED,READY,PARTIAL' },
-  { value: 'road', label: 'En ruta', status: 'DISPATCHED' },
-  { value: 'delivered', label: 'Entregadas', status: 'DELIVERED' },
-  { value: 'cancelled', label: 'Anuladas', status: 'CANCELLED' },
-  { value: 'all', label: 'Todas', status: undefined },
-] as const;
+const unitsOf = (order: SalesOrder) =>
+  sumQuantities(order.lines.map((line) => line.quantity.quantity));
 
-type StatusFilter = (typeof STATUS_FILTERS)[number]['value'];
-
+/** "Pedidos": consultation of sales orders by date, status, seller, customer and number. */
 export function OrdersPage() {
-  const profile = useProfile();
-  const { can } = useSession();
   const navigate = useNavigate();
-  const [scope, setScope] = useState<'mine' | 'team'>(
-    profile.roles.includes('sales') ? 'mine' : 'team',
-  );
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
-  const [search, setSearch] = useState('');
+  const { can } = useSession();
+  const { has } = useAccess();
+  const seesAll = can('sales-orders:read-all');
+  useWorkTab('Pedidos');
 
-  const orders = useOrders({
-    mine: scope === 'mine' ? true : undefined,
-    status: STATUS_FILTERS.find((filter) => filter.value === statusFilter)?.status,
-    q: search.trim() || undefined,
+  const filters = useQueryFilters({
+    desde: todayIso(-60),
+    hasta: todayIso(),
+    estado: 'open',
+    vendedor: '',
+    cliente: '',
+    numero: '',
   });
+  const { applied, draft, set } = filters;
+  const sellers = useSellers(seesAll && can('customers:read'));
+  const orders = useOrders({ status: statusesFor(applied.estado), limit: '500' });
   const coverage = useOrderCoverage(can('planning:read'));
   const coverageByOrder = useMemo(
     () => new Map((coverage.data ?? []).map((row) => [row.orderId, row.status])),
     [coverage.data],
   );
 
+  const { desde, hasta, vendedor, cliente, numero } = applied;
+  const rows = useMemo(() => {
+    const customer = normalizeText(cliente.trim());
+    const number = normalizeText(numero.trim());
+    return (orders.data ?? []).filter((row) => {
+      const day = colombiaDay(row.createdAt);
+      return (
+        (!desde || day >= desde) &&
+        (!hasta || day <= hasta) &&
+        (!vendedor || row.seller.id === vendedor) &&
+        (!customer ||
+          normalizeText(`${row.customer.name} ${row.customer.documentNumber}`).includes(
+            customer,
+          )) &&
+        (!number || normalizeText(row.label).includes(number))
+      );
+    });
+  }, [orders.data, desde, hasta, vendedor, cliente, numero]);
+
+  const columns: QueryColumn<SalesOrder>[] = [
+    {
+      key: 'number',
+      header: 'Número',
+      render: (row) => (
+        <EntityLink to="order" id={row.id} className="font-medium">
+          {row.label}
+        </EntityLink>
+      ),
+      sort: (row) => Number(row.number),
+      csv: (row) => row.label,
+    },
+    {
+      key: 'date',
+      header: 'Fecha',
+      render: (row) => (
+        <span className="whitespace-nowrap">{formatDate(colombiaDay(row.createdAt))}</span>
+      ),
+      sort: (row) => row.createdAt,
+      csv: (row) => colombiaDay(row.createdAt),
+    },
+    {
+      key: 'customer',
+      header: 'Cliente',
+      render: (row) => (
+        <EntityLink to="customer" id={row.customer.id}>
+          {row.customer.name}
+        </EntityLink>
+      ),
+      sort: (row) => row.customer.name,
+      csv: (row) => row.customer.name,
+    },
+    {
+      key: 'document',
+      header: 'NIT / C.C.',
+      className: 'tabular-nums text-ink-2',
+      hideOnMobile: true,
+      render: (row) => row.customer.documentNumber,
+      csv: (row) => row.customer.documentNumber,
+    },
+    {
+      key: 'branch',
+      header: 'Sucursal',
+      hideOnMobile: true,
+      render: (row) => row.branch.name,
+      sort: (row) => row.branch.name,
+      csv: (row) => row.branch.name,
+    },
+    {
+      key: 'seller',
+      header: 'Vendedor',
+      hideOnMobile: true,
+      render: (row) => row.seller.name,
+      sort: (row) => row.seller.name,
+      csv: (row) => row.seller.name,
+    },
+    {
+      key: 'promised',
+      header: 'Fecha prometida',
+      render: (row) =>
+        COMMITTED.includes(row.status) || row.status === 'DRAFT' ? (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            {formatDate(row.estimatedDeliveryDate)}
+            <span className="text-[12px]">
+              <DueDate date={row.estimatedDeliveryDate} lateLabel="Atrasado" />
+            </span>
+          </span>
+        ) : (
+          <span className="whitespace-nowrap">{formatDate(row.estimatedDeliveryDate)}</span>
+        ),
+      sort: (row) => row.estimatedDeliveryDate ?? '9999-12-31',
+      csv: (row) => row.estimatedDeliveryDate ?? '',
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      render: (row) => <OrderStatusChip status={row.status} />,
+      sort: (row) => row.statusLabel,
+      csv: (row) => row.statusLabel,
+    },
+    {
+      key: 'units',
+      header: 'Unidades',
+      align: 'right',
+      render: (row) => formatUnits(unitsOf(row)),
+      sort: unitsOf,
+      csv: (row) => formatUnits(unitsOf(row)),
+      total: (rows) => formatUnits(rows.reduce((sum, row) => sum + unitsOf(row), 0)),
+    },
+    ...(can('planning:read')
+      ? [
+          {
+            key: 'coverage',
+            header: 'Cobertura',
+            hideOnMobile: true,
+            render: (row: SalesOrder) => {
+              const status = coverageByOrder.get(row.id);
+              return status ? (
+                <CoverageChip status={status} />
+              ) : (
+                <span className="text-ink-3">—</span>
+              );
+            },
+            sort: (row: SalesOrder) => coverageByOrder.get(row.id) ?? '',
+            csv: (row: SalesOrder) => {
+              const status = coverageByOrder.get(row.id);
+              return status ? COVERAGE[status].label : '';
+            },
+          },
+        ]
+      : []),
+  ];
+
   return (
     <>
-      <PageHeader
-        title="Ventas"
-        description="Preventas del equipo y si se pueden cumplir con lo que hay o se puede fabricar."
-        actions={
-          can('sales-orders:write') ? (
-            <Link
-              to="/ventas/nueva"
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-strong"
-            >
-              <Plus aria-hidden className="size-4" />
-              Nueva preventa
-            </Link>
-          ) : null
-        }
+      <DocumentToolbar
+        actions={[
+          {
+            label: 'Nuevo pedido',
+            icon: FilePlus2,
+            to: '/ventas/nueva',
+            primary: true,
+            hidden: !(can('sales-orders:write') && has('newOrder')),
+          },
+        ]}
       />
-
-      <Panel flush>
-        <div className="flex flex-col gap-3 border-b border-line px-4 py-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <Segmented
-              label="Vendedor"
-              value={scope}
-              onChange={setScope}
-              options={[
-                { value: 'mine', label: 'Mis preventas' },
-                { value: 'team', label: 'Todo el equipo' },
-              ]}
-            />
-            <Segmented
-              label="Estado"
-              value={statusFilter}
-              onChange={setStatusFilter}
-              options={STATUS_FILTERS}
-            />
-          </div>
-          <label className="relative block md:w-72">
-            <span className="sr-only">Buscar preventa o cliente</span>
-            <Search
-              aria-hidden
-              className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3"
-            />
-            <Input
-              value={search}
+      <ScreenTitle
+        title="Pedidos"
+        description="Pedidos de venta (preventas) con su estado en el flujo y si el stock los cubre. Enter o doble clic abre el pedido."
+      />
+      <FilterBar onSubmit={filters.submit}>
+        <FilterField label="Desde">
+          <input
+            type="date"
+            value={draft.desde}
+            onChange={(event) => {
+              set('desde', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          />
+        </FilterField>
+        <FilterField label="Hasta">
+          <input
+            type="date"
+            value={draft.hasta}
+            onChange={(event) => {
+              set('hasta', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          />
+        </FilterField>
+        <FilterField label="Estado">
+          <select
+            value={draft.estado}
+            onChange={(event) => {
+              set('estado', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          >
+            {ORDER_STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        {seesAll ? (
+          <FilterField label="Vendedor">
+            <select
+              value={draft.vendedor}
               onChange={(event) => {
-                setSearch(event.target.value);
+                set('vendedor', event.target.value);
               }}
-              placeholder="PV-00012 o cliente"
-              className="pl-9"
-            />
-          </label>
-        </div>
-
-        <QueryView query={orders}>
-          {(rows) => (
-            <DataTable<SalesOrder>
-              label="Preventas"
-              rows={rows}
-              rowKey={(row) => row.id}
-              onRowClick={(row) => {
-                void navigate(`/ventas/${row.id}`);
-              }}
-              empty={
-                <EmptyState
-                  icon={<ClipboardList />}
-                  title="No hay preventas con estos filtros"
-                  description={
-                    can('sales-orders:write')
-                      ? 'Registra una preventa nueva para empezar.'
-                      : undefined
-                  }
-                />
-              }
-              columns={[
-                {
-                  key: 'label',
-                  header: 'Preventa',
-                  render: (row) => (
-                    <span className="flex flex-wrap items-center gap-2">
-                      <EntityLink to="order" id={row.id} className="font-medium">
-                        {row.label}
-                      </EntityLink>
-                      <span className="md:hidden">
-                        <OrderStatusChip status={row.status} />
-                      </span>
-                    </span>
-                  ),
-                },
-                {
-                  key: 'customer',
-                  header: 'Cliente',
-                  render: (row) => (
-                    <EntityLink to="customer" id={row.customer.id}>
-                      {row.customer.name}
-                    </EntityLink>
-                  ),
-                },
-                {
-                  key: 'seller',
-                  header: 'Vendedor',
-                  render: (row) => row.seller.name,
-                  hideOnMobile: true,
-                },
-                {
-                  key: 'delivery',
-                  header: 'Entrega',
-                  render: (row) =>
-                    ['DRAFT', 'CONFIRMED', 'INVOICED', 'READY', 'PARTIAL'].includes(row.status) ? (
-                      <DueDate date={row.estimatedDeliveryDate} />
-                    ) : (
-                      formatDate(row.dispatchedAt ?? row.estimatedDeliveryDate)
-                    ),
-                },
-                {
-                  key: 'products',
-                  header: 'Productos',
-                  hideOnMobile: true,
-                  render: (row) => (
-                    <span className="text-ink-2">
-                      {row.lines
-                        .map(
-                          (line) =>
-                            `${line.productCode} × ${formatDecimal(line.quantity.quantity)} ${unitLabel(line.quantity.unit)}`,
-                        )
-                        .join(', ')}
-                    </span>
-                  ),
-                },
-                {
-                  key: 'status',
-                  header: 'Estado',
-                  hideOnMobile: true,
-                  render: (row) => <OrderStatusChip status={row.status} />,
-                },
-                {
-                  key: 'coverage',
-                  header: 'Cobertura',
-                  render: (row) => {
-                    const status = coverageByOrder.get(row.id);
-                    return status ? (
-                      <CoverageChip status={status} />
-                    ) : (
-                      <span className="text-ink-3">—</span>
-                    );
-                  },
-                },
-              ]}
-            />
-          )}
-        </QueryView>
-      </Panel>
+              className={FILTER_INPUT}
+            >
+              <option value="">Todos</option>
+              {(sellers.data ?? []).map((seller) => (
+                <option key={seller.id} value={seller.id}>
+                  {seller.name}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+        ) : null}
+        <FilterField label="Cliente (nombre o NIT)">
+          <input
+            value={draft.cliente}
+            onChange={(event) => {
+              set('cliente', event.target.value);
+            }}
+            className={`${FILTER_INPUT} w-52`}
+          />
+        </FilterField>
+        <FilterField label="Número">
+          <input
+            value={draft.numero}
+            placeholder="PV-00031"
+            onChange={(event) => {
+              set('numero', event.target.value);
+            }}
+            className={`${FILTER_INPUT} w-28`}
+          />
+        </FilterField>
+      </FilterBar>
+      <QueryView query={orders}>
+        {() => (
+          <QueryGrid
+            title="Pedidos"
+            exportName="pedidos"
+            columns={columns}
+            rows={rows}
+            rowKey={(row) => row.id}
+            initialSort={{ key: 'number', direction: 'desc' }}
+            onOpen={(row) => {
+              void navigate(`/ventas/${row.id}`);
+            }}
+            empty="No hay pedidos con estos filtros. Amplía el rango de fechas o cambia el estado."
+          />
+        )}
+      </QueryView>
     </>
   );
 }

@@ -53,8 +53,8 @@ export function DispatchDialog({ shipment, onClose }: { shipment: Shipment; onCl
     <Dialog
       open
       onClose={onClose}
-      title={`Despachar ${shipment.label}`}
-      description="Confirma que el vehículo sale ahora: el producto sale de la bodega de despacho y los pedidos quedan en ruta."
+      title={`¿Despachar ${shipment.label}?`}
+      description="Confirma que el vehículo sale ahora: el producto sale de la bodega de despacho y los pedidos quedan en ruta. Queda en la auditoría con tu nombre."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>

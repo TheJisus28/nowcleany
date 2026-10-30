@@ -1,6 +1,7 @@
-import { CircleCheck, Factory, Link2, Pencil, Power, ShoppingCart, Tags } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
-import { useParams } from 'react-router';
+import { PackageSearch, Pencil, Power, Printer } from 'lucide-react';
+import { type ReactNode, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { api } from '../../api/client';
 import {
   useAction,
   useAvailability,
@@ -9,115 +10,99 @@ import {
   useProduct,
   useProductionNeeds,
   useProductionOrders,
+  useProducts,
   usePurchaseNeeds,
   usePurchaseOrders,
   useStockStatus,
   useWhereUsed,
 } from '../../api/hooks';
-import type { Product, ProductionOrder, PurchaseOrder, Q, SalesOrder } from '../../api/types';
+import type {
+  Movement,
+  Product,
+  ProductionOrder,
+  PurchaseOrder,
+  Q,
+  SalesOrder,
+  WhereUsed,
+} from '../../api/types';
 import { useAccess } from '../../app/access';
 import { useSession } from '../../auth/session';
-import { DataTable } from '../../components/data-table';
-import { BackLink, EntityLink } from '../../components/links';
-import { Qty } from '../../components/qty';
 import {
-  Chip,
-  DueDate,
-  OrderStatusChip,
-  ProductionStatusChip,
-  PurchaseStatusChip,
-} from '../../components/status';
-import { Button, cn, EmptyState, PageHeader, Panel, QueryView, Spinner } from '../../components/ui';
-import { api } from '../../api/client';
-import { formatCop, formatDate, formatDecimal, unitLabel } from '../../lib/format';
-import { MovementTable } from '../inventory/movement-table';
+  DocumentScreen,
+  DocumentSection,
+  DocumentToolbar,
+  HeaderField,
+  HeaderGrid,
+  type QueryColumn,
+  QueryGrid,
+  useWorkTab,
+} from '../../components/erp';
+import { EntityLink } from '../../components/links';
+import { Qty } from '../../components/qty';
+import { OrderStatusChip, ProductionStatusChip, PurchaseStatusChip } from '../../components/status';
+import { cn, QueryView } from '../../components/ui';
+import {
+  formatCop,
+  formatDateTime,
+  formatDecimal,
+  roundUpDecimal,
+  unitLabel,
+} from '../../lib/format';
+import { ConfirmDialog, csvQty, DateCell, neighbors, QtyTotal } from '../inventory/erp-kit';
 import { FormulaSection } from './formula-section';
 import { ProductFormDialog } from './product-form-dialog';
 
 /**
- * Everything about one product in one place: stock, who asked for it, how it is made, what is being
- * produced or bought. Each section appears only for the panels that work with it.
+ * The product record as a master file: header with its data, stock figures, and the documents that
+ * move it (orders, production, purchases, kardex) plus how it is made. Each section appears only for
+ * the panels that work with it.
  */
 export function ProductPage() {
   const { id } = useParams();
   const product = useProduct(id);
-  return <QueryView query={product}>{(data) => <ProductView product={data} />}</QueryView>;
+  const list = useProducts({});
+  const ids = useMemo(
+    () =>
+      list.data
+        ? [...list.data].sort((a, b) => a.code.localeCompare(b.code)).map((row) => row.id)
+        : undefined,
+    [list.data],
+  );
+  return (
+    <QueryView query={product}>{(data) => <ProductRecord product={data} ids={ids} />}</QueryView>
+  );
 }
 
-function ProductView({ product }: { product: Product }) {
+function ProductRecord({ product, ids }: { product: Product; ids: string[] | undefined }) {
   const { has, home } = useAccess();
   const { can } = useSession();
+  useWorkTab(`${product.code} · ${product.name}`);
+  const [editing, setEditing] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
   const raw = product.type === 'RAW_MATERIAL';
   const bulk = product.type === 'BULK';
   const finished = product.type === 'FINISHED_GOOD';
   const resale = product.type === 'RESALE';
   const made = bulk || finished;
-
+  const sold = finished || resale;
+  const bought = raw || resale;
+  const unit = unitLabel(product.stockUnit);
   const sections = {
-    orders: (finished || resale) && (has('summary') || has('sales') || has('home') || has('plant')),
-    production: made && has('plant'),
-    purchases: (raw || resale) && (has('purchasing') || has('monthlyPlan') || has('receiving')),
-    kardex: has('inventory'),
+    stock: can('inventory:read'),
+    orders: sold && (has('operations') || has('sales') || has('home') || has('plant')),
+    production: made && (has('plant') || has('production')),
+    purchases: bought && (has('purchasing') || has('monthlyPlan') || has('receiving')),
+    kardex: has('inventory') || has('kardex'),
     formula: made && (has('catalog') || has('plant')),
     whereUsed: (raw || bulk) && (has('catalog') || has('plant') || has('purchasing')),
-    pricing: !bulk,
   };
-  const fallback = has('catalog') ? '/catalogo' : has('inventory') ? '/inventario' : home;
+  const closeTo = has('catalog') ? '/catalogo' : has('inventory') ? '/inventario' : home;
+  const nav = neighbors(ids, product.id, (value) => `/productos/${value}`);
+  const margin =
+    resale && product.price && product.cost && Number(product.price) > 0
+      ? Math.round(((Number(product.price) - Number(product.cost)) / Number(product.price)) * 100)
+      : null;
 
-  return (
-    <>
-      <BackLink fallback={fallback} label="Volver" />
-      <PageHeader
-        title={product.name}
-        description={
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[12.5px] text-ink-2">
-              {product.code}
-            </span>
-            <span>
-              {product.typeLabel} · se maneja en {unitLabel(product.stockUnit)}
-            </span>
-            {product.active ? null : (
-              <Chip tone="neutral" icon={CircleCheck}>
-                Desactivado
-              </Chip>
-            )}
-          </span>
-        }
-        actions={can('products:write') ? <ProductActions product={product} /> : null}
-      />
-
-      {can('inventory:read') ? <StockStrip product={product} /> : null}
-
-      {sections.orders || sections.production || sections.purchases || sections.kardex ? (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="flex min-w-0 flex-col gap-6">
-            {sections.orders ? <OrdersSection product={product} /> : null}
-            {sections.production ? <ProductionSection product={product} /> : null}
-            {sections.purchases ? <PurchasesSection product={product} /> : null}
-            {sections.kardex ? <KardexSection product={product} /> : null}
-          </div>
-          <div className="flex flex-col gap-6">
-            {sections.pricing ? <PricingSection product={product} /> : null}
-            {sections.formula ? <FormulaSection product={product} /> : null}
-            {sections.whereUsed ? <WhereUsedSection product={product} /> : null}
-          </div>
-        </div>
-      ) : (
-        // Formulation only sees how the product is made: give it the full width.
-        <div className="grid max-w-4xl gap-6">
-          {sections.pricing ? <PricingSection product={product} /> : null}
-          {sections.formula ? <FormulaSection product={product} /> : null}
-          {sections.whereUsed ? <WhereUsedSection product={product} /> : null}
-        </div>
-      )}
-    </>
-  );
-}
-
-/** Edit name, batch size, price and cost, or deactivate (products are never deleted: history points to them). */
-function ProductActions({ product }: { product: Product }) {
-  const [editing, setEditing] = useState(false);
   const toggle = useAction(
     () => api.patch<Product>(`/v1/products/${product.id}`, { active: !product.active }),
     {
@@ -127,27 +112,130 @@ function ProductActions({ product }: { product: Product }) {
           : `${saved.code} desactivado: no aparece para vender ni planear`,
     },
   );
+
   return (
     <>
-      <Button
-        variant="secondary"
-        icon={<Pencil className="size-4" />}
-        onClick={() => {
-          setEditing(true);
-        }}
+      <DocumentScreen
+        kind={`Ficha de producto · ${product.typeLabel}`}
+        number={product.code}
+        status={
+          product.active ? (
+            <span className="text-[13px] font-medium text-good">Activo</span>
+          ) : (
+            <span className="text-[13px] font-medium text-ink-3">Desactivado</span>
+          )
+        }
+        toolbar={
+          <DocumentToolbar
+            actions={[
+              {
+                label: 'Editar',
+                icon: Pencil,
+                shortcut: 'F2',
+                hidden: !can('products:write'),
+                onClick: () => {
+                  setEditing(true);
+                },
+              },
+              {
+                label: product.active ? 'Desactivar' : 'Activar',
+                icon: Power,
+                danger: product.active,
+                hidden: !can('products:write'),
+                loading: toggle.isPending,
+                onClick: () => {
+                  if (product.active) setDeactivating(true);
+                  else toggle.mutate(undefined);
+                },
+              },
+              {
+                label: 'Kárdex',
+                icon: PackageSearch,
+                hidden: !has('kardex'),
+                to: `/inventario/kardex?producto=${product.id}`,
+              },
+              {
+                label: 'Imprimir',
+                icon: Printer,
+                shortcut: 'Ctrl+P',
+                onClick: () => {
+                  window.print();
+                },
+              },
+            ]}
+            previous={nav.previous}
+            next={nav.next}
+            closeTo={closeTo}
+          />
+        }
       >
-        Editar
-      </Button>
-      <Button
-        variant="ghost"
-        icon={<Power className="size-4" />}
-        loading={toggle.isPending}
-        onClick={() => {
-          toggle.mutate(undefined);
-        }}
-      >
-        {product.active ? 'Desactivar' : 'Activar'}
-      </Button>
+        <HeaderGrid>
+          <HeaderField label="Descripción" span={2}>
+            <span className="font-medium">{product.name}</span>
+          </HeaderField>
+          <HeaderField label="Tipo">{product.typeLabel}</HeaderField>
+          <HeaderField label="Unidad de inventario">{unit}</HeaderField>
+          {bulk ? (
+            <HeaderField label="Capacidad del bache">
+              {product.batchCapacity ? (
+                `${formatDecimal(product.batchCapacity.quantity)} ${unitLabel(product.batchCapacity.unit)}`
+              ) : (
+                <span className="text-ink-3">Sin definir</span>
+              )}
+            </HeaderField>
+          ) : null}
+          {sold ? (
+            <HeaderField label={`Precio de venta (por ${unit})`}>
+              {product.price ? (
+                <span className="font-semibold tabular-nums">{formatCop(product.price)}</span>
+              ) : (
+                <span className="text-ink-3">Sin definir</span>
+              )}
+            </HeaderField>
+          ) : null}
+          {bought ? (
+            <HeaderField label={`Costo de compra (por ${unit})`}>
+              {product.cost ? (
+                <span className="font-semibold tabular-nums">{formatCop(product.cost)}</span>
+              ) : (
+                <span className="text-ink-3">Sin definir</span>
+              )}
+            </HeaderField>
+          ) : null}
+          {margin !== null ? (
+            <HeaderField label="Margen bruto">
+              <span className={cn('font-semibold', margin < 0 && 'text-critical')}>{margin} %</span>
+            </HeaderField>
+          ) : null}
+          {made ? (
+            <HeaderField label="Fórmula">
+              {product.activeFormulaVersion ? (
+                `Vigente v${String(product.activeFormulaVersion)}`
+              ) : (
+                <span className="text-[#9a6a00]">Sin fórmula vigente</span>
+              )}
+              {product.hasDraftFormula ? (
+                <span className="text-ink-3"> · borrador por publicar</span>
+              ) : null}
+            </HeaderField>
+          ) : null}
+        </HeaderGrid>
+
+        {sections.stock ? <StockFigures product={product} /> : null}
+        {sections.orders ? <OrdersSection product={product} /> : null}
+        {sections.production ? <ProductionSection product={product} /> : null}
+        {sections.purchases ? <PurchasesSection product={product} /> : null}
+        {sections.kardex ? <KardexSection product={product} /> : null}
+        {sections.whereUsed ? <WhereUsedSection product={product} /> : null}
+        {sections.formula ? (
+          <DocumentSection title="Fórmula">
+            <div className="grid gap-4">
+              <FormulaSection product={product} />
+            </div>
+          </DocumentSection>
+        ) : null}
+      </DocumentScreen>
+
       {editing ? (
         <ProductFormDialog
           product={product}
@@ -156,392 +244,514 @@ function ProductActions({ product }: { product: Product }) {
           }}
         />
       ) : null}
+      <ConfirmDialog
+        open={deactivating}
+        title={`¿Desactivar ${product.code}?`}
+        description="Deja de aparecer para vender, comprar y planear. Su historia (pedidos, kárdex) se conserva y se puede volver a activar."
+        confirmLabel="Desactivar"
+        danger
+        loading={toggle.isPending}
+        onClose={() => {
+          setDeactivating(false);
+        }}
+        onConfirm={() => {
+          toggle.mutate(undefined, {
+            onSuccess: () => {
+              setDeactivating(false);
+            },
+          });
+        }}
+      />
     </>
   );
 }
 
-function Stat({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
+/** A consultation inside the record, without its own frame. */
+function GridSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-[10px] border border-line bg-surface p-4">
-      <p className="text-[13px] text-ink-2">{label}</p>
-      <p className="mt-1.5 text-[22px] leading-tight">{children}</p>
-      {hint ? <p className="mt-1 text-[12.5px] text-ink-3">{hint}</p> : null}
-    </div>
+    <DocumentSection title={title} flush>
+      <div className="border-t border-line [&>div]:rounded-none [&>div]:border-0">{children}</div>
+    </DocumentSection>
+  );
+}
+
+function Figure({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: ReactNode;
+}) {
+  return (
+    <HeaderField label={label}>
+      <span className="text-[16px]">{children}</span>
+      {hint ? <span className="block text-[12px] text-ink-3">{hint}</span> : null}
+    </HeaderField>
   );
 }
 
 /** Stock, plus the one planning figure that matters for this kind of product and this user. */
-function StockStrip({ product }: { product: Product }) {
+function StockFigures({ product }: { product: Product }) {
+  const { has } = useAccess();
   const status = useStockStatus({ q: product.code });
   const row = status.data?.find((candidate) => candidate.productId === product.id);
-  if (status.isPending) return <Spinner />;
   const zero: Q = { quantity: '0', unit: product.stockUnit };
-  const byWarehouse = row?.byWarehouse
-    .map((w) => `${w.warehouseName}: ${formatDecimal(w.onHand.quantity)}`)
-    .join(' · ');
+  const at = (code: string) =>
+    row?.byWarehouse.find((warehouse) => warehouse.warehouseCode === code)?.onHand ?? zero;
+  const purchasable = product.type === 'RAW_MATERIAL' || product.type === 'RESALE';
+  const made = product.type === 'BULK' || product.type === 'FINISHED_GOOD';
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Stat label="Físico" hint={byWarehouse ?? 'Sin movimientos'}>
-        <Qty value={row?.onHand ?? zero} emphasis />
-      </Stat>
-      <Stat label="Comprometido en preventas">
-        <Qty value={row?.committed ?? zero} emphasis dimZero />
-      </Stat>
-      <Stat label="Proyectado" hint="Físico menos lo comprometido">
-        <Qty value={row?.projected ?? zero} emphasis />
-      </Stat>
-      <PlanningStat product={product} />
-    </div>
+    <DocumentSection title="Existencias" flush>
+      <HeaderGrid className="border-t border-b-0 lg:grid-cols-6">
+        <Figure label="Planta">
+          <Qty value={at('PLANTA')} />
+        </Figure>
+        <Figure label="Despacho">
+          <Qty value={at('DESPACHO')} />
+        </Figure>
+        <Figure label="Físico total">
+          <Qty value={row?.onHand ?? zero} emphasis />
+        </Figure>
+        <Figure label="Comprometido">
+          <Qty value={row?.committed ?? zero} dimZero />
+        </Figure>
+        <Figure label="Proyectado" hint="Físico − comprometido">
+          <Qty value={row?.projected ?? zero} emphasis />
+        </Figure>
+        {product.type === 'FINISHED_GOOD' && (has('operations') || has('sales') || has('home')) ? (
+          <PromisableFigure product={product} />
+        ) : purchasable && (has('purchasing') || has('monthlyPlan')) ? (
+          <ToBuyFigure product={product} />
+        ) : made && has('plant') ? (
+          <ToMakeFigure product={product} />
+        ) : null}
+      </HeaderGrid>
+    </DocumentSection>
   );
 }
 
-function PlanningStat({ product }: { product: Product }) {
-  const { has } = useAccess();
-  const purchasable = product.type === 'RAW_MATERIAL' || product.type === 'RESALE';
-  const made = product.type === 'BULK' || product.type === 'FINISHED_GOOD';
-  if (product.type === 'FINISHED_GOOD' && (has('summary') || has('sales') || has('home')))
-    return <PromisableStat product={product} />;
-  if (purchasable && (has('purchasing') || has('monthlyPlan')))
-    return <ToBuyStat product={product} />;
-  if (made && has('plant')) return <ToMakeStat product={product} />;
-  return null;
-}
-
-function PromisableStat({ product }: { product: Product }) {
+function PromisableFigure({ product }: { product: Product }) {
   const availability = useAvailability();
   const row = availability.data?.rows.find((candidate) => candidate.product.id === product.id);
   return (
-    <Stat
-      label="Puedes prometer"
-      hint={row?.limitingMaterial ? `Lo limita: ${row.limitingMaterial.name}` : undefined}
+    <Figure
+      label="Se puede prometer"
+      hint={row?.limitingMaterial ? `Lo limita ${row.limitingMaterial.name}` : undefined}
     >
       {row ? <Qty value={row.promisable} emphasis /> : '—'}
-    </Stat>
+    </Figure>
   );
 }
 
-function ToBuyStat({ product }: { product: Product }) {
+function ToBuyFigure({ product }: { product: Product }) {
   const needs = usePurchaseNeeds();
   const row = needs.data?.rows.find((candidate) => candidate.product.id === product.id);
   return (
-    <Stat label="Por comprar" hint="Exactamente el faltante, ya descontado lo que viene en camino">
+    <Figure label="Falta comprar" hint="Ya descontado lo que viene en camino">
       {row ? <Qty value={row.toBuy} emphasis dimZero /> : <span className="text-ink-3">0</span>}
-    </Stat>
+    </Figure>
   );
 }
 
-function ToMakeStat({ product }: { product: Product }) {
+function ToMakeFigure({ product }: { product: Product }) {
   const needs = useProductionNeeds();
   const pending =
     product.type === 'BULK'
       ? needs.data?.bulk.find((row) => row.product.id === product.id)?.pendingToSchedule
       : needs.data?.packaging.find((row) => row.product.id === product.id)?.pendingToSchedule;
   return (
-    <Stat
+    <Figure
       label={product.type === 'BULK' ? 'Falta programar producir' : 'Falta programar envasar'}
-      hint="Para las preventas confirmadas, descontado lo ya programado"
     >
       {pending ? <Qty value={pending} emphasis dimZero /> : <span className="text-ink-3">0</span>}
-    </Stat>
+    </Figure>
   );
 }
 
 function OrdersSection({ product }: { product: Product }) {
+  const navigate = useNavigate();
+  const { canOpen } = useAccess();
   const orders = useOrders({
     productId: product.id,
     status: 'DRAFT,CONFIRMED,INVOICED,READY,PARTIAL',
   });
-  const quantityOf = (order: SalesOrder) =>
+  const rows = useMemo(
+    () =>
+      [...(orders.data ?? [])].sort((a, b) =>
+        (a.estimatedDeliveryDate ?? '9').localeCompare(b.estimatedDeliveryDate ?? '9'),
+      ),
+    [orders.data],
+  );
+  const pendingOf = (order: SalesOrder) =>
     order.lines.find((line) => line.productId === product.id)?.pending;
+  const columns: QueryColumn<SalesOrder>[] = [
+    {
+      key: 'order',
+      header: 'Pedido',
+      sort: (row) => row.label,
+      csv: (row) => row.label,
+      render: (row) => (
+        <EntityLink to="order" id={row.id} className="font-medium">
+          {row.label}
+        </EntityLink>
+      ),
+    },
+    {
+      key: 'customer',
+      header: 'Cliente',
+      sort: (row) => row.customer.name,
+      csv: (row) => row.customer.name,
+      render: (row) => row.customer.name,
+    },
+    {
+      key: 'seller',
+      header: 'Vendedor',
+      hideOnMobile: true,
+      csv: (row) => row.seller.name,
+      render: (row) => <span className="text-ink-2">{row.seller.name}</span>,
+    },
+    {
+      key: 'delivery',
+      header: 'Prometido',
+      sort: (row) => row.estimatedDeliveryDate ?? '9999',
+      csv: (row) => row.estimatedDeliveryDate ?? '',
+      render: (row) => <DateCell date={row.estimatedDeliveryDate} pending lateLabel="Atrasado" />,
+    },
+    {
+      key: 'pending',
+      header: 'Por despachar',
+      align: 'right',
+      csv: (row) => csvQty(pendingOf(row)),
+      render: (row) => {
+        const pending = pendingOf(row);
+        return pending ? <Qty value={pending} emphasis /> : '—';
+      },
+      total: (list) => (
+        <QtyTotal
+          values={list.flatMap((row) => {
+            const pending = pendingOf(row);
+            return pending ? [pending] : [];
+          })}
+        />
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      csv: (row) => row.statusLabel,
+      render: (row) => <OrderStatusChip status={row.status} />,
+    },
+  ];
   return (
-    <Panel
-      title="Pedidos abiertos que lo piden"
-      description="Borradores y pedidos que aún no se despachan completos, por fecha de entrega."
-      flush
-    >
+    <GridSection title="Pedidos abiertos que lo piden">
       <QueryView query={orders}>
-        {(rows) => (
-          <DataTable<SalesOrder>
-            label="Preventas"
-            rows={[...rows].sort((a, b) =>
-              (a.estimatedDeliveryDate ?? '9').localeCompare(b.estimatedDeliveryDate ?? '9'),
-            )}
+        {() => (
+          <QueryGrid<SalesOrder>
+            title="Pedidos abiertos del producto"
+            exportName="pedidos-abiertos"
+            columns={columns}
+            rows={rows}
             rowKey={(row) => row.id}
-            empty={<EmptyState icon={<Tags />} title="Nadie lo tiene en un pedido abierto" />}
-            columns={[
-              {
-                key: 'order',
-                header: 'Preventa',
-                render: (row) => (
-                  <EntityLink to="order" id={row.id} className="font-medium">
-                    {row.label}
-                  </EntityLink>
-                ),
-              },
-              {
-                key: 'customer',
-                header: 'Cliente',
-                render: (row) => (
-                  <EntityLink to="customer" id={row.customer.id}>
-                    {row.customer.name}
-                  </EntityLink>
-                ),
-              },
-              {
-                key: 'seller',
-                header: 'Vendedor',
-                hideOnMobile: true,
-                render: (row) => row.seller.name,
-              },
-              {
-                key: 'delivery',
-                header: 'Entrega',
-                render: (row) => <DueDate date={row.estimatedDeliveryDate} />,
-              },
-              {
-                key: 'quantity',
-                header: 'Por despachar',
-                align: 'right',
-                render: (row) => {
-                  const quantity = quantityOf(row);
-                  return quantity ? <Qty value={quantity} emphasis /> : '—';
-                },
-              },
-              {
-                key: 'status',
-                header: 'Estado',
-                render: (row) => <OrderStatusChip status={row.status} />,
-              },
-            ]}
+            pageSize={25}
+            {...(canOpen('order')
+              ? {
+                  onOpen: (row: SalesOrder) => {
+                    void navigate(`/ventas/${row.id}`);
+                  },
+                }
+              : {})}
+            empty="Nadie lo tiene en un pedido abierto."
           />
         )}
       </QueryView>
-    </Panel>
+    </GridSection>
   );
 }
 
 function ProductionSection({ product }: { product: Product }) {
+  const navigate = useNavigate();
   const orders = useProductionOrders(undefined, product.id);
+  const rows = useMemo(() => orders.data ?? [], [orders.data]);
+  const columns: QueryColumn<ProductionOrder>[] = [
+    {
+      key: 'label',
+      header: 'Orden',
+      sort: (row) => row.label,
+      csv: (row) => row.label,
+      render: (row) => (
+        <EntityLink to="production-order" id={row.id} className="font-medium">
+          {row.label}
+        </EntityLink>
+      ),
+    },
+    { key: 'kind', header: 'Tipo', csv: (row) => row.kind, render: (row) => row.kind },
+    {
+      key: 'quantity',
+      header: 'Cantidad',
+      align: 'right',
+      csv: (row) => csvQty(row.producedQuantity ?? row.plannedQuantity),
+      render: (row) => <Qty value={row.producedQuantity ?? row.plannedQuantity} />,
+    },
+    {
+      key: 'date',
+      header: 'Programada',
+      sort: (row) => row.scheduledDate ?? '',
+      csv: (row) => row.scheduledDate ?? '',
+      render: (row) => (
+        <DateCell
+          date={row.scheduledDate}
+          pending={row.status === 'PLANNED'}
+          lateLabel="Atrasada"
+        />
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      csv: (row) => row.statusLabel,
+      render: (row) => <ProductionStatusChip status={row.status} />,
+    },
+  ];
   return (
-    <Panel
-      title="Órdenes de producción"
-      description={product.type === 'BULK' ? 'Baches de granel.' : 'Envasado.'}
-      flush
-    >
+    <GridSection title="Órdenes de producción">
       <QueryView query={orders}>
-        {(rows) => (
-          <DataTable<ProductionOrder>
-            label="Órdenes de producción"
-            rows={rows.slice(0, 15)}
+        {() => (
+          <QueryGrid<ProductionOrder>
+            title="Órdenes de producción del producto"
+            exportName="ordenes-produccion"
+            columns={columns}
+            rows={rows}
             rowKey={(row) => row.id}
-            empty={
-              <EmptyState icon={<Factory />} title="Todavía no hay órdenes para este producto" />
-            }
-            columns={[
-              {
-                key: 'label',
-                header: 'Orden',
-                render: (row) => (
-                  <EntityLink to="production-order" id={row.id} className="font-medium">
-                    {row.label}
-                  </EntityLink>
-                ),
-              },
-              {
-                key: 'quantity',
-                header: 'Cantidad',
-                align: 'right',
-                render: (row) => <Qty value={row.producedQuantity ?? row.plannedQuantity} />,
-              },
-              {
-                key: 'date',
-                header: 'Fecha',
-                render: (row) =>
-                  row.status === 'PLANNED' ? (
-                    <DueDate date={row.scheduledDate} />
-                  ) : (
-                    formatDate(row.completedAt ?? row.cancelledAt ?? row.scheduledDate)
-                  ),
-              },
-              {
-                key: 'status',
-                header: 'Estado',
-                render: (row) => <ProductionStatusChip status={row.status} />,
-              },
-            ]}
+            pageSize={25}
+            onOpen={(row) => {
+              void navigate(`/planta/ordenes/${row.id}`);
+            }}
+            empty="Todavía no hay órdenes de producción para este producto."
           />
         )}
       </QueryView>
-    </Panel>
+    </GridSection>
   );
 }
 
 function PurchasesSection({ product }: { product: Product }) {
+  const navigate = useNavigate();
   const orders = usePurchaseOrders(undefined, product.id);
+  const rows = useMemo(() => orders.data ?? [], [orders.data]);
   const lineOf = (order: PurchaseOrder) =>
     order.lines.find((line) => line.productId === product.id);
+  const columns: QueryColumn<PurchaseOrder>[] = [
+    {
+      key: 'label',
+      header: 'Orden de compra',
+      sort: (row) => row.label,
+      csv: (row) => row.label,
+      render: (row) => (
+        <EntityLink to="purchase-order" id={row.id} className="font-medium">
+          {row.label}
+        </EntityLink>
+      ),
+    },
+    {
+      key: 'supplier',
+      header: 'Proveedor',
+      sort: (row) => row.supplier.name,
+      csv: (row) => row.supplier.name,
+      render: (row) => row.supplier.name,
+    },
+    {
+      key: 'ordered',
+      header: 'Pedido',
+      align: 'right',
+      csv: (row) => csvQty(lineOf(row)?.quantity),
+      render: (row) => {
+        const line = lineOf(row);
+        return line ? <Qty value={line.quantity} /> : '—';
+      },
+    },
+    {
+      key: 'received',
+      header: 'Recibido',
+      align: 'right',
+      csv: (row) => csvQty(lineOf(row)?.received),
+      render: (row) => {
+        const line = lineOf(row);
+        return line ? <Qty value={line.received} dimZero /> : '—';
+      },
+    },
+    {
+      key: 'cost',
+      header: 'Costo unit.',
+      align: 'right',
+      csv: (row) => lineOf(row)?.unitCost ?? '',
+      render: (row) => formatCop(lineOf(row)?.unitCost ?? null),
+    },
+    {
+      key: 'expected',
+      header: 'Fecha esperada',
+      sort: (row) => row.expectedDate ?? '',
+      csv: (row) => row.expectedDate ?? '',
+      render: (row) => (
+        <DateCell
+          date={row.expectedDate}
+          pending={row.status === 'OPEN' || row.status === 'PARTIAL'}
+          lateLabel="No ha llegado"
+        />
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      csv: (row) => row.statusLabel,
+      render: (row) => <PurchaseStatusChip status={row.status} />,
+    },
+  ];
   return (
-    <Panel
-      title="Compras"
-      description={`Órdenes a proveedores que incluyen este ${product.type === 'RESALE' ? 'producto' : 'insumo'}.`}
-      flush
-    >
+    <GridSection title="Compras">
       <QueryView query={orders}>
-        {(rows) => (
-          <DataTable<PurchaseOrder>
-            label="Compras"
-            rows={rows.slice(0, 15)}
+        {() => (
+          <QueryGrid<PurchaseOrder>
+            title="Compras del producto"
+            exportName="compras"
+            columns={columns}
+            rows={rows}
             rowKey={(row) => row.id}
-            empty={
-              <EmptyState icon={<ShoppingCart />} title="Todavía no se ha pedido a un proveedor" />
-            }
-            columns={[
-              {
-                key: 'label',
-                header: 'Orden',
-                render: (row) => (
-                  <span>
-                    <EntityLink to="purchase-order" id={row.id} className="font-medium">
-                      {row.label}
-                    </EntityLink>
-                    <span className="block text-[12.5px] text-ink-3">{row.supplier.name}</span>
-                  </span>
-                ),
-              },
-              {
-                key: 'quantity',
-                header: 'Recibido / pedido',
-                align: 'right',
-                render: (row) => {
-                  const line = lineOf(row);
-                  return line ? (
-                    <span className="whitespace-nowrap">
-                      <Qty value={line.received} dimZero />
-                      <span className="text-ink-3"> / </span>
-                      <Qty value={line.quantity} emphasis />
-                    </span>
-                  ) : (
-                    '—'
-                  );
-                },
-              },
-              {
-                key: 'cost',
-                header: 'Costo',
-                align: 'right',
-                hideOnMobile: true,
-                render: (row) => {
-                  const line = lineOf(row);
-                  return line ? formatCop(line.unitCost) : '—';
-                },
-              },
-              {
-                key: 'date',
-                header: 'Llega',
-                render: (row) =>
-                  row.status === 'OPEN' || row.status === 'PARTIAL' ? (
-                    <DueDate date={row.expectedDate} lateLabel="No ha llegado" />
-                  ) : (
-                    formatDate(row.receivedAt ?? row.cancelledAt ?? row.expectedDate)
-                  ),
-              },
-              {
-                key: 'status',
-                header: 'Estado',
-                render: (row) => <PurchaseStatusChip status={row.status} />,
-              },
-            ]}
+            pageSize={25}
+            onOpen={(row) => {
+              void navigate(`/compras/ordenes/${row.id}`);
+            }}
+            empty="Todavía no se ha pedido a un proveedor."
           />
         )}
       </QueryView>
-    </Panel>
+    </GridSection>
   );
 }
 
 function KardexSection({ product }: { product: Product }) {
   const movements = useMovements({ productId: product.id });
+  const rows = useMemo(() => movements.data ?? [], [movements.data]);
+  const columns: QueryColumn<Movement>[] = [
+    {
+      key: 'when',
+      header: 'Fecha',
+      sort: (row) => row.occurredAt,
+      csv: (row) => row.occurredAt,
+      render: (row) => <span className="whitespace-nowrap">{formatDateTime(row.occurredAt)}</span>,
+    },
+    {
+      key: 'type',
+      header: 'Movimiento',
+      csv: (row) => row.typeLabel,
+      render: (row) => row.typeLabel,
+    },
+    {
+      key: 'reference',
+      header: 'Documento',
+      csv: (row) => row.reference?.label ?? '',
+      render: (row) => <span className="text-ink-2">{row.reference?.label ?? '—'}</span>,
+    },
+    {
+      key: 'warehouse',
+      header: 'Bodega',
+      csv: (row) => row.warehouse.name,
+      render: (row) => <span className="text-ink-2">{row.warehouse.name}</span>,
+    },
+    {
+      key: 'quantity',
+      header: 'Cantidad',
+      align: 'right',
+      csv: (row) => csvQty(row.quantity),
+      render: (row) => (
+        <span className={row.quantity.quantity.startsWith('-') ? 'text-critical' : 'text-good'}>
+          {row.quantity.quantity.startsWith('-') ? '' : '+'}
+          {formatDecimal(roundUpDecimal(row.quantity.quantity))}
+        </span>
+      ),
+    },
+    {
+      key: 'balance',
+      header: 'Saldo',
+      align: 'right',
+      csv: (row) => csvQty(row.balanceAfter),
+      render: (row) => (
+        <span className="font-semibold">
+          {formatDecimal(roundUpDecimal(row.balanceAfter.quantity))}
+        </span>
+      ),
+    },
+    {
+      key: 'actor',
+      header: 'Usuario',
+      hideOnMobile: true,
+      csv: (row) => row.actor.name,
+      render: (row) => <span className="text-ink-2">{row.actor.name}</span>,
+    },
+  ];
   return (
-    <Panel title="Movimientos" description="Kardex: cada entrada y salida con su saldo." flush>
+    <GridSection title="Últimos movimientos (kárdex)">
       <QueryView query={movements}>
-        {(rows) => <MovementTable rows={rows} showProduct={false} />}
+        {() => (
+          <QueryGrid<Movement>
+            title="Kárdex del producto"
+            exportName="kardex"
+            columns={columns}
+            rows={rows}
+            rowKey={(row) => row.id}
+            pageSize={25}
+            empty="Sin movimientos."
+          />
+        )}
       </QueryView>
-    </Panel>
-  );
-}
-
-/** Sale price and purchase cost per stock unit (and the gross margin of resale goods). */
-function PricingSection({ product }: { product: Product }) {
-  const unit = unitLabel(product.stockUnit);
-  const sold = product.type === 'FINISHED_GOOD' || product.type === 'RESALE';
-  const bought = product.type === 'RAW_MATERIAL' || product.type === 'RESALE';
-  const margin =
-    product.type === 'RESALE' && product.price && product.cost && Number(product.price) > 0
-      ? Math.round(((Number(product.price) - Number(product.cost)) / Number(product.price)) * 100)
-      : null;
-  const value = (amount: string | null) =>
-    amount ? (
-      <span className="text-[22px] leading-tight font-semibold tabular-nums">
-        {formatCop(amount)}
-        <span className="ml-1 text-[13px] font-normal text-ink-3">por {unit}</span>
-      </span>
-    ) : (
-      <span className="text-sm text-ink-3">Sin definir</span>
-    );
-  return (
-    <Panel title="Precio y costo" description="En pesos por unidad de inventario, antes de IVA.">
-      <dl className="grid gap-4">
-        {sold ? (
-          <div>
-            <dt className="text-[13px] text-ink-2">Precio de venta</dt>
-            <dd className="mt-0.5">{value(product.price)}</dd>
-          </div>
-        ) : null}
-        {bought ? (
-          <div>
-            <dt className="text-[13px] text-ink-2">Costo de compra</dt>
-            <dd className="mt-0.5">{value(product.cost)}</dd>
-          </div>
-        ) : null}
-        {margin !== null ? (
-          <div>
-            <dt className="text-[13px] text-ink-2">Margen bruto</dt>
-            <dd className={cn('mt-0.5 text-lg font-semibold', margin < 0 && 'text-critical')}>
-              {margin} %
-            </dd>
-          </div>
-        ) : null}
-      </dl>
-    </Panel>
+    </GridSection>
   );
 }
 
 function WhereUsedSection({ product }: { product: Product }) {
+  const navigate = useNavigate();
   const users = useWhereUsed(product.id);
+  const rows = useMemo(() => users.data ?? [], [users.data]);
+  const columns: QueryColumn<WhereUsed>[] = [
+    {
+      key: 'code',
+      header: 'Código',
+      sort: (row) => row.code,
+      csv: (row) => row.code,
+      render: (row) => <span className="tabular-nums">{row.code}</span>,
+    },
+    {
+      key: 'name',
+      header: 'Producto',
+      sort: (row) => row.name,
+      csv: (row) => row.name,
+      render: (row) => (
+        <EntityLink to="product" id={row.id}>
+          {row.name}
+        </EntityLink>
+      ),
+    },
+    { key: 'type', header: 'Tipo', csv: (row) => row.typeLabel, render: (row) => row.typeLabel },
+  ];
   return (
-    <Panel title="Se usa en" description="Productos cuya fórmula vigente lo consume.">
+    <GridSection title="Se usa en (fórmulas vigentes)">
       <QueryView query={users}>
-        {(rows) =>
-          rows.length === 0 ? (
-            <p className="text-sm text-ink-3">Ninguna fórmula vigente lo usa.</p>
-          ) : (
-            <ul className="flex flex-col gap-2.5 text-sm">
-              {rows.map((row) => (
-                <li key={row.id} className="flex items-start gap-2.5">
-                  <Link2 aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-3" />
-                  <span>
-                    <EntityLink to="product" id={row.id} className="font-medium">
-                      {row.name}
-                    </EntityLink>
-                    <span className="block text-[12.5px] text-ink-3">
-                      {row.code} · {row.typeLabel}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )
-        }
+        {() => (
+          <QueryGrid<WhereUsed>
+            title="Se usa en"
+            exportName="se-usa-en"
+            columns={columns}
+            rows={rows}
+            rowKey={(row) => row.id}
+            pageSize={25}
+            onOpen={(row) => {
+              void navigate(`/productos/${row.id}`);
+            }}
+            empty="Ninguna fórmula vigente lo usa."
+          />
+        )}
       </QueryView>
-    </Panel>
+    </GridSection>
   );
 }

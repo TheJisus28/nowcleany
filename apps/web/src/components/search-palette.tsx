@@ -3,34 +3,61 @@ import {
   Contact,
   CornerDownLeft,
   Factory,
+  FileText,
   type LucideIcon,
+  Menu,
   Package,
   Search,
   ShoppingCart,
   Tags,
+  Truck,
 } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api } from '../api/client';
-import type { Customer, Product, ProductionOrder, PurchaseOrder, SalesOrder } from '../api/types';
-import { type Entity, useAccess } from '../app/access';
+import type {
+  Customer,
+  Invoice,
+  Product,
+  ProductionOrder,
+  PurchaseOrder,
+  SalesOrder,
+  Shipment,
+} from '../api/types';
+import { useAccess } from '../app/access';
+import { NAV } from '../app/nav';
 import { useSession } from '../auth/session';
 import { pathTo } from './links';
 import { cn } from './ui';
 
+type Group =
+  | 'menu'
+  | 'order'
+  | 'invoice'
+  | 'customer'
+  | 'product'
+  | 'production-order'
+  | 'purchase-order'
+  | 'shipment';
+
 interface Result {
-  entity: Entity;
-  id: string;
+  group: Group;
+  key: string;
   title: string;
   detail: string;
+  to: string;
+  icon?: LucideIcon;
 }
 
-const GROUPS: { entity: Entity; label: string; icon: LucideIcon }[] = [
-  { entity: 'product', label: 'Productos', icon: Package },
-  { entity: 'order', label: 'Preventas', icon: Tags },
-  { entity: 'customer', label: 'Clientes', icon: Contact },
-  { entity: 'production-order', label: 'Órdenes de producción', icon: Factory },
-  { entity: 'purchase-order', label: 'Órdenes de compra', icon: ShoppingCart },
+const GROUPS: { group: Group; label: string; icon: LucideIcon }[] = [
+  { group: 'menu', label: 'Opciones del menú', icon: Menu },
+  { group: 'order', label: 'Pedidos', icon: Tags },
+  { group: 'invoice', label: 'Facturas de venta', icon: FileText },
+  { group: 'customer', label: 'Clientes', icon: Contact },
+  { group: 'product', label: 'Productos', icon: Package },
+  { group: 'purchase-order', label: 'Órdenes de compra', icon: ShoppingCart },
+  { group: 'shipment', label: 'Remisiones', icon: Truck },
+  { group: 'production-order', label: 'Órdenes de producción', icon: Factory },
 ];
 
 const PER_GROUP = 5;
@@ -48,14 +75,25 @@ function useDebounced(value: string, delay = 200): string {
   return debounced;
 }
 
-const contains = (needle: string, ...values: string[]) =>
-  values.some((value) => value.toLowerCase().includes(needle));
+/** Lowercase without accents ("facturación" matches "facturacion"). */
+const normalize = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
 
-/** Searches, in one box, every record the user can open: products, orders, customers, OP and OC. */
+const contains = (needle: string, ...values: string[]) =>
+  values.some((value) => normalize(value).includes(needle));
+
+/**
+ * Searches, in one box, the menu options of the role and every record the user can open: orders,
+ * invoices (FV-), customers, products, purchase orders (OC-), shipping guides (GU-) and production
+ * orders.
+ */
 function useResults(term: string): { results: Result[]; loading: boolean } {
-  const { canOpen } = useAccess();
+  const { canOpen, has } = useAccess();
   const { can } = useSession();
-  const needle = term.trim().toLowerCase();
+  const needle = normalize(term.trim());
   const active = needle.length >= 2;
   const q = encodeURIComponent(term.trim());
 
@@ -68,6 +106,11 @@ function useResults(term: string): { results: Result[]; loading: boolean } {
     queryKey: ['search', 'orders', needle],
     queryFn: () => api.get<SalesOrder[]>(`/v1/sales-orders?q=${q}&limit=${String(PER_GROUP)}`),
     enabled: active && canOpen('order'),
+  });
+  const invoices = useQuery({
+    queryKey: ['search', 'invoices', needle],
+    queryFn: () => api.get<Invoice[]>(`/v1/invoices?q=${q}&limit=${String(PER_GROUP)}`),
+    enabled: active && canOpen('invoice') && can('invoices:read'),
   });
   const customers = useQuery({
     queryKey: ['search', 'customers', needle],
@@ -87,41 +130,61 @@ function useResults(term: string): { results: Result[]; loading: boolean } {
     enabled: active && canOpen('purchase-order'),
     staleTime: 60_000,
   });
+  const shipments = useQuery({
+    queryKey: ['search', 'shipments'],
+    queryFn: () => api.get<Shipment[]>('/v1/shipments'),
+    enabled: active && canOpen('shipment') && can('shipments:read'),
+    staleTime: 60_000,
+  });
 
   const results = useMemo(() => {
     if (!active) return [];
     const list: Result[] = [];
-    for (const product of (products.data ?? []).slice(0, PER_GROUP))
+    for (const item of NAV.filter(
+      (entry) =>
+        has(entry.panel) && contains(needle, entry.label, entry.group ?? '', entry.kind ?? ''),
+    ).slice(0, 6))
       list.push({
-        entity: 'product',
-        id: product.id,
-        title: product.name,
-        detail: `${product.code} · ${product.typeLabel}`,
+        group: 'menu',
+        key: item.to,
+        title: item.label,
+        detail: [item.group ?? 'Inicio', item.kind].filter(Boolean).join(' › '),
+        to: item.to,
+        icon: item.icon,
       });
     for (const order of (orders.data ?? []).slice(0, PER_GROUP))
       list.push({
-        entity: 'order',
-        id: order.id,
+        group: 'order',
+        key: order.id,
         title: `${order.label} · ${order.customer.name}`,
         detail: `${order.statusLabel} · ${order.seller.name}`,
+        to: pathTo('order', order.id),
+      });
+    for (const invoice of (invoices.data ?? []).slice(0, PER_GROUP))
+      list.push({
+        group: 'invoice',
+        key: invoice.id,
+        title: `${invoice.label} · ${invoice.customer.name}`,
+        detail: `${invoice.statusLabel} · pedido ${invoice.order.label}`,
+        to: pathTo('invoice', invoice.id),
       });
     for (const customer of (customers.data ?? []).slice(0, PER_GROUP))
       list.push({
-        entity: 'customer',
-        id: customer.id,
+        group: 'customer',
+        key: customer.id,
         title: customer.name,
         detail: [`${customer.documentTypeLabel} ${customer.documentNumber}`, customer.city]
           .filter(Boolean)
           .join(' · '),
+        to: pathTo('customer', customer.id),
       });
-    for (const order of (production.data ?? [])
-      .filter((o) => contains(needle, o.label, o.product.name, o.product.code))
-      .slice(0, PER_GROUP))
+    for (const product of (products.data ?? []).slice(0, PER_GROUP))
       list.push({
-        entity: 'production-order',
-        id: order.id,
-        title: `${order.label} · ${order.product.name}`,
-        detail: `${order.kind} · ${order.statusLabel}`,
+        group: 'product',
+        key: product.id,
+        title: product.name,
+        detail: `${product.code} · ${product.typeLabel}`,
+        to: pathTo('product', product.id),
       });
     for (const order of (purchases.data ?? [])
       .filter((o) =>
@@ -129,17 +192,61 @@ function useResults(term: string): { results: Result[]; loading: boolean } {
       )
       .slice(0, PER_GROUP))
       list.push({
-        entity: 'purchase-order',
-        id: order.id,
+        group: 'purchase-order',
+        key: order.id,
         title: `${order.label} · ${order.supplier.name}`,
         detail: order.statusLabel,
+        to: pathTo('purchase-order', order.id),
       });
-    return list;
-  }, [active, needle, products.data, orders.data, customers.data, production.data, purchases.data]);
+    for (const shipment of (shipments.data ?? [])
+      .filter((s) =>
+        contains(
+          needle,
+          s.label,
+          s.carrier,
+          s.vehiclePlate,
+          s.driverName,
+          ...s.orders.flatMap((entry) => [entry.orderLabel, entry.customer.name]),
+        ),
+      )
+      .slice(0, PER_GROUP))
+      list.push({
+        group: 'shipment',
+        key: shipment.id,
+        title: `${shipment.label} · ${shipment.vehiclePlate}`,
+        detail: `${shipment.statusLabel} · ${shipment.driverName} · ${shipment.orders
+          .map((entry) => entry.orderLabel)
+          .join(', ')}`,
+        to: pathTo('shipment', shipment.id),
+      });
+    for (const order of (production.data ?? [])
+      .filter((o) => contains(needle, o.label, o.product.name, o.product.code))
+      .slice(0, PER_GROUP))
+      list.push({
+        group: 'production-order',
+        key: order.id,
+        title: `${order.label} · ${order.product.name}`,
+        detail: `${order.kind} · ${order.statusLabel}`,
+        to: pathTo('production-order', order.id),
+      });
+    // Same order as the groups on screen, so the arrows move top to bottom.
+    return GROUPS.flatMap((group) => list.filter((result) => result.group === group.group));
+  }, [
+    active,
+    needle,
+    has,
+    products.data,
+    orders.data,
+    invoices.data,
+    customers.data,
+    production.data,
+    purchases.data,
+    shipments.data,
+  ]);
 
   const loading =
     active &&
-    [products, orders, customers, production, purchases].some(
+    [products, orders, invoices, customers, production, purchases, shipments].some(
       (query) => query.fetchStatus === 'fetching',
     );
   return { results, loading };
@@ -180,7 +287,7 @@ function Palette({ onClose }: { onClose: () => void }) {
   const go = (result: Result | undefined) => {
     if (!result) return;
     onClose();
-    void navigate(pathTo(result.entity, result.id));
+    void navigate(result.to);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -209,7 +316,7 @@ function Palette({ onClose }: { onClose: () => void }) {
             setActive(0);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Producto, preventa, cliente, OP u OC…"
+          placeholder="Menú, pedido, FV-, OC-, GU-, cliente o producto…"
           className="h-14 w-full bg-transparent text-[16px] outline-none placeholder:text-ink-3"
         />
         <kbd className="hidden rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-3 sm:block">
@@ -219,7 +326,8 @@ function Palette({ onClose }: { onClose: () => void }) {
       <div className="max-h-[60vh] overflow-y-auto p-2">
         {debounced.trim().length < 2 ? (
           <p className="px-3 py-6 text-center text-sm text-ink-3">
-            Escribe al menos dos letras: un código (00224, PV-00012), un nombre o un proveedor.
+            Escribe al menos dos letras: una opción del menú (cartera, recibo), un número (PV-00012,
+            FV-00102, OC-00045, GU-00007), un cliente o un producto.
           </p>
         ) : results.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-ink-3">
@@ -227,16 +335,17 @@ function Palette({ onClose }: { onClose: () => void }) {
           </p>
         ) : (
           GROUPS.map((group) => {
-            const items = results.filter((result) => result.entity === group.entity);
+            const items = results.filter((result) => result.group === group.group);
             if (items.length === 0) return null;
             return (
-              <section key={group.entity} className="mb-1">
+              <section key={group.group} className="mb-1">
                 <h3 className="px-3 pt-2 pb-1 text-[12px] font-medium text-ink-3">{group.label}</h3>
                 <ul>
                   {items.map((item) => {
                     const index = results.indexOf(item);
+                    const Icon = item.icon ?? group.icon;
                     return (
-                      <li key={`${item.entity}-${item.id}`}>
+                      <li key={`${item.group}-${item.key}`}>
                         <button
                           type="button"
                           onMouseEnter={() => {
@@ -250,7 +359,7 @@ function Palette({ onClose }: { onClose: () => void }) {
                             index === active ? 'bg-brand-soft' : 'hover:bg-surface-2',
                           )}
                         >
-                          <group.icon aria-hidden className="size-4 shrink-0 text-ink-3" />
+                          <Icon aria-hidden className="size-4 shrink-0 text-ink-3" />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium">{item.title}</span>
                             <span className="block truncate text-[12.5px] text-ink-3">

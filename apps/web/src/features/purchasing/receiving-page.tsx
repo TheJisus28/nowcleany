@@ -1,315 +1,399 @@
-import { CircleCheck, Clock, PackageOpen, ReceiptText, Truck } from 'lucide-react';
-import { useState } from 'react';
+import { FilePlus2, Printer } from 'lucide-react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { usePurchaseOrders, useSupplierInvoices } from '../../api/hooks';
+import { usePurchaseOrders, useSupplierInvoices, useSuppliers } from '../../api/hooks';
 import type { PurchaseOrder, SupplierInvoice } from '../../api/types';
 import { useSession } from '../../auth/session';
-import { DataTable } from '../../components/data-table';
-import { Kpi } from '../../components/kpi';
-import { EntityLink, pathTo } from '../../components/links';
-import { Qty } from '../../components/qty';
-import { DueDate, PurchaseStatusChip } from '../../components/status';
-import { Button, EmptyState, PageHeader, Panel, QueryView } from '../../components/ui';
 import {
-  daysUntil,
-  formatCop,
-  formatCopShort,
-  formatDate,
-  formatDateTime,
-  isZero,
-  plural,
-  todayIso,
-} from '../../lib/format';
+  DocumentToolbar,
+  FilterBar,
+  FilterField,
+  type QueryColumn,
+  QueryGrid,
+  useWorkTab,
+} from '../../components/erp';
+import { EntityLink } from '../../components/links';
+import { PurchaseStatusChip } from '../../components/status';
+import { QueryView } from '../../components/ui';
+import { formatCop, formatDate, formatDateTime, isZero } from '../../lib/format';
+import {
+  DateCell,
+  inRange,
+  INPUT,
+  QtyTotal,
+  QueryPanel,
+  ScreenTitle,
+  SELECT,
+  TabStrip,
+  useUrlFilters,
+} from '../inventory/erp-kit';
 import { pendingValue } from './money';
-import { SupplierInvoiceDialog } from './supplier-invoice-dialog';
+
+type View = 'pendientes' | 'entradas';
+
+const FILTERS = { vista: 'pendientes', proveedor: '', desde: '', hasta: '', q: '' };
+
+const sumCop = <T,>(rows: readonly T[], pick: (row: T) => string | bigint) =>
+  formatCop(rows.reduce((sum, row) => sum + BigInt(pick(row)), 0n).toString());
 
 /**
- * Receiving's desk: purchase orders waiting for goods, and the supplier invoices already entered.
- * Entering an invoice against its order is what brings the goods into the stock.
+ * Receiving's consultations: purchase orders waiting for goods (Enter registers the warehouse entry
+ * against the order) and the entries already registered with the supplier's invoice.
  */
 export function ReceivingPage() {
+  useWorkTab('Entradas de almacén');
+  const navigate = useNavigate();
+  const { can } = useSession();
+  const canReceive = can('purchasing:receive');
+  const filters = useUrlFilters(FILTERS);
+  const { proveedor, desde, hasta, q } = filters.applied;
+  const view: View = filters.applied.vista === 'entradas' ? 'entradas' : 'pendientes';
   const orders = usePurchaseOrders('OPEN,PARTIAL');
   const invoices = useSupplierInvoices();
-  const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
+  const suppliers = useSuppliers();
+
+  const pendingRows = useMemo(() => {
+    const text = q.trim().toLowerCase();
+    return (orders.data ?? [])
+      .filter(
+        (order) =>
+          (!proveedor || order.supplier.id === proveedor) &&
+          inRange(order.expectedDate, desde, hasta) &&
+          (!text ||
+            [
+              order.label,
+              order.supplier.name,
+              ...order.lines.map((line) => `${line.productCode} ${line.productName}`),
+            ]
+              .join(' ')
+              .toLowerCase()
+              .includes(text)),
+      )
+      .sort((a, b) => (a.expectedDate ?? '9').localeCompare(b.expectedDate ?? '9'));
+  }, [orders.data, proveedor, desde, hasta, q]);
+  const entryRows = useMemo(() => {
+    const text = q.trim().toLowerCase();
+    return (invoices.data ?? [])
+      .filter(
+        (invoice) =>
+          (!proveedor || invoice.supplier.id === proveedor) &&
+          inRange(invoice.invoiceDate, desde, hasta) &&
+          (!text ||
+            `${invoice.documentNumber} ${invoice.purchaseOrder.label} ${invoice.supplier.name}`
+              .toLowerCase()
+              .includes(text)),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [invoices.data, proveedor, desde, hasta, q]);
 
   return (
     <>
-      <PageHeader
-        title="Recepción de facturas"
-        description="Cuando llega la mercancía con la factura del proveedor, ingrésala contra su orden de compra: así entra al inventario y queda lista para pagar."
+      <DocumentToolbar
+        actions={[
+          {
+            label: 'Nueva entrada de almacén',
+            icon: FilePlus2,
+            shortcut: 'F9',
+            primary: true,
+            hidden: !canReceive,
+            to: '/recepcion/nueva',
+          },
+          {
+            label: 'Imprimir',
+            icon: Printer,
+            shortcut: 'Ctrl+P',
+            onClick: () => {
+              window.print();
+            },
+          },
+        ]}
       />
-
-      <ReceivingKpis orders={orders.data} invoices={invoices.data} />
-
-      <Panel
-        title="Órdenes esperando mercancía"
-        description="En tránsito y recibidas parcial, primero la que debía llegar antes."
-        className="mb-6"
-        flush
+      <ScreenTitle
+        title="Entradas de almacén"
+        subtitle="Cuando llega la mercancía con la factura del proveedor, regístrala contra su orden de compra: así entra al inventario y queda en cuentas por pagar."
+      />
+      <TabStrip<View>
+        label="Consulta"
+        value={view}
+        onChange={(value) => {
+          filters.applyNow('vista', value);
+        }}
+        tabs={[
+          { value: 'pendientes', label: 'Órdenes por recibir', count: orders.data?.length },
+          { value: 'entradas', label: 'Entradas registradas' },
+        ]}
+      />
+      <QueryPanel
+        filters={
+          <FilterBar
+            onSubmit={() => {
+              filters.apply();
+            }}
+          >
+            <FilterField label="Proveedor">
+              <select
+                className={`${SELECT} max-w-64`}
+                value={filters.draft.proveedor}
+                onChange={(event) => {
+                  filters.set('proveedor', event.target.value);
+                }}
+              >
+                <option value="">Todos</option>
+                {(suppliers.data ?? []).map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            <FilterField label={view === 'pendientes' ? 'Esperada desde' : 'Factura desde'}>
+              <input
+                type="date"
+                className={INPUT}
+                value={filters.draft.desde}
+                onChange={(event) => {
+                  filters.set('desde', event.target.value);
+                }}
+              />
+            </FilterField>
+            <FilterField label="Hasta">
+              <input
+                type="date"
+                className={INPUT}
+                value={filters.draft.hasta}
+                onChange={(event) => {
+                  filters.set('hasta', event.target.value);
+                }}
+              />
+            </FilterField>
+            <FilterField
+              label={view === 'pendientes' ? 'Orden o producto' : 'Factura u orden'}
+              className="w-full sm:w-52"
+            >
+              <input
+                className={INPUT}
+                value={filters.draft.q}
+                onChange={(event) => {
+                  filters.set('q', event.target.value);
+                }}
+              />
+            </FilterField>
+          </FilterBar>
+        }
       >
-        <QueryView query={orders}>
-          {(rows) => (
-            <PendingOrders
-              rows={rows}
-              onReceive={(order) => {
-                setReceiving(order);
-              }}
-            />
-          )}
-        </QueryView>
-      </Panel>
-
-      <Panel
-        title="Facturas ingresadas recientemente"
-        description="Las últimas facturas de proveedor registradas, con su total y vencimiento."
-        flush
-      >
-        <QueryView query={invoices}>{(rows) => <RecentInvoices rows={rows} />}</QueryView>
-      </Panel>
-
-      {receiving ? (
-        <SupplierInvoiceDialog
-          order={receiving}
-          onClose={() => {
-            setReceiving(null);
-          }}
-        />
+        {view === 'pendientes' ? (
+          <QueryView query={orders}>
+            {() => (
+              <QueryGrid<PurchaseOrder>
+                title="Órdenes por recibir"
+                columns={PENDING_COLUMNS}
+                rows={pendingRows}
+                rowKey={(row) => row.id}
+                onOpen={(row) => {
+                  void navigate(
+                    canReceive ? `/recepcion/nueva?orden=${row.id}` : `/compras/ordenes/${row.id}`,
+                  );
+                }}
+                empty="No hay mercancía en camino con estos filtros."
+              />
+            )}
+          </QueryView>
+        ) : (
+          <QueryView query={invoices}>
+            {() => (
+              <QueryGrid<SupplierInvoice>
+                title="Entradas registradas"
+                columns={ENTRY_COLUMNS}
+                rows={entryRows}
+                rowKey={(row) => row.id}
+                onOpen={(row) => {
+                  void navigate(`/compras/ordenes/${row.purchaseOrder.id}`);
+                }}
+                empty="No hay entradas registradas con estos filtros."
+              />
+            )}
+          </QueryView>
+        )}
+      </QueryPanel>
+      {view === 'pendientes' && canReceive ? (
+        <p className="no-print -mt-3 text-[12px] text-ink-3">
+          Enter o doble clic sobre una orden abre la entrada de almacén con lo pendiente.
+        </p>
       ) : null}
     </>
   );
 }
 
-function ReceivingKpis({
-  orders,
-  invoices,
-}: {
-  orders: PurchaseOrder[] | undefined;
-  invoices: SupplierInvoice[] | undefined;
-}) {
-  const waiting = orders ?? [];
-  const late = waiting.filter((order) => (daysUntil(order.expectedDate) ?? 0) < 0);
-  const today = waiting.filter((order) => daysUntil(order.expectedDate) === 0);
-  const month = todayIso().slice(0, 7);
-  const thisMonth = (invoices ?? []).filter((invoice) => invoice.createdAt.startsWith(month));
-  const entered = thisMonth.reduce((sum, invoice) => sum + BigInt(invoice.total), 0n);
-  return (
-    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Kpi
-        label="Órdenes esperando"
-        value={orders ? waiting.length : '…'}
-        icon={Truck}
-        tone="brand"
-        hint={plural(
-          waiting.filter((order) => order.status === 'PARTIAL').length,
-          'recibida parcial',
-          'recibidas parcial',
-        )}
+const PENDING_COLUMNS: QueryColumn<PurchaseOrder>[] = [
+  {
+    key: 'label',
+    header: 'Orden de compra',
+    sort: (row) => row.label,
+    csv: (row) => row.label,
+    render: (row) => (
+      <EntityLink to="purchase-order" id={row.id} className="font-medium">
+        {row.label}
+      </EntityLink>
+    ),
+  },
+  {
+    key: 'supplier',
+    header: 'Proveedor',
+    sort: (row) => row.supplier.name,
+    csv: (row) => row.supplier.name,
+    render: (row) => (
+      <span className="block max-w-56 truncate" title={row.supplier.name}>
+        {row.supplier.name}
+      </span>
+    ),
+  },
+  {
+    key: 'expected',
+    header: 'Fecha esperada',
+    sort: (row) => row.expectedDate ?? '9999',
+    csv: (row) => row.expectedDate ?? '',
+    render: (row) => <DateCell date={row.expectedDate} pending lateLabel="No ha llegado" />,
+  },
+  {
+    key: 'status',
+    header: 'Estado',
+    csv: (row) => row.statusLabel,
+    render: (row) => <PurchaseStatusChip status={row.status} />,
+  },
+  {
+    key: 'products',
+    header: 'Productos pendientes',
+    csv: (row) =>
+      row.lines
+        .filter((line) => !isZero(line.pending.quantity))
+        .map((line) => line.productCode)
+        .join(', '),
+    render: (row) => (
+      <span className="block max-w-72 truncate text-[12.5px] text-ink-2">
+        {row.lines
+          .filter((line) => !isZero(line.pending.quantity))
+          .map((line) => line.productName)
+          .join(' · ')}
+      </span>
+    ),
+  },
+  {
+    key: 'pendingQty',
+    header: 'Cantidad pendiente',
+    align: 'right',
+    hideOnMobile: true,
+    render: (row) => (
+      <QtyTotal
+        values={row.lines
+          .filter((line) => !isZero(line.pending.quantity))
+          .map((line) => line.pending)}
       />
-      <Kpi
-        label="Llegan hoy"
-        value={orders ? today.length : '…'}
-        icon={PackageOpen}
-        hint="Según la fecha esperada de la orden"
-      />
-      <Kpi
-        label="Atrasadas"
-        value={orders ? late.length : '…'}
-        icon={Clock}
-        tone={late.length > 0 ? 'critical' : 'good'}
-        hint={late.length > 0 ? 'Pasó la fecha y no han llegado' : 'Ninguna atrasada'}
-      />
-      <Kpi
-        label="Ingresado este mes"
-        value={
-          invoices ? (
-            <span title={formatCop(entered.toString())}>{formatCopShort(entered.toString())}</span>
-          ) : (
-            '…'
-          )
-        }
-        icon={ReceiptText}
-        hint={plural(thisMonth.length, 'factura con IVA', 'facturas con IVA')}
-      />
-    </div>
-  );
-}
+    ),
+  },
+  {
+    key: 'value',
+    header: 'Valor pendiente',
+    align: 'right',
+    sort: (row) => Number(pendingValue(row)),
+    csv: (row) => pendingValue(row).toString(),
+    render: (row) => formatCop(pendingValue(row).toString()),
+    total: (rows) => sumCop(rows, pendingValue),
+  },
+  {
+    key: 'createdBy',
+    header: 'Elaboró',
+    hideOnMobile: true,
+    csv: (row) => row.createdBy,
+    render: (row) => <span className="text-ink-2">{row.createdBy}</span>,
+  },
+];
 
-function PendingOrders({
-  rows,
-  onReceive,
-}: {
-  rows: PurchaseOrder[];
-  onReceive: (order: PurchaseOrder) => void;
-}) {
-  const navigate = useNavigate();
-  const { can } = useSession();
-  const canReceive = can('purchasing:receive');
-  return (
-    <DataTable<PurchaseOrder>
-      label="Órdenes esperando mercancía"
-      rows={[...rows].sort((a, b) => (a.expectedDate ?? '9').localeCompare(b.expectedDate ?? '9'))}
-      rowKey={(row) => row.id}
-      onRowClick={(row) => {
-        void navigate(pathTo('purchase-order', row.id));
-      }}
-      empty={
-        <EmptyState
-          icon={<CircleCheck />}
-          title="No hay mercancía en camino"
-          description="Cuando compras haga una orden, aparecerá aquí para recibirla."
-        />
-      }
-      columns={[
-        {
-          key: 'label',
-          header: 'Orden',
-          render: (row) => (
-            <span>
-              <EntityLink to="purchase-order" id={row.id} className="font-medium">
-                {row.label}
-              </EntityLink>
-              <span className="block text-[12.5px] text-ink-3">{row.supplier.name}</span>
-            </span>
-          ),
-        },
-        {
-          key: 'expected',
-          header: 'Esperada',
-          render: (row) => (
-            <span>
-              <DueDate date={row.expectedDate} lateLabel="No ha llegado" />
-              <span className="block text-[12px] text-ink-3">{formatDate(row.expectedDate)}</span>
-            </span>
-          ),
-        },
-        {
-          key: 'pending',
-          header: 'Pendiente por llegar',
-          render: (row) => (
-            <ul className="flex flex-col gap-0.5 text-[13px]">
-              {row.lines
-                .filter((line) => !isZero(line.pending.quantity))
-                .map((line) => (
-                  <li key={line.productId}>
-                    <span className="text-ink-2">{line.productName}:</span>{' '}
-                    <Qty value={line.pending} emphasis />
-                  </li>
-                ))}
-            </ul>
-          ),
-        },
-        {
-          key: 'value',
-          header: 'Valor pendiente',
-          align: 'right',
-          hideOnMobile: true,
-          render: (row) => formatCop(pendingValue(row).toString()),
-        },
-        {
-          key: 'status',
-          header: 'Estado',
-          render: (row) => <PurchaseStatusChip status={row.status} />,
-        },
-        ...(canReceive
-          ? [
-              {
-                key: 'action',
-                header: '',
-                align: 'right' as const,
-                render: (row: PurchaseOrder) => (
-                  <Button
-                    size="sm"
-                    icon={<ReceiptText className="size-3.5" />}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onReceive(row);
-                    }}
-                  >
-                    Ingresar factura del proveedor
-                  </Button>
-                ),
-              },
-            ]
-          : []),
-      ]}
-    />
-  );
-}
-
-function RecentInvoices({ rows }: { rows: SupplierInvoice[] }) {
-  const recent = [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 25);
-  return (
-    <DataTable<SupplierInvoice>
-      label="Facturas ingresadas"
-      rows={recent}
-      rowKey={(row) => row.id}
-      empty={
-        <EmptyState
-          icon={<ReceiptText />}
-          title="Aún no hay facturas de proveedor"
-          description="Las facturas que ingreses aparecerán aquí."
-        />
-      }
-      columns={[
-        {
-          key: 'document',
-          header: 'Factura',
-          render: (row) => (
-            <span>
-              <span className="font-medium">{row.documentNumber}</span>
-              <span className="block text-[12.5px] text-ink-3">{row.supplier.name}</span>
-            </span>
-          ),
-        },
-        {
-          key: 'order',
-          header: 'Orden',
-          render: (row) => (
-            <EntityLink to="purchase-order" id={row.purchaseOrder.id}>
-              {row.purchaseOrder.label}
-            </EntityLink>
-          ),
-        },
-        {
-          key: 'date',
-          header: 'Fecha',
-          render: (row) => (
-            <span>
-              {formatDate(row.invoiceDate)}
-              <span className="block text-[12px] text-ink-3">
-                Ingresada {formatDateTime(row.createdAt)}
-              </span>
-            </span>
-          ),
-        },
-        {
-          key: 'products',
-          header: 'Llegó',
-          hideOnMobile: true,
-          render: (row) => (
-            <ul className="text-[13px]">
-              {row.lines.map((line) => (
-                <li key={line.productId}>
-                  <span title={line.productName}>{line.productCode}</span>:{' '}
-                  <Qty value={line.quantity} />
-                </li>
-              ))}
-            </ul>
-          ),
-        },
-        {
-          key: 'total',
-          header: 'Total con IVA',
-          align: 'right',
-          render: (row) => <span className="font-medium">{formatCop(row.total)}</span>,
-        },
-        {
-          key: 'receivedBy',
-          header: 'Recibió',
-          hideOnMobile: true,
-          render: (row) => row.receivedBy,
-        },
-      ]}
-    />
-  );
-}
+const ENTRY_COLUMNS: QueryColumn<SupplierInvoice>[] = [
+  {
+    key: 'document',
+    header: 'Factura del proveedor',
+    sort: (row) => row.documentNumber,
+    csv: (row) => row.documentNumber,
+    render: (row) => <span className="font-medium tabular-nums">{row.documentNumber}</span>,
+  },
+  {
+    key: 'date',
+    header: 'Fecha factura',
+    sort: (row) => row.invoiceDate,
+    csv: (row) => row.invoiceDate,
+    render: (row) => <span className="whitespace-nowrap">{formatDate(row.invoiceDate)}</span>,
+  },
+  {
+    key: 'supplier',
+    header: 'Proveedor',
+    sort: (row) => row.supplier.name,
+    csv: (row) => row.supplier.name,
+    render: (row) => (
+      <span className="block max-w-56 truncate" title={row.supplier.name}>
+        {row.supplier.name}
+      </span>
+    ),
+  },
+  {
+    key: 'order',
+    header: 'Orden de compra',
+    sort: (row) => row.purchaseOrder.label,
+    csv: (row) => row.purchaseOrder.label,
+    render: (row) => (
+      <EntityLink to="purchase-order" id={row.purchaseOrder.id}>
+        {row.purchaseOrder.label}
+      </EntityLink>
+    ),
+  },
+  {
+    key: 'subtotal',
+    header: 'Subtotal',
+    align: 'right',
+    csv: (row) => row.subtotal,
+    render: (row) => formatCop(row.subtotal),
+    total: (rows) => sumCop(rows, (row) => row.subtotal),
+  },
+  {
+    key: 'tax',
+    header: 'IVA',
+    align: 'right',
+    hideOnMobile: true,
+    csv: (row) => row.tax,
+    render: (row) => formatCop(row.tax),
+    total: (rows) => sumCop(rows, (row) => row.tax),
+  },
+  {
+    key: 'total',
+    header: 'Total',
+    align: 'right',
+    sort: (row) => Number(row.total),
+    csv: (row) => row.total,
+    render: (row) => <span className="font-medium">{formatCop(row.total)}</span>,
+    total: (rows) => sumCop(rows, (row) => row.total),
+  },
+  {
+    key: 'due',
+    header: 'Vence',
+    sort: (row) => row.dueDate,
+    csv: (row) => row.dueDate,
+    render: (row) =>
+      isZero(row.balance) ? (
+        <span className="text-good">Pagada</span>
+      ) : (
+        <DateCell date={row.dueDate} pending lateLabel="Vencida" />
+      ),
+  },
+  {
+    key: 'receivedBy',
+    header: 'Recibió',
+    hideOnMobile: true,
+    sort: (row) => row.createdAt,
+    csv: (row) => row.receivedBy,
+    render: (row) => (
+      <span className="text-ink-2">
+        {row.receivedBy}
+        <span className="text-ink-3"> · {formatDateTime(row.createdAt)}</span>
+      </span>
+    ),
+  },
+];

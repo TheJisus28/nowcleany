@@ -75,3 +75,23 @@
     }
   }
 }
+
+/* Paper: documents, consultations and reports print without the menu, toolbars or filters. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: white;
+    font-size: 11px;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+}

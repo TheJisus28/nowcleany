@@ -1,46 +1,64 @@
 import {
+  BadgeDollarSign,
   BookOpen,
-  CalendarRange,
+  Building2,
   ChartColumn,
   ClipboardCheck,
   Contact,
   Factory,
+  FilePlus2,
   FileText,
+  Gauge,
+  HandCoins,
   History,
   House,
   Inbox,
-  Landmark,
   type LucideIcon,
   MapPinned,
+  NotebookTabs,
   PackageCheck,
+  PackageSearch,
+  Receipt,
+  ScrollText,
   ShoppingCart,
   Tags,
+  TrendingDown,
   Truck,
   Users,
+  Wallet,
   Warehouse,
-  Building2,
+  Wrench,
 } from 'lucide-react';
 
 /** A work area. Each role sees only the panels it works with (see PANELS_BY_ROLE). */
 export type Panel =
-  | 'summary'
-  | 'home'
+  | 'operations'
   | 'tasks'
-  | 'customers'
-  | 'sales'
-  | 'visits'
+  | 'home'
+  | 'newOrder'
   | 'consolidation'
+  | 'sales'
   | 'invoices'
+  | 'visits'
+  | 'customers'
   | 'plant'
+  | 'production'
+  | 'catalog'
   | 'shipments'
   | 'inventory'
-  | 'monthlyPlan'
+  | 'kardex'
+  | 'inventoryDocs'
   | 'purchasing'
   | 'receiving'
+  | 'monthlyPlan'
   | 'suppliers'
+  | 'receipts'
+  | 'disbursements'
+  | 'receivables'
+  | 'payables'
   | 'finance'
   | 'trail'
-  | 'catalog'
+  | 'oversell'
   | 'users';
 
 export interface NavItem {
@@ -50,70 +68,229 @@ export interface NavItem {
   icon: LucideIcon;
 }
 
-/** An ERP module: the menu groups its panels under it. */
+export type SectionKind = 'Documentos' | 'Consultas' | 'Informes' | 'Maestros';
+
+/** An ERP module: its options grouped as Documentos / Consultas / Informes / Maestros. */
 export interface NavGroup {
-  /** Null for the first group (the role's start page needs no heading). */
+  /** Null for the start group (the role's landing page needs no heading). */
   label: string | null;
-  items: readonly NavItem[];
+  icon?: LucideIcon;
+  sections: readonly { kind: SectionKind | null; items: readonly NavItem[] }[];
 }
 
-/** Menu order; a role's home is the first panel it has. */
+/** Menu tree; a role's home is the first panel it has. */
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: null,
-    items: [
-      { panel: 'summary', to: '/resumen', label: 'Resumen', icon: ChartColumn },
-      { panel: 'home', to: '/inicio', label: 'Mi día', icon: House },
-      { panel: 'tasks', to: '/bandeja', label: 'Mi bandeja', icon: Inbox },
+    sections: [
+      {
+        kind: null,
+        items: [
+          { panel: 'operations', to: '/operacion', label: 'Tablero de operación', icon: Gauge },
+          { panel: 'tasks', to: '/pendientes', label: 'Pendientes', icon: Inbox },
+          { panel: 'home', to: '/inicio', label: 'Mi día', icon: House },
+        ],
+      },
     ],
   },
   {
     label: 'Ventas',
-    items: [
-      { panel: 'customers', to: '/clientes', label: 'Clientes', icon: Contact },
-      { panel: 'sales', to: '/ventas', label: 'Preventas', icon: Tags },
-      { panel: 'visits', to: '/visitas', label: 'Visitas', icon: MapPinned },
-      { panel: 'consolidation', to: '/consolidado', label: 'Consolidado', icon: ClipboardCheck },
-      { panel: 'invoices', to: '/facturas', label: 'Facturas', icon: FileText },
+    icon: Tags,
+    sections: [
+      {
+        kind: 'Documentos',
+        items: [
+          { panel: 'newOrder', to: '/ventas/nueva', label: 'Pedido (preventa)', icon: FilePlus2 },
+          {
+            panel: 'consolidation',
+            to: '/consolidado',
+            label: 'Facturación de pedidos',
+            icon: ClipboardCheck,
+          },
+        ],
+      },
+      {
+        kind: 'Consultas',
+        items: [
+          { panel: 'sales', to: '/ventas', label: 'Pedidos', icon: NotebookTabs },
+          { panel: 'invoices', to: '/facturas', label: 'Facturas de venta', icon: FileText },
+          { panel: 'visits', to: '/visitas', label: 'Visitas de vendedores', icon: MapPinned },
+        ],
+      },
+      {
+        kind: 'Maestros',
+        items: [{ panel: 'customers', to: '/clientes', label: 'Clientes', icon: Contact }],
+      },
     ],
   },
   {
-    label: 'Operación',
-    items: [
-      { panel: 'plant', to: '/planta', label: 'Planta', icon: Factory },
-      { panel: 'shipments', to: '/logistica', label: 'Logística y guías', icon: Truck },
-      { panel: 'inventory', to: '/inventario', label: 'Existencias', icon: Warehouse },
+    label: 'Producción',
+    icon: Factory,
+    sections: [
+      {
+        kind: 'Documentos',
+        items: [
+          { panel: 'plant', to: '/planta', label: 'Alistamiento de pedidos', icon: PackageCheck },
+          {
+            panel: 'production',
+            to: '/planta/produccion',
+            label: 'Órdenes de producción',
+            icon: Factory,
+          },
+        ],
+      },
+      {
+        kind: 'Maestros',
+        items: [
+          { panel: 'catalog', to: '/catalogo', label: 'Productos y fórmulas', icon: BookOpen },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'Logística',
+    icon: Truck,
+    sections: [
+      {
+        kind: 'Documentos',
+        items: [{ panel: 'shipments', to: '/logistica', label: 'Remisiones y guías', icon: Truck }],
+      },
+    ],
+  },
+  {
+    label: 'Inventario',
+    icon: Warehouse,
+    sections: [
+      {
+        kind: 'Documentos',
+        items: [
+          {
+            panel: 'inventoryDocs',
+            to: '/inventario/documentos',
+            label: 'Ajustes, traslados y mermas',
+            icon: Wrench,
+          },
+        ],
+      },
+      {
+        kind: 'Consultas',
+        items: [
+          { panel: 'inventory', to: '/inventario', label: 'Existencias', icon: Warehouse },
+          { panel: 'kardex', to: '/inventario/kardex', label: 'Kárdex', icon: PackageSearch },
+        ],
+      },
     ],
   },
   {
     label: 'Compras',
-    items: [
-      { panel: 'monthlyPlan', to: '/compras/plan', label: 'Plan del mes', icon: CalendarRange },
-      { panel: 'purchasing', to: '/compras', label: 'Órdenes de compra', icon: ShoppingCart },
-      { panel: 'receiving', to: '/recepcion', label: 'Recepción de facturas', icon: PackageCheck },
-      { panel: 'suppliers', to: '/proveedores', label: 'Proveedores', icon: Building2 },
+    icon: ShoppingCart,
+    sections: [
+      {
+        kind: 'Documentos',
+        items: [
+          { panel: 'purchasing', to: '/compras', label: 'Órdenes de compra', icon: ShoppingCart },
+          {
+            panel: 'receiving',
+            to: '/recepcion',
+            label: 'Entradas de almacén',
+            icon: PackageCheck,
+          },
+        ],
+      },
+      {
+        kind: 'Informes',
+        items: [
+          {
+            panel: 'monthlyPlan',
+            to: '/compras/plan',
+            label: 'Plan de compras del mes',
+            icon: ChartColumn,
+          },
+        ],
+      },
+      {
+        kind: 'Maestros',
+        items: [{ panel: 'suppliers', to: '/proveedores', label: 'Proveedores', icon: Building2 }],
+      },
     ],
   },
   {
     label: 'Contabilidad',
-    items: [
-      { panel: 'finance', to: '/contabilidad', label: 'Cobros y pagos', icon: Landmark },
-      { panel: 'trail', to: '/traza', label: 'Traza', icon: History },
+    icon: BadgeDollarSign,
+    sections: [
+      {
+        kind: 'Documentos',
+        items: [
+          {
+            panel: 'receipts',
+            to: '/contabilidad/recibos',
+            label: 'Recibos de caja',
+            icon: Receipt,
+          },
+          {
+            panel: 'disbursements',
+            to: '/contabilidad/egresos',
+            label: 'Comprobantes de egreso',
+            icon: HandCoins,
+          },
+        ],
+      },
+      {
+        kind: 'Consultas',
+        items: [
+          { panel: 'receivables', to: '/contabilidad/cartera', label: 'Cartera', icon: Wallet },
+          {
+            panel: 'payables',
+            to: '/contabilidad/por-pagar',
+            label: 'Cuentas por pagar',
+            icon: ScrollText,
+          },
+        ],
+      },
+      {
+        kind: 'Informes',
+        items: [
+          { panel: 'finance', to: '/contabilidad', label: 'Cobros y pagos', icon: ChartColumn },
+          { panel: 'trail', to: '/traza', label: 'Auditoría (traza)', icon: History },
+        ],
+      },
     ],
   },
   {
-    label: 'Catálogo',
-    items: [{ panel: 'catalog', to: '/catalogo', label: 'Productos y fórmulas', icon: BookOpen }],
+    label: 'Gerencia',
+    icon: Gauge,
+    sections: [
+      {
+        kind: 'Informes',
+        items: [
+          {
+            panel: 'oversell',
+            to: '/informes/sobreventa',
+            label: 'Sobreventa y cobertura',
+            icon: TrendingDown,
+          },
+        ],
+      },
+    ],
   },
   {
     label: 'Administración',
-    items: [{ panel: 'users', to: '/usuarios', label: 'Usuarios', icon: Users }],
+    icon: Users,
+    sections: [
+      {
+        kind: 'Maestros',
+        items: [{ panel: 'users', to: '/usuarios', label: 'Usuarios', icon: Users }],
+      },
+    ],
   },
 ];
 
-export const NAV: readonly (NavItem & { group: string | null })[] = NAV_GROUPS.flatMap((group) =>
-  group.items.map((item) => ({ ...item, group: group.label })),
-);
+export const NAV: readonly (NavItem & { group: string | null; kind: SectionKind | null })[] =
+  NAV_GROUPS.flatMap((group) =>
+    group.sections.flatMap((section) =>
+      section.items.map((item) => ({ ...item, group: group.label, kind: section.kind })),
+    ),
+  );
 
 /**
  * What each role works with day to day. Read permissions are broader on purpose (planning reads
@@ -123,29 +300,43 @@ export const NAV: readonly (NavItem & { group: string | null })[] = NAV_GROUPS.f
 export const PANELS_BY_ROLE: Record<string, readonly Panel[]> = {
   admin: NAV.map((item) => item.panel).filter((panel) => panel !== 'home' && panel !== 'tasks'),
   manager: [
-    'summary',
-    'customers',
-    'sales',
-    'visits',
+    'operations',
     'consolidation',
+    'sales',
     'invoices',
+    'visits',
+    'customers',
     'plant',
+    'production',
+    'catalog',
     'shipments',
     'inventory',
-    'monthlyPlan',
+    'kardex',
     'purchasing',
+    'monthlyPlan',
     'suppliers',
+    'receivables',
+    'payables',
     'finance',
     'trail',
-    'catalog',
+    'oversell',
   ],
-  sales: ['home', 'customers', 'sales', 'visits'],
-  consolidator: ['tasks', 'consolidation', 'invoices', 'sales', 'customers', 'inventory'],
-  plant: ['tasks', 'plant', 'inventory', 'catalog'],
-  logistics: ['tasks', 'shipments', 'sales', 'inventory'],
-  purchasing: ['tasks', 'monthlyPlan', 'purchasing', 'suppliers', 'inventory'],
-  receiving: ['tasks', 'receiving', 'purchasing', 'inventory'],
-  accountant: ['tasks', 'finance', 'invoices', 'trail'],
+  sales: ['home', 'newOrder', 'sales', 'visits', 'customers'],
+  consolidator: ['tasks', 'consolidation', 'sales', 'invoices', 'customers', 'inventory'],
+  plant: ['tasks', 'plant', 'production', 'catalog', 'inventory', 'kardex', 'inventoryDocs'],
+  logistics: ['tasks', 'shipments', 'sales', 'inventory', 'kardex', 'inventoryDocs'],
+  purchasing: ['tasks', 'purchasing', 'monthlyPlan', 'suppliers', 'inventory', 'kardex'],
+  receiving: ['tasks', 'receiving', 'purchasing', 'inventory', 'kardex'],
+  accountant: [
+    'tasks',
+    'receipts',
+    'disbursements',
+    'receivables',
+    'payables',
+    'finance',
+    'invoices',
+    'trail',
+  ],
 };
 
 export const ROLE_LABELS: Record<string, string> = {
@@ -160,14 +351,14 @@ export const ROLE_LABELS: Record<string, string> = {
   accountant: 'Contable',
 };
 
-/** The menu entry a path belongs to (detail pages belong to their list). */
-export function navItemFor(pathname: string): (NavItem & { group: string | null }) | undefined {
-  const aliases: Record<string, string> = { '/productos': '/catalogo' };
-  const parts = pathname.split('/');
-  const two = `/${parts[1] ?? ''}/${parts[2] ?? ''}`;
-  const exact = NAV.find((item) => item.to === two);
-  if (exact) return exact;
-  const first = `/${parts[1] ?? ''}`;
-  const base = aliases[first] ?? first;
-  return NAV.find((item) => item.to === base);
+/** The menu entry a path belongs to (the longest matching route; detail pages belong to their list). */
+export function navItemFor(
+  pathname: string,
+): (NavItem & { group: string | null; kind: SectionKind | null }) | undefined {
+  const aliases: Record<string, string> = { '/productos': '/catalogo', '/resumen': '/operacion' };
+  const first = `/${pathname.split('/')[1] ?? ''}`;
+  const path = aliases[first] ? pathname.replace(first, aliases[first]) : pathname;
+  return [...NAV]
+    .filter((item) => path === item.to || path.startsWith(`${item.to}/`))
+    .sort((a, b) => b.to.length - a.to.length)[0];
 }

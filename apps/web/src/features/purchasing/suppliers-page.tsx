@@ -1,114 +1,178 @@
-import { Plus, Search, Truck } from 'lucide-react';
-import { type SyntheticEvent, useState } from 'react';
+import { FilePlus2, Printer } from 'lucide-react';
+import { type SyntheticEvent, useMemo, useState } from 'react';
 import { api } from '../../api/client';
 import { useAction, useSuppliers } from '../../api/hooks';
 import type { Supplier } from '../../api/types';
 import { useSession } from '../../auth/session';
-import { DataTable } from '../../components/data-table';
 import { Dialog } from '../../components/dialog';
 import {
-  Button,
-  EmptyState,
-  Field,
-  Input,
-  PageHeader,
-  Panel,
-  QueryView,
-} from '../../components/ui';
+  DocumentToolbar,
+  FilterBar,
+  FilterField,
+  type QueryColumn,
+  QueryGrid,
+  useWorkTab,
+} from '../../components/erp';
+import { Button, Field, Input, QueryView } from '../../components/ui';
+import { INPUT, QueryPanel, ScreenTitle, SELECT, useUrlFilters } from '../inventory/erp-kit';
 
+const FILTERS = { q: '', estado: 'activos' };
+
+const COLUMNS: QueryColumn<Supplier>[] = [
+  {
+    key: 'nit',
+    header: 'NIT',
+    sort: (row) => row.documentNumber ?? '',
+    csv: (row) => row.documentNumber ?? '',
+    render: (row) => <span className="tabular-nums">{row.documentNumber ?? '—'}</span>,
+  },
+  {
+    key: 'name',
+    header: 'Razón social',
+    sort: (row) => row.name,
+    csv: (row) => row.name,
+    render: (row) => <span className="font-medium">{row.name}</span>,
+  },
+  {
+    key: 'contact',
+    header: 'Contacto',
+    sort: (row) => row.contact ?? '',
+    csv: (row) => row.contact ?? '',
+    render: (row) => row.contact ?? <span className="text-ink-3">—</span>,
+  },
+  {
+    key: 'phone',
+    header: 'Teléfono',
+    csv: (row) => row.phone ?? '',
+    render: (row) => <span className="tabular-nums">{row.phone ?? '—'}</span>,
+  },
+  {
+    key: 'email',
+    header: 'Correo',
+    hideOnMobile: true,
+    csv: (row) => row.email ?? '',
+    render: (row) => <span className="text-ink-2">{row.email ?? '—'}</span>,
+  },
+  {
+    key: 'city',
+    header: 'Ciudad',
+    sort: (row) => row.city ?? '',
+    csv: (row) => row.city ?? '',
+    render: (row) => row.city ?? <span className="text-ink-3">—</span>,
+  },
+  {
+    key: 'active',
+    header: 'Estado',
+    sort: (row) => (row.active ? 0 : 1),
+    csv: (row) => (row.active ? 'Activo' : 'Inactivo'),
+    render: (row) => (row.active ? 'Activo' : <span className="text-ink-3">Inactivo</span>),
+  },
+];
+
+/** Suppliers master: consultation in a grid; Enter opens the record to edit it. */
 export function SuppliersPage() {
+  useWorkTab('Proveedores');
   const { can } = useSession();
   const canWrite = can('suppliers:write');
-  const [search, setSearch] = useState('');
+  const filters = useUrlFilters(FILTERS);
+  const { q, estado } = filters.applied;
   const [editing, setEditing] = useState<{ supplier?: Supplier } | null>(null);
-  const suppliers = useSuppliers(search.trim() || undefined);
+  const suppliers = useSuppliers(q.trim() || undefined);
+  const rows = useMemo(
+    () =>
+      (suppliers.data ?? []).filter(
+        (row) => estado === 'todos' || (estado === 'activos' ? row.active : !row.active),
+      ),
+    [suppliers.data, estado],
+  );
 
   return (
     <>
-      <PageHeader
-        title="Proveedores"
-        description="A quién se le compran las materias primas, envases y empaques."
-        actions={
-          canWrite ? (
-            <Button
-              icon={<Plus className="size-4" />}
-              onClick={() => {
-                setEditing({});
-              }}
-            >
-              Nuevo proveedor
-            </Button>
-          ) : null
-        }
+      <DocumentToolbar
+        actions={[
+          {
+            label: 'Nuevo proveedor',
+            icon: FilePlus2,
+            shortcut: 'F9',
+            primary: true,
+            hidden: !canWrite,
+            onClick: () => {
+              setEditing({});
+            },
+          },
+          {
+            label: 'Imprimir',
+            icon: Printer,
+            shortcut: 'Ctrl+P',
+            onClick: () => {
+              window.print();
+            },
+          },
+        ]}
       />
-      <Panel flush>
-        <div className="border-b border-line px-4 py-3">
-          <label className="relative block sm:w-80">
-            <span className="sr-only">Buscar proveedor</span>
-            <Search
-              aria-hidden
-              className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3"
-            />
-            <Input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-              }}
-              placeholder="Nombre o NIT"
-              className="pl-9"
-            />
-          </label>
-        </div>
+      <ScreenTitle
+        title="Proveedores"
+        subtitle={`A quién se le compran materias primas, envases y mercancía de reventa.${canWrite ? ' Enter o doble clic abre la ficha.' : ''}`}
+      />
+      <QueryPanel
+        filters={
+          <FilterBar
+            onSubmit={() => {
+              filters.apply();
+            }}
+          >
+            <FilterField label="Nombre o NIT" className="w-full sm:w-64">
+              <input
+                className={INPUT}
+                value={filters.draft.q}
+                onChange={(event) => {
+                  filters.set('q', event.target.value);
+                }}
+              />
+            </FilterField>
+            <FilterField label="Estado">
+              <select
+                className={SELECT}
+                value={filters.draft.estado}
+                onChange={(event) => {
+                  filters.set('estado', event.target.value);
+                }}
+              >
+                <option value="activos">Activos</option>
+                <option value="inactivos">Inactivos</option>
+                <option value="todos">Todos</option>
+              </select>
+            </FilterField>
+          </FilterBar>
+        }
+      >
         <QueryView query={suppliers}>
-          {(rows) => (
-            <DataTable<Supplier>
-              label="Proveedores"
+          {() => (
+            <QueryGrid<Supplier>
+              title="Proveedores"
+              columns={COLUMNS}
               rows={rows}
               rowKey={(row) => row.id}
               {...(canWrite
                 ? {
-                    onRowClick: (row: Supplier) => {
+                    onOpen: (row: Supplier) => {
                       setEditing({ supplier: row });
                     },
                   }
                 : {})}
-              rowClassName={(row) => (row.active ? undefined : 'opacity-60')}
-              empty={<EmptyState icon={<Truck />} title="No hay proveedores con ese nombre" />}
-              columns={[
-                {
-                  key: 'name',
-                  header: 'Proveedor',
-                  render: (row) => (
-                    <span>
-                      <span className="font-medium">{row.name}</span>
-                      <span className="block text-[12.5px] text-ink-3">
-                        {row.documentNumber ? `NIT ${row.documentNumber}` : 'Sin NIT'}
-                        {row.active ? '' : ' (inactivo)'}
-                      </span>
-                    </span>
-                  ),
-                },
-                { key: 'contact', header: 'Contacto', render: (row) => row.contact ?? '—' },
-                { key: 'phone', header: 'Teléfono', render: (row) => row.phone ?? '—' },
-                {
-                  key: 'email',
-                  header: 'Correo',
-                  hideOnMobile: true,
-                  render: (row) => row.email ?? '—',
-                },
-                { key: 'city', header: 'Ciudad', render: (row) => row.city ?? '—' },
-              ]}
+              rowClassName={(row) => (row.active ? undefined : 'text-ink-3')}
+              empty="No hay proveedores con estos filtros."
             />
           )}
         </QueryView>
-      </Panel>
+      </QueryPanel>
       <Dialog
         open={editing !== null}
         onClose={() => {
           setEditing(null);
         }}
-        title={editing?.supplier ? editing.supplier.name : 'Nuevo proveedor'}
-        description="Los datos de contacto aparecen en las órdenes de compra."
+        title={editing?.supplier ? `Proveedor · ${editing.supplier.name}` : 'Nuevo proveedor'}
+        description="Ficha del proveedor: sus datos aparecen en las órdenes de compra."
       >
         {editing ? (
           <SupplierForm
@@ -167,7 +231,7 @@ function SupplierForm({ supplier, onClose }: { supplier?: Supplier; onClose: () 
     { key: 'city', label: 'Ciudad' },
   ];
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4 p-5">
+    <form onSubmit={submit} className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         {fields.map((field) => (
           <Field

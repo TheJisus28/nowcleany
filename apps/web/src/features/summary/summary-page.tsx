@@ -179,7 +179,7 @@ export function SummaryPage() {
   return (
     <>
       <PageHeader
-        title="Resumen"
+        title="Sobreventa y cobertura"
         description={`Hoy, ${today}. Filtra por vendedor, producto, entrega o cobertura; también haciendo clic en los gráficos.`}
       />
       <QueryView query={coverage}>{(rows) => <Dashboard orders={rows} />}</QueryView>

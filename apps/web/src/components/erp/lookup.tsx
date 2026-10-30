@@ -1,0 +1,224 @@
+import { Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Dialog } from '../dialog';
+import { cn, Input } from '../ui';
+
+export interface LookupItem {
+  id: string;
+  /** Code, NIT or number the user types. */
+  code: string;
+  label: string;
+  detail?: string;
+}
+
+const normalize = (text: string) => text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/** Exact code first, then items whose code or name contains every typed word. */
+export function filterLookup(items: readonly LookupItem[], query: string): LookupItem[] {
+  const words = normalize(query).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [...items];
+  const exact = items.filter((item) => normalize(item.code) === words.join(' '));
+  const rest = items.filter(
+    (item) =>
+      !exact.includes(item) &&
+      words.every((word) =>
+        normalize(`${item.code} ${item.label} ${item.detail ?? ''}`).includes(word),
+      ),
+  );
+  return [...exact, ...rest];
+}
+
+/**
+ * The F2 search of traditional systems: type part of the code or the name, move with the arrows,
+ * Enter picks it.
+ */
+export function LookupDialog({
+  open,
+  title,
+  items,
+  initialQuery = '',
+  onPick,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  items: readonly LookupItem[];
+  initialQuery?: string;
+  onPick: (item: LookupItem) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState(initialQuery);
+  const [active, setActive] = useState(0);
+  const input = useRef<HTMLInputElement>(null);
+  const results = useMemo(() => filterLookup(items, query).slice(0, 80), [items, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery(initialQuery);
+    setActive(0);
+    window.setTimeout(() => input.current?.focus(), 0);
+  }, [open, initialQuery]);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={title}
+      description="Escribe parte del código o del nombre. Enter elige."
+    >
+      <div className="flex flex-col gap-3">
+        <div className="relative">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3"
+          />
+          <input
+            ref={input}
+            value={query}
+            className="h-10 w-full rounded-md border border-line-strong bg-surface pr-3 pl-9 text-sm text-ink focus-visible:border-brand"
+            aria-label="Buscar"
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActive(0);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setActive((value) => Math.min(value + 1, results.length - 1));
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActive((value) => Math.max(value - 1, 0));
+              } else if (event.key === 'Enter') {
+                event.preventDefault();
+                const item = results[active];
+                if (item) onPick(item);
+              }
+            }}
+          />
+        </div>
+        <ul
+          className="max-h-80 overflow-y-auto rounded-md border border-line"
+          role="listbox"
+          aria-label={title}
+        >
+          {results.length === 0 ? (
+            <li className="px-3 py-6 text-center text-sm text-ink-3">Sin resultados</li>
+          ) : (
+            results.map((item, index) => (
+              <li key={item.id} role="option" aria-selected={index === active}>
+                <button
+                  type="button"
+                  onMouseEnter={() => {
+                    setActive(index);
+                  }}
+                  onClick={() => {
+                    onPick(item);
+                  }}
+                  className={cn(
+                    'grid w-full grid-cols-[120px_1fr] gap-3 px-3 py-1.5 text-left text-[13.5px]',
+                    index === active ? 'bg-brand text-white' : 'hover:bg-surface-2',
+                  )}
+                >
+                  <span className="truncate tabular-nums">{item.code}</span>
+                  <span className="truncate">
+                    {item.label}
+                    {item.detail ? (
+                      <span className={index === active ? 'text-white/75' : 'text-ink-3'}>
+                        {' '}
+                        · {item.detail}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      </div>
+    </Dialog>
+  );
+}
+
+/**
+ * A field that holds a record (customer, supplier…): shows its code and name; F2 or the button opens the
+ * search. Typing a code and pressing Enter picks it directly when it matches.
+ */
+export function LookupField({
+  id,
+  title,
+  items,
+  value,
+  onChange,
+  disabled = false,
+  placeholder = 'Código o NIT (F2 para buscar)',
+}: {
+  id?: string;
+  title: string;
+  items: readonly LookupItem[];
+  value: string | null;
+  onChange: (id: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const selected = items.find((item) => item.id === value) ?? null;
+  const [text, setText] = useState('');
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    setText(selected ? selected.code : '');
+  }, [selected]);
+  return (
+    <>
+      <div className="flex min-w-0 items-center gap-2">
+        <Input
+          id={id}
+          value={text}
+          disabled={disabled}
+          placeholder={placeholder}
+          className="h-8 w-40 shrink-0 tabular-nums"
+          onChange={(event) => {
+            setText(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'F2') {
+              event.preventDefault();
+              setOpen(true);
+            } else if (event.key === 'Enter') {
+              event.preventDefault();
+              const [match] = filterLookup(items, text);
+              if (match && filterLookup(items, text).length === 1) onChange(match.id);
+              else setOpen(true);
+            }
+          }}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            setOpen(true);
+          }}
+          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 text-[12.5px] text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+          title="Buscar (F2)"
+        >
+          <Search aria-hidden className="size-3.5" />
+          F2
+        </button>
+        <span className="min-w-0 truncate text-[14px]">
+          {selected ? selected.label : <span className="text-ink-3">Sin seleccionar</span>}
+        </span>
+      </div>
+      <LookupDialog
+        open={open}
+        title={title}
+        items={items}
+        initialQuery={text === selected?.code ? '' : text}
+        onPick={(item) => {
+          onChange(item.id);
+          setOpen(false);
+        }}
+        onClose={() => {
+          setOpen(false);
+        }}
+      />
+    </>
+  );
+}

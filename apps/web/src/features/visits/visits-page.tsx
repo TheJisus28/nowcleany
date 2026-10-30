@@ -1,46 +1,23 @@
-import { CalendarDays, CircleCheck, Contact, MapPinned, TriangleAlert } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { MapPinned, TriangleAlert } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import { useSellers, useVisits } from '../../api/hooks';
 import type { Visit } from '../../api/types';
 import { useSession } from '../../auth/session';
-import { Kpi } from '../../components/kpi';
+import {
+  FilterBar,
+  FilterField,
+  type QueryColumn,
+  QueryGrid,
+  useWorkTab,
+} from '../../components/erp';
 import { EntityLink } from '../../components/links';
 import { MapView } from '../../components/map/map-view';
 import type { MapLink, MapMarker } from '../../components/map/types';
-import {
-  EmptyState,
-  PageHeader,
-  Panel,
-  QueryView,
-  Segmented,
-  Select,
-  cn,
-} from '../../components/ui';
-import { todayIso } from '../../lib/format';
+import { cn, QueryView } from '../../components/ui';
+import { formatDate, todayIso } from '../../lib/format';
+import { colombiaDay, normalizeText, timeOf } from '../billing/billing-format';
+import { FILTER_INPUT, GridTitle, ScreenTitle, useQueryFilters } from '../billing/erp-kit';
 import { formatDistance, VisitPlaceChip } from './visit-place';
-
-type Period = '1' | '7' | '14' | '30';
-type Place = 'all' | 'onSite' | 'far';
-
-const PERIODS: readonly { value: Period; label: string }[] = [
-  { value: '1', label: 'Hoy' },
-  { value: '7', label: '7 días' },
-  { value: '14', label: '14 días' },
-  { value: '30', label: '30 días' },
-];
-
-const PLACES: readonly { value: Place; label: string }[] = [
-  { value: 'all', label: 'Todas' },
-  { value: 'onSite', label: 'En sitio' },
-  { value: 'far', label: 'Lejos' },
-];
-
-/** Colombia calendar day of an instant ("2026-10-29"). */
-const dayOf = (instant: string) =>
-  new Date(new Date(instant).getTime() - 5 * 3_600_000).toISOString().slice(0, 10);
-
-const timeOf = (instant: string) =>
-  new Date(instant).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
 
 const dayLabel = (day: string, style: 'short' | 'long' = 'short') =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString('es-CO', {
@@ -50,64 +27,132 @@ const dayLabel = (day: string, style: 'short' | 'long' = 'short') =>
     timeZone: 'UTC',
   });
 
+const placeText = (visit: Visit) =>
+  visit.onSite === null ? 'Sucursal sin ubicar' : visit.onSite ? 'En sitio' : 'Lejos';
+
+/** Days between two calendar dates, both included. */
+function daysBetween(from: string, to: string): number {
+  if (!from || !to) return 0;
+  return (
+    Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1
+  );
+}
+
+/** "Visitas de vendedores": where and when each seller was at a customer, checked with GPS. */
 export function VisitsPage() {
   const { can } = useSession();
   const seesAll = can('visits:read-all');
-  const [period, setPeriod] = useState<Period>('7');
-  const [place, setPlace] = useState<Place>('all');
-  const [sellerId, setSellerId] = useState('');
-  const sellers = useSellers(seesAll);
-  const days = Number(period);
-  const visits = useVisits({
-    from: todayIso(-(days - 1)),
-    to: todayIso(),
-    sellerId: sellerId || undefined,
+  useWorkTab('Visitas de vendedores');
+  const filters = useQueryFilters({
+    desde: todayIso(-6),
+    hasta: todayIso(),
+    vendedor: '',
+    lugar: 'all',
+    cliente: '',
   });
+  const { draft, set } = filters;
+  const { desde, hasta, vendedor, lugar, cliente } = filters.applied;
+  const sellers = useSellers(seesAll);
+  const visits = useVisits({
+    from: desde || undefined,
+    to: hasta || undefined,
+    sellerId: vendedor || undefined,
+  });
+  const rows = useMemo(() => {
+    const customer = normalizeText(cliente.trim());
+    return (visits.data ?? []).filter(
+      (visit) =>
+        (lugar === 'all' ||
+          (lugar === 'onSite' && visit.onSite === true) ||
+          (lugar === 'far' && visit.onSite === false) ||
+          (lugar === 'unknown' && visit.onSite === null)) &&
+        (!customer ||
+          normalizeText(`${visit.customer.name} ${visit.branch.name}`).includes(customer)),
+    );
+  }, [visits.data, lugar, cliente]);
 
   return (
     <>
-      <PageHeader
-        title="Visitas"
+      <ScreenTitle
+        title="Visitas de vendedores"
         description={
           seesAll
             ? 'Cuándo y dónde estuvo cada vendedor con sus clientes, verificado con el GPS del celular.'
             : 'Tus visitas registradas desde la app, comparadas con la ubicación de cada sucursal.'
         }
       />
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <Segmented label="Periodo" value={period} options={PERIODS} onChange={setPeriod} />
-        <Segmented label="Lugar" value={place} options={PLACES} onChange={setPlace} />
+      <FilterBar onSubmit={filters.submit}>
+        <FilterField label="Desde">
+          <input
+            type="date"
+            value={draft.desde}
+            max={todayIso()}
+            onChange={(event) => {
+              set('desde', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          />
+        </FilterField>
+        <FilterField label="Hasta">
+          <input
+            type="date"
+            value={draft.hasta}
+            max={todayIso()}
+            onChange={(event) => {
+              set('hasta', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          />
+        </FilterField>
         {seesAll ? (
-          <div className="w-full sm:w-56">
-            <Select
-              aria-label="Vendedor"
-              value={sellerId}
+          <FilterField label="Vendedor">
+            <select
+              value={draft.vendedor}
               onChange={(event) => {
-                setSellerId(event.target.value);
+                set('vendedor', event.target.value);
               }}
+              className={FILTER_INPUT}
             >
-              <option value="">Todos los vendedores</option>
+              <option value="">Todos</option>
               {(sellers.data ?? []).map((seller) => (
                 <option key={seller.id} value={seller.id}>
                   {seller.name}
                 </option>
               ))}
-            </Select>
-          </div>
+            </select>
+          </FilterField>
         ) : null}
-      </div>
+        <FilterField label="Lugar">
+          <select
+            value={draft.lugar}
+            onChange={(event) => {
+              set('lugar', event.target.value);
+            }}
+            className={FILTER_INPUT}
+          >
+            <option value="all">Todas</option>
+            <option value="onSite">En sitio</option>
+            <option value="far">Lejos de la sucursal</option>
+            <option value="unknown">Sucursal sin ubicar</option>
+          </select>
+        </FilterField>
+        <FilterField label="Cliente o sucursal">
+          <input
+            value={draft.cliente}
+            onChange={(event) => {
+              set('cliente', event.target.value);
+            }}
+            className={`${FILTER_INPUT} w-52`}
+          />
+        </FilterField>
+      </FilterBar>
       <QueryView query={visits}>
-        {(rows) => (
+        {() => (
           <VisitsBoard
-            visits={rows.filter((visit) =>
-              place === 'all'
-                ? true
-                : place === 'onSite'
-                  ? visit.onSite === true
-                  : visit.onSite === false,
-            )}
-            days={days}
-            showSellers={seesAll && !sellerId}
+            visits={rows}
+            days={daysBetween(desde, hasta)}
+            lastDay={hasta || todayIso()}
+            showSellers={seesAll && !vendedor}
           />
         )}
       </QueryView>
@@ -118,17 +163,21 @@ export function VisitsPage() {
 function VisitsBoard({
   visits,
   days,
+  lastDay,
   showSellers,
 }: {
   visits: Visit[];
   days: number;
+  lastDay: string;
   showSellers: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
   const onSite = visits.filter((visit) => visit.onSite === true).length;
   const far = visits.filter((visit) => visit.onSite === false).length;
   const customers = new Set(visits.map((visit) => visit.customer.id)).size;
   const withOrder = visits.filter((visit) => visit.order).length;
+  const focused = visits.find((visit) => visit.id === selected);
 
   const { markers, links } = useMemo(() => {
     const branchMarkers = new Map<string, MapMarker>();
@@ -150,7 +199,7 @@ function VisitsBoard({
         id: visit.id,
         shape: 'dot',
         tone: visit.onSite === null ? 'muted' : visit.onSite ? 'good' : 'warning',
-        title: `${visit.seller.name} · ${dayLabel(dayOf(visit.visitedAt))} ${timeOf(visit.visitedAt)}`,
+        title: `${visit.seller.name} · ${dayLabel(colombiaDay(visit.visitedAt))} ${timeOf(visit.visitedAt)}`,
         lines: [
           `${visit.customer.name} (${visit.branch.name})`,
           visit.distanceM === null
@@ -176,127 +225,160 @@ function VisitsBoard({
     return { markers: [...branchMarkers.values(), ...visitMarkers], links: farLinks };
   }, [visits]);
 
-  const byDay = useMemo(() => {
-    const groups = new Map<string, Visit[]>();
-    for (const visit of visits) {
-      const day = dayOf(visit.visitedAt);
-      groups.set(day, [...(groups.get(day) ?? []), visit]);
-    }
-    return [...groups.entries()].sort(([a], [b]) => b.localeCompare(a));
-  }, [visits]);
+  const columns: QueryColumn<Visit>[] = [
+    {
+      key: 'date',
+      header: 'Fecha',
+      render: (visit) => (
+        <span className="whitespace-nowrap">{formatDate(colombiaDay(visit.visitedAt))}</span>
+      ),
+      sort: (visit) => visit.visitedAt,
+      csv: (visit) => colombiaDay(visit.visitedAt),
+    },
+    {
+      key: 'time',
+      header: 'Hora',
+      className: 'whitespace-nowrap tabular-nums text-ink-2',
+      render: (visit) => timeOf(visit.visitedAt),
+      sort: (visit) => visit.visitedAt,
+      csv: (visit) => timeOf(visit.visitedAt),
+    },
+    ...(showSellers
+      ? [
+          {
+            key: 'seller',
+            header: 'Vendedor',
+            render: (visit: Visit) => visit.seller.name,
+            sort: (visit: Visit) => visit.seller.name,
+            csv: (visit: Visit) => visit.seller.name,
+          },
+        ]
+      : []),
+    {
+      key: 'customer',
+      header: 'Cliente',
+      render: (visit) => (
+        <EntityLink to="customer" id={visit.customer.id} className="font-medium">
+          {visit.customer.name}
+        </EntityLink>
+      ),
+      sort: (visit) => visit.customer.name,
+      csv: (visit) => visit.customer.name,
+    },
+    {
+      key: 'branch',
+      header: 'Sucursal',
+      render: (visit) => visit.branch.name,
+      sort: (visit) => visit.branch.name,
+      csv: (visit) => visit.branch.name,
+    },
+    {
+      key: 'place',
+      header: 'Lugar',
+      render: (visit) => <VisitPlaceChip visit={visit} />,
+      sort: placeText,
+      csv: placeText,
+    },
+    {
+      key: 'distance',
+      header: 'Distancia',
+      align: 'right',
+      hideOnMobile: true,
+      render: (visit) => (visit.distanceM === null ? '—' : formatDistance(visit.distanceM)),
+      sort: (visit) => visit.distanceM ?? 0,
+      csv: (visit) => (visit.distanceM === null ? '' : Math.round(visit.distanceM)),
+    },
+    {
+      key: 'accuracy',
+      header: 'Precisión GPS',
+      align: 'right',
+      hideOnMobile: true,
+      render: (visit) =>
+        visit.accuracyM === null ? '—' : `± ${String(Math.round(visit.accuracyM))} m`,
+      csv: (visit) => (visit.accuracyM === null ? '' : Math.round(visit.accuracyM)),
+    },
+    {
+      key: 'order',
+      header: 'Pedido',
+      render: (visit) =>
+        visit.order ? (
+          <EntityLink to="order" id={visit.order.id}>
+            {visit.order.label}
+          </EntityLink>
+        ) : (
+          <span className="text-ink-3">—</span>
+        ),
+      csv: (visit) => visit.order?.label ?? '',
+      total: (list) => `${String(list.filter((visit) => visit.order).length)} con pedido`,
+    },
+    {
+      key: 'notes',
+      header: 'Observaciones',
+      hideOnMobile: true,
+      render: (visit) => visit.notes ?? <span className="text-ink-3">—</span>,
+      csv: (visit) => visit.notes ?? '',
+    },
+  ];
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi
-          label="Visitas"
-          value={visits.length}
-          icon={MapPinned}
-          tone="brand"
-          hint={`${String(withOrder)} con preventa`}
+    <div className="mt-3 flex flex-col gap-4">
+      <p className="text-[13px] text-ink-2 tabular-nums">
+        <span className="font-semibold text-ink">{visits.length}</span> visitas ·{' '}
+        <span className="font-semibold text-ink">
+          {visits.length ? `${String(Math.round((onSite / visits.length) * 100))} %` : '—'}
+        </span>{' '}
+        en sitio ·{' '}
+        <span className={cn('font-semibold', far > 0 ? 'text-[#b67d00]' : 'text-ink')}>{far}</span>{' '}
+        lejos de la sucursal · <span className="font-semibold text-ink">{customers}</span> clientes
+        visitados · <span className="font-semibold text-ink">{withOrder}</span> con pedido
+      </p>
+
+      <div ref={mapRef} className="overflow-hidden rounded-[8px] border border-line bg-surface">
+        <MapView
+          label="Mapa de visitas"
+          className="h-[400px] w-full"
+          markers={markers}
+          links={links}
+          focus={focused ? { latitude: focused.latitude, longitude: focused.longitude } : null}
         />
-        <Kpi
-          label="En sitio"
-          value={visits.length ? `${String(Math.round((onSite / visits.length) * 100))} %` : '—'}
-          icon={CircleCheck}
-          tone="good"
-          hint={`${String(onSite)} a menos de 150 m de la sucursal`}
-        />
-        <Kpi
-          label="Lejos de la sucursal"
-          value={far}
-          icon={TriangleAlert}
-          tone={far > 0 ? 'warning' : 'neutral'}
-          hint="Marcaron la visita desde otro lugar"
-        />
-        <Kpi label="Clientes visitados" value={customers} icon={Contact} />
+        <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-line px-4 py-2 text-[12.5px] text-ink-2">
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full bg-good ring-2 ring-white" /> Visita en sitio
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full bg-[#e09a00] ring-2 ring-white" /> Visita lejos
+            (línea punteada hasta la sucursal)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <MapPinned aria-hidden className="size-3.5 text-brand" /> Sucursal del cliente
+          </span>
+          {focused ? (
+            <span className="ml-auto font-medium text-ink">
+              Ubicada: {focused.customer.name} · {timeOf(focused.visitedAt)}
+            </span>
+          ) : null}
+        </div>
       </div>
 
-      {showSellers ? <SellerDays visits={visits} days={days} /> : null}
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <Panel flush className="self-start overflow-hidden">
-          <MapView
-            label="Mapa de visitas"
-            className="h-[460px] w-full"
-            markers={markers}
-            links={links}
-          />
-          <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-line px-4 py-2.5 text-[12.5px] text-ink-2">
-            <span className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-good ring-2 ring-white" /> Visita en sitio
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#e09a00] ring-2 ring-white" /> Visita lejos
-              (línea punteada hasta la sucursal)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <MapPinned aria-hidden className="size-3.5 text-brand" /> Sucursal del cliente
-            </span>
-          </div>
-        </Panel>
-
-        <Panel title="Recorrido" description="Las visitas de cada día, en orden." flush>
-          {byDay.length === 0 ? (
-            <EmptyState
-              icon={<CalendarDays />}
-              title="Sin visitas en este periodo"
-              description="Las visitas se registran desde la app de vendedores, con el GPS del celular."
-            />
-          ) : (
-            <div className="max-h-[512px] overflow-y-auto">
-              {byDay.map(([day, list]) => (
-                <section key={day}>
-                  <h3 className="sticky top-0 z-[1] border-b border-line bg-surface-2 px-5 py-1.5 text-[13px] font-semibold text-ink-2 first-letter:uppercase">
-                    {dayLabel(day, 'long')} · {list.length}
-                  </h3>
-                  <ul className="divide-y divide-line">
-                    {[...list]
-                      .sort((a, b) => a.visitedAt.localeCompare(b.visitedAt))
-                      .map((visit) => (
-                        <li
-                          key={visit.id}
-                          className={cn(
-                            'flex gap-3 px-5 py-3 text-sm transition-colors',
-                            selected === visit.id && 'bg-brand-soft/60',
-                          )}
-                        >
-                          <span className="w-[74px] shrink-0 whitespace-nowrap text-ink-2 tabular-nums">
-                            {timeOf(visit.visitedAt)}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate">
-                              <EntityLink
-                                to="customer"
-                                id={visit.customer.id}
-                                className="font-medium"
-                              >
-                                {visit.customer.name}
-                              </EntityLink>
-                              <span className="text-ink-3"> · {visit.branch.name}</span>
-                            </p>
-                            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
-                              {showSellers ? <span>{visit.seller.name}</span> : null}
-                              <VisitPlaceChip visit={visit} />
-                              {visit.order ? (
-                                <EntityLink to="order" id={visit.order.id}>
-                                  {visit.order.label}
-                                </EntityLink>
-                              ) : null}
-                            </p>
-                            {visit.notes ? (
-                              <p className="mt-1 text-[13px] text-ink-3">{visit.notes}</p>
-                            ) : null}
-                          </div>
-                        </li>
-                      ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          )}
-        </Panel>
+      <div>
+        <GridTitle aside="Enter o doble clic ubica la visita en el mapa">Recorrido</GridTitle>
+        <QueryGrid
+          title="Recorrido de visitas"
+          exportName="visitas"
+          columns={columns}
+          rows={visits}
+          rowKey={(visit) => visit.id}
+          initialSort={{ key: 'date', direction: 'asc' }}
+          onOpen={(visit) => {
+            setSelected(visit.id);
+            mapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
+          rowClassName={(visit) => (visit.id === selected ? 'bg-brand-soft/60' : undefined)}
+          empty="Sin visitas en este periodo. Las visitas se registran desde la app de vendedores, con el GPS del celular."
+        />
       </div>
+
+      {showSellers ? <SellerDays visits={visits} days={days} lastDay={lastDay} /> : null}
     </div>
   );
 }
@@ -305,9 +387,13 @@ function VisitsBoard({
 const STEPS = ['bg-surface-2', 'bg-[#d6e6f8]', 'bg-[#a9c9ef]', 'bg-[#6fa3e3]', 'bg-[#2a78d6]'];
 
 /** Which days each seller was out visiting customers, and how many visits. */
-function SellerDays({ visits, days }: { visits: Visit[]; days: number }) {
+function SellerDays({ visits, days, lastDay }: { visits: Visit[]; days: number; lastDay: string }) {
   const shown = Math.min(days, 14);
-  const dayList = Array.from({ length: shown }, (_, index) => todayIso(-(shown - 1 - index)));
+  const dayList = Array.from({ length: shown }, (_, index) =>
+    new Date(Date.parse(`${lastDay}T12:00:00Z`) - (shown - 1 - index) * 86_400_000)
+      .toISOString()
+      .slice(0, 10),
+  );
   const sellers = useMemo(() => {
     const rows = new Map<string, { name: string; perDay: Map<string, Visit[]> }>();
     for (const visit of visits) {
@@ -315,7 +401,7 @@ function SellerDays({ visits, days }: { visits: Visit[]; days: number }) {
         name: visit.seller.name,
         perDay: new Map<string, Visit[]>(),
       };
-      const day = dayOf(visit.visitedAt);
+      const day = colombiaDay(visit.visitedAt);
       row.perDay.set(day, [...(row.perDay.get(day) ?? []), visit]);
       rows.set(visit.seller.id, row);
     }
@@ -324,10 +410,14 @@ function SellerDays({ visits, days }: { visits: Visit[]; days: number }) {
   if (sellers.length === 0 || shown < 2) return null;
 
   return (
-    <Panel
-      title="Días en la calle"
-      description={`Visitas por vendedor y día (últimos ${String(shown)} días). Los recuadros con aviso tienen visitas lejos de la sucursal.`}
-    >
+    <section className="rounded-[8px] border border-line bg-surface px-5 py-3">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[13.5px] font-semibold">Días en la calle por vendedor</h2>
+        <p className="text-[12px] text-ink-3">
+          Visitas por día (últimos {shown} días del rango); el aviso marca visitas lejos de la
+          sucursal.
+        </p>
+      </div>
       <div className="overflow-x-auto">
         <table className="border-separate border-spacing-[3px] text-[12.5px]">
           <thead>
@@ -387,13 +477,6 @@ function SellerDays({ visits, days }: { visits: Visit[]; days: number }) {
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex items-center gap-2 text-[12px] text-ink-3">
-        <span>Menos</span>
-        {STEPS.map((step) => (
-          <span key={step} className={cn('size-3.5 rounded-[3px]', step)} />
-        ))}
-        <span>Más visitas</span>
-      </div>
-    </Panel>
+    </section>
   );
 }

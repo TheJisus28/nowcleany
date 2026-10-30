@@ -1,17 +1,35 @@
-import { Check, CircleCheck, Clock, MapPin, PackageOpen, Truck, UserCheck } from 'lucide-react';
-import { useState } from 'react';
+import { Clock, Printer, Truck, UserCheck } from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { api } from '../../api/client';
-import { useAction, useShipment } from '../../api/hooks';
-import type { Shipment } from '../../api/types';
+import { useAction, useShipment, useShipments } from '../../api/hooks';
+import type { Q, Shipment } from '../../api/types';
 import { useSession } from '../../auth/session';
 import { Dialog } from '../../components/dialog';
-import { BackLink, EntityLink } from '../../components/links';
-import { Qty } from '../../components/qty';
-import { Chip, DueDate, ShipmentStatusChip } from '../../components/status';
-import { Button, cn, Field, Input, PageHeader, Panel, QueryView } from '../../components/ui';
-import { formatDate, formatDateTime, plural } from '../../lib/format';
-import { DispatchDialog, shipmentTotals } from './dispatch-dialog';
+import {
+  DocumentScreen,
+  DocumentSection,
+  DocumentToolbar,
+  HeaderField,
+  HeaderGrid,
+  useWorkTab,
+} from '../../components/erp';
+import { EntityLink } from '../../components/links';
+import { ShipmentStatusChip } from '../../components/status';
+import { Button, cn, QueryView } from '../../components/ui';
+import { formatDateTime, formatDecimal, unitLabel } from '../../lib/format';
+import {
+  addDecimals,
+  DateCell,
+  DocumentNotice,
+  GRID_HEAD,
+  GRID_TD,
+  GRID_TH,
+  INPUT,
+  neighbors,
+  QtyTotal,
+} from '../inventory/erp-kit';
+import { DispatchDialog } from './dispatch-dialog';
 import { Plate } from './plate';
 
 type GuideOrder = Shipment['orders'][number];
@@ -19,117 +37,280 @@ type GuideOrder = Shipment['orders'][number];
 export function ShipmentPage() {
   const { id } = useParams();
   const shipment = useShipment(id);
-  return <QueryView query={shipment}>{(data) => <ShipmentView shipment={data} />}</QueryView>;
+  const list = useShipments({});
+  const ids = useMemo(
+    () =>
+      list.data
+        ? [...list.data].sort((a, b) => a.label.localeCompare(b.label)).map((row) => row.id)
+        : undefined,
+    [list.data],
+  );
+  return (
+    <QueryView query={shipment}>
+      {(data) => <ShipmentDocument shipment={data} ids={ids} />}
+    </QueryView>
+  );
 }
 
-function ShipmentView({ shipment }: { shipment: Shipment }) {
+function ShipmentDocument({ shipment, ids }: { shipment: Shipment; ids: string[] | undefined }) {
   const { can } = useSession();
   const canWrite = can('shipments:write');
   const [dispatching, setDispatching] = useState(false);
   const [delivering, setDelivering] = useState<GuideOrder | null>(null);
+  useWorkTab(`${shipment.label} · ${shipment.vehiclePlate}`);
   const delivered = shipment.orders.filter((order) => order.deliveredAt).length;
+  const nav = neighbors(ids, shipment.id, (value) => `/logistica/guias/${value}`);
+
+  const totals = useMemo(() => {
+    const byProduct = new Map<string, { id: string; code: string; name: string; quantity: Q }>();
+    for (const order of shipment.orders) {
+      for (const line of order.lines) {
+        const current = byProduct.get(line.productId);
+        byProduct.set(line.productId, {
+          id: line.productId,
+          code: line.productCode,
+          name: line.productName,
+          quantity: current
+            ? {
+                unit: line.quantity.unit,
+                quantity: addDecimals(current.quantity.quantity, line.quantity.quantity),
+              }
+            : line.quantity,
+        });
+      }
+    }
+    return [...byProduct.values()].sort((a, b) => a.code.localeCompare(b.code));
+  }, [shipment.orders]);
 
   return (
     <>
-      <BackLink fallback="/logistica" label="Logística y guías" />
-      <PageHeader
-        title={`Guía ${shipment.label}`}
-        description={
-          <span className="flex flex-wrap items-center gap-2">
-            <ShipmentStatusChip status={shipment.status} />
-            <span>
-              {plural(shipment.orders.length, 'pedido', 'pedidos')}
-              {shipment.route ? ` · ${shipment.route}` : ''}
-            </span>
-          </span>
+      <DocumentScreen
+        kind="Remisión / guía de despacho"
+        number={shipment.label}
+        status={<ShipmentStatusChip status={shipment.status} />}
+        toolbar={
+          <DocumentToolbar
+            actions={[
+              {
+                label: 'Despachar',
+                icon: Truck,
+                shortcut: 'F9',
+                primary: true,
+                hidden: shipment.status !== 'PLANNED' || !canWrite,
+                onClick: () => {
+                  setDispatching(true);
+                },
+              },
+              {
+                label: 'Imprimir',
+                icon: Printer,
+                shortcut: 'Ctrl+P',
+                onClick: () => {
+                  window.print();
+                },
+              },
+            ]}
+            previous={nav.previous}
+            next={nav.next}
+            closeTo="/logistica"
+          />
         }
-        actions={
-          shipment.status === 'PLANNED' && canWrite ? (
-            <Button
-              icon={<Truck className="size-4" />}
-              onClick={() => {
-                setDispatching(true);
-              }}
-            >
-              Despachar
-            </Button>
-          ) : null
+        notes={
+          shipment.notes ? (
+            <>
+              <span className="mb-0.5 block text-[12px] font-medium text-ink-3">Observaciones</span>
+              <span className="whitespace-pre-line">{shipment.notes}</span>
+            </>
+          ) : (
+            <span className="text-ink-3">Sin observaciones.</span>
+          )
         }
-      />
-
-      <Steps shipment={shipment} delivered={delivered} />
-
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <Panel
-          title="Pedidos de la guía"
-          description={
-            shipment.status === 'IN_TRANSIT'
-              ? `${String(delivered)} de ${String(shipment.orders.length)} entregados. Confirma cada entrega con el nombre de quien recibió.`
-              : shipment.status === 'PLANNED'
-                ? 'Cargados en el vehículo; la entrega se confirma cuando la guía esté en ruta.'
-                : 'Todos los pedidos fueron entregados.'
-          }
-          flush
-        >
-          <ul className="divide-y divide-line">
-            {shipment.orders.map((order) => (
-              <OrderStop
-                key={order.orderId}
-                order={order}
-                status={shipment.status}
-                canDeliver={canWrite && shipment.status === 'IN_TRANSIT'}
-                onDeliver={() => {
-                  setDelivering(order);
-                }}
-              />
-            ))}
-          </ul>
-        </Panel>
-
-        <div className="flex flex-col gap-6">
-          <Panel title="Vehículo">
-            <div className="mb-4">
-              <Plate plate={shipment.vehiclePlate} size="lg" />
-            </div>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
-              <dt className="text-ink-3">Transportador</dt>
-              <dd>{shipment.carrier}</dd>
-              <dt className="text-ink-3">Conductor</dt>
-              <dd>{shipment.driverName}</dd>
-              <dt className="text-ink-3">Ruta</dt>
-              <dd>{shipment.route ?? <span className="text-ink-3">Sin ruta</span>}</dd>
-              <dt className="text-ink-3">Salida</dt>
-              <dd>
-                {formatDate(shipment.scheduledDate)}
-                {shipment.status === 'PLANNED' ? (
-                  <span className="block text-[12.5px]">
-                    <DueDate date={shipment.scheduledDate} lateLabel="Debió salir" />
-                  </span>
+        totals={[
+          { label: 'Pedidos', value: shipment.orders.length },
+          {
+            label: 'Entregados',
+            value: `${String(delivered)} de ${String(shipment.orders.length)}`,
+          },
+          {
+            label: 'Carga',
+            value: <QtyTotal values={totals.map((total) => total.quantity)} />,
+            strong: true,
+          },
+        ]}
+        signatures={[
+          { label: 'Elaboró', name: shipment.createdBy, at: formatDateTime(shipment.createdAt) },
+          {
+            label: 'Despachó',
+            name: shipment.dispatchedBy,
+            at: shipment.dispatchedAt ? formatDateTime(shipment.dispatchedAt) : null,
+          },
+          { label: 'Conductor', name: shipment.driverName },
+        ]}
+      >
+        {shipment.status === 'IN_TRANSIT' && canWrite ? (
+          <DocumentNotice tone="info">
+            En ruta: confirma cada entrega con el nombre de quien recibió (columna Entrega).
+          </DocumentNotice>
+        ) : null}
+        <HeaderGrid>
+          <HeaderField label="Fecha de salida">
+            <DateCell
+              date={shipment.scheduledDate}
+              pending={shipment.status === 'PLANNED'}
+              lateLabel="Debió salir"
+            />
+          </HeaderField>
+          <HeaderField label="Transportador">{shipment.carrier}</HeaderField>
+          <HeaderField label="Placa">
+            <Plate plate={shipment.vehiclePlate} />
+          </HeaderField>
+          <HeaderField label="Conductor">{shipment.driverName}</HeaderField>
+          <HeaderField label="Ruta" span={2}>
+            {shipment.route ?? <span className="text-ink-3">Sin ruta</span>}
+          </HeaderField>
+          <HeaderField label="Despachada">
+            {shipment.dispatchedAt ? (
+              <>
+                {formatDateTime(shipment.dispatchedAt)}
+                {shipment.dispatchedBy ? (
+                  <span className="text-ink-2"> · {shipment.dispatchedBy}</span>
                 ) : null}
-              </dd>
-              {shipment.notes ? (
-                <>
-                  <dt className="text-ink-3">Notas</dt>
-                  <dd className="whitespace-pre-line">{shipment.notes}</dd>
-                </>
-              ) : null}
-            </dl>
-          </Panel>
+              </>
+            ) : (
+              <span className="text-ink-3">Por despachar</span>
+            )}
+          </HeaderField>
+          <HeaderField label="Entregada">
+            {shipment.deliveredAt ? (
+              formatDateTime(shipment.deliveredAt)
+            ) : (
+              <span className="text-ink-3">
+                {delivered} de {shipment.orders.length} pedidos
+              </span>
+            )}
+          </HeaderField>
+        </HeaderGrid>
 
-          <Panel title="Carga" description="Total por producto en el vehículo." flush>
-            <ul className="divide-y divide-line text-sm">
-              {shipmentTotals(shipment).map((total) => (
-                <li key={total.id} className="flex justify-between gap-4 px-5 py-2.5">
-                  <EntityLink to="product" id={total.id} className="truncate">
-                    {total.name}
-                  </EntityLink>
-                  <Qty value={total.quantity} emphasis />
-                </li>
+        <DocumentSection title="Detalle de la remisión" flush>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] border-collapse text-[13.5px]">
+              <thead>
+                <tr className={GRID_HEAD}>
+                  <th className={cn(GRID_TH, 'w-10 text-center')}>#</th>
+                  <th className={GRID_TH}>Pedido</th>
+                  <th className={GRID_TH}>Cliente / entrega</th>
+                  <th className={cn(GRID_TH, 'w-24')}>Código</th>
+                  <th className={GRID_TH}>Producto</th>
+                  <th className={cn(GRID_TH, 'w-12')}>Und</th>
+                  <th className={cn(GRID_TH, 'text-right')}>Cantidad</th>
+                  <th className={cn(GRID_TH, 'w-48')}>Entrega</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shipment.orders.map((order, index) => (
+                  <Fragment key={order.orderId}>
+                    {order.lines.map((line, lineIndex) => (
+                      <tr
+                        key={line.productId}
+                        className={cn(
+                          lineIndex === order.lines.length - 1 && 'border-b border-line',
+                        )}
+                      >
+                        {lineIndex === 0 ? (
+                          <>
+                            <td
+                              rowSpan={order.lines.length}
+                              className={cn(
+                                GRID_TD,
+                                'text-center align-top text-ink-3 tabular-nums',
+                              )}
+                            >
+                              {index + 1}
+                            </td>
+                            <td rowSpan={order.lines.length} className={cn(GRID_TD, 'align-top')}>
+                              <EntityLink to="order" id={order.orderId} className="font-medium">
+                                {order.orderLabel}
+                              </EntityLink>
+                              {order.partial ? (
+                                <span className="block text-[12px] text-[#9a6a00]">
+                                  Entrega parcial
+                                </span>
+                              ) : null}
+                            </td>
+                            <td rowSpan={order.lines.length} className={cn(GRID_TD, 'align-top')}>
+                              <EntityLink
+                                to="customer"
+                                id={order.customer.id}
+                                className="font-medium"
+                              >
+                                {order.customer.name}
+                              </EntityLink>
+                              <span className="block text-[12.5px] text-ink-2">
+                                {order.branch.name}
+                                {order.branch.address ? ` · ${order.branch.address}` : ''}
+                                {order.branch.city ? `, ${order.branch.city}` : ''}
+                              </span>
+                            </td>
+                          </>
+                        ) : null}
+                        <td className={cn(GRID_TD, 'tabular-nums')}>{line.productCode}</td>
+                        <td className={GRID_TD}>{line.productName}</td>
+                        <td className={cn(GRID_TD, 'text-ink-2')}>
+                          {unitLabel(line.quantity.unit)}
+                        </td>
+                        <td className={cn(GRID_TD, 'text-right font-medium tabular-nums')}>
+                          {formatDecimal(line.quantity.quantity)}
+                        </td>
+                        {lineIndex === 0 ? (
+                          <td rowSpan={order.lines.length} className={cn(GRID_TD, 'align-top')}>
+                            <Delivery
+                              order={order}
+                              status={shipment.status}
+                              canDeliver={canWrite && shipment.status === 'IN_TRANSIT'}
+                              onDeliver={() => {
+                                setDelivering(order);
+                              }}
+                            />
+                          </td>
+                        ) : null}
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DocumentSection>
+
+        <DocumentSection title="Carga total por producto" flush>
+          <table className="w-full border-collapse text-[13.5px]">
+            <thead>
+              <tr className={GRID_HEAD}>
+                <th className={cn(GRID_TH, 'w-24 pl-5')}>Código</th>
+                <th className={GRID_TH}>Producto</th>
+                <th className={cn(GRID_TH, 'w-12')}>Und</th>
+                <th className={cn(GRID_TH, 'pr-5 text-right')}>Cantidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              {totals.map((total) => (
+                <tr key={total.id} className="border-b border-line last:border-0">
+                  <td className={cn(GRID_TD, 'pl-5 tabular-nums')}>{total.code}</td>
+                  <td className={GRID_TD}>
+                    <EntityLink to="product" id={total.id}>
+                      {total.name}
+                    </EntityLink>
+                  </td>
+                  <td className={cn(GRID_TD, 'text-ink-2')}>{unitLabel(total.quantity.unit)}</td>
+                  <td className={cn(GRID_TD, 'pr-5 text-right font-semibold tabular-nums')}>
+                    {formatDecimal(total.quantity.quantity)}
+                  </td>
+                </tr>
               ))}
-            </ul>
-          </Panel>
-        </div>
-      </div>
+            </tbody>
+          </table>
+        </DocumentSection>
+      </DocumentScreen>
 
       {dispatching ? (
         <DispatchDialog
@@ -152,54 +333,7 @@ function ShipmentView({ shipment }: { shipment: Shipment }) {
   );
 }
 
-/** Built → dispatched → delivered, with who and when (a real sequence, so it is numbered). */
-function Steps({ shipment, delivered }: { shipment: Shipment; delivered: number }) {
-  const steps = [
-    {
-      label: 'Guía armada',
-      done: true,
-      detail: `${formatDateTime(shipment.createdAt)} · ${shipment.createdBy}`,
-    },
-    {
-      label: 'Despachada',
-      done: shipment.dispatchedAt !== null,
-      detail: shipment.dispatchedAt
-        ? `${formatDateTime(shipment.dispatchedAt)} · ${shipment.dispatchedBy ?? ''}`
-        : `Programada para ${formatDate(shipment.scheduledDate)}`,
-    },
-    {
-      label: 'Entregada',
-      done: shipment.status === 'DELIVERED',
-      detail: shipment.deliveredAt
-        ? formatDateTime(shipment.deliveredAt)
-        : `${String(delivered)} de ${String(shipment.orders.length)} pedidos`,
-    },
-  ];
-  return (
-    <ol className="mb-6 grid gap-3 rounded-[10px] border border-line bg-surface p-4 sm:grid-cols-3">
-      {steps.map((step, index) => (
-        <li key={step.label} className="flex items-start gap-3">
-          <span
-            className={cn(
-              'flex size-7 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold',
-              step.done ? 'bg-brand text-white' : 'border border-line-strong text-ink-3',
-            )}
-          >
-            {step.done ? <Check aria-hidden className="size-4" strokeWidth={2.5} /> : index + 1}
-          </span>
-          <span className="min-w-0">
-            <span className={cn('block text-sm font-medium', !step.done && 'text-ink-2')}>
-              {step.label}
-            </span>
-            <span className="block truncate text-[12.5px] text-ink-3">{step.detail}</span>
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function OrderStop({
+function Delivery({
   order,
   status,
   canDeliver,
@@ -210,73 +344,49 @@ function OrderStop({
   canDeliver: boolean;
   onDeliver: () => void;
 }) {
+  if (order.deliveredAt) {
+    return (
+      <span className="block text-[13px]">
+        <span className="inline-flex items-center gap-1 font-medium text-good">
+          <UserCheck aria-hidden className="size-3.5" />
+          {order.receivedBy ?? 'Entregado'}
+        </span>
+        <span className="block text-[12px] text-ink-3">{formatDateTime(order.deliveredAt)}</span>
+      </span>
+    );
+  }
+  if (canDeliver) {
+    return (
+      <Button
+        size="sm"
+        variant="secondary"
+        className="no-print"
+        icon={<UserCheck className="size-3.5" />}
+        onClick={onDeliver}
+      >
+        Confirmar entrega
+      </Button>
+    );
+  }
   return (
-    <li className="px-5 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2">
-            <EntityLink to="order" id={order.orderId} className="font-semibold">
-              {order.orderLabel}
-            </EntityLink>
-            <EntityLink to="customer" id={order.customer.id}>
-              {order.customer.name}
-            </EntityLink>
-            {order.partial ? (
-              <Chip tone="warning" icon={PackageOpen}>
-                Entrega parcial
-              </Chip>
-            ) : null}
-          </p>
-          <p className="mt-1 flex items-start gap-1.5 text-[13px] text-ink-2">
-            <MapPin aria-hidden className="mt-0.5 size-3.5 shrink-0 text-ink-3" />
-            <span>
-              {order.branch.name}
-              {order.branch.address ? ` · ${order.branch.address}` : ''}
-              {order.branch.city ? `, ${order.branch.city}` : ''}
-            </span>
-          </p>
-        </div>
-        {order.deliveredAt ? (
-          <span className="text-right text-[13px]">
-            <Chip tone="good" icon={CircleCheck}>
-              Entregado
-            </Chip>
-            <span className="mt-1 flex items-center justify-end gap-1 text-ink-2">
-              <UserCheck aria-hidden className="size-3.5 text-ink-3" />
-              {order.receivedBy ?? '—'}
-            </span>
-            <span className="block text-[12px] text-ink-3">
-              {formatDateTime(order.deliveredAt)}
-            </span>
-          </span>
-        ) : canDeliver ? (
-          <Button size="sm" icon={<UserCheck className="size-3.5" />} onClick={onDeliver}>
-            Confirmar entrega
-          </Button>
-        ) : status === 'PLANNED' ? (
-          <Chip tone="neutral" icon={Clock}>
-            Por salir
-          </Chip>
-        ) : (
-          <Chip tone="brand" icon={Truck}>
-            En camino
-          </Chip>
-        )}
-      </div>
-      <ul className="mt-3 grid gap-x-6 gap-y-1 rounded-md bg-surface-2/60 px-3 py-2 text-[13px] sm:grid-cols-2">
-        {order.lines.map((line) => (
-          <li key={line.productId} className="flex justify-between gap-3">
-            <span className="truncate text-ink-2" title={line.productName}>
-              {line.productName}
-            </span>
-            <Qty value={line.quantity} emphasis />
-          </li>
-        ))}
-      </ul>
-    </li>
+    <span className="inline-flex items-center gap-1 text-[13px] text-ink-2">
+      {status === 'PLANNED' ? (
+        <>
+          <Clock aria-hidden className="size-3.5 text-ink-3" />
+          Por salir
+        </>
+      ) : (
+        <>
+          <Truck aria-hidden className="size-3.5 text-brand" />
+          En camino
+        </>
+      )}
+      <span className="hidden print:inline"> · Recibió: ____________</span>
+    </span>
   );
 }
 
+/** Short data: who received the order at the customer. */
 function DeliverDialog({
   shipment,
   order,
@@ -295,6 +405,9 @@ function DeliverDialog({
     { success: `${order.orderLabel} entregado a ${order.customer.name}` },
   );
   const valid = receivedBy.trim().length >= 2;
+  const submit = () => {
+    if (valid && !deliver.isPending) deliver.mutate(undefined, { onSuccess: onClose });
+  };
   return (
     <Dialog
       open
@@ -303,16 +416,15 @@ function DeliverDialog({
       description={`${order.customer.name} · ${order.branch.name}${order.branch.city ? `, ${order.branch.city}` : ''}`}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>
-            Cancelar
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Volver
           </Button>
           <Button
+            size="sm"
             icon={<UserCheck className="size-4" />}
             loading={deliver.isPending}
             disabled={!valid}
-            onClick={() => {
-              deliver.mutate(undefined, { onSuccess: onClose });
-            }}
+            onClick={submit}
           >
             Confirmar entrega
           </Button>
@@ -322,22 +434,24 @@ function DeliverDialog({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (valid) deliver.mutate(undefined, { onSuccess: onClose });
+          submit();
         }}
       >
-        <Field label="¿Quién recibió?" hint="Nombre de quien firmó la guía en el cliente.">
-          {(props) => (
-            <Input
-              {...props}
-              value={receivedBy}
-              autoFocus
-              maxLength={120}
-              onChange={(event) => {
-                setReceivedBy(event.target.value);
-              }}
-            />
-          )}
-        </Field>
+        <label className="flex flex-col gap-1">
+          <span className="text-[12px] font-medium text-ink-3">¿Quién recibió?</span>
+          <input
+            className={INPUT}
+            value={receivedBy}
+            autoFocus
+            maxLength={120}
+            onChange={(event) => {
+              setReceivedBy(event.target.value);
+            }}
+          />
+          <span className="text-[12px] text-ink-3">
+            Nombre de quien firmó la remisión en el cliente.
+          </span>
+        </label>
       </form>
     </Dialog>
   );
