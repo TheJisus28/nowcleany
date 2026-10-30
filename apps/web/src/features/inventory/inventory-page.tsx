@@ -1,5 +1,6 @@
 import {
   ArrowRightLeft,
+  Droplets,
   FileUp,
   PackageCheck,
   PackagePlus,
@@ -54,7 +55,7 @@ const TYPES = [
 ] as const;
 
 type Tab = 'existencias' | 'por-recibir' | 'por-despachar' | 'movimientos';
-type DialogKind = 'receipt' | 'transfer' | 'adjust' | 'load' | null;
+type DialogKind = 'receipt' | 'transfer' | 'adjust' | 'waste' | 'load' | null;
 
 export function InventoryPage() {
   const { can } = useSession();
@@ -113,6 +114,17 @@ export function InventoryPage() {
                 Entregar a despacho
               </Button>
             ) : null}
+            {can('inventory:waste') ? (
+              <Button
+                variant="secondary"
+                icon={<Droplets className="size-4" />}
+                onClick={() => {
+                  setDialog('waste');
+                }}
+              >
+                Registrar merma
+              </Button>
+            ) : null}
             {can('inventory:adjust') ? (
               <Button
                 variant="secondary"
@@ -158,6 +170,7 @@ export function InventoryPage() {
       {dialog === 'receipt' ? <ReceiptDialog onClose={close} /> : null}
       {dialog === 'transfer' ? <TransferDialog onClose={close} /> : null}
       {dialog === 'adjust' ? <AdjustDialog onClose={close} /> : null}
+      {dialog === 'waste' ? <WasteDialog onClose={close} /> : null}
       {dialog === 'load' ? <InitialLoadDialog onClose={close} /> : null}
     </>
   );
@@ -231,16 +244,16 @@ function StockTab() {
                 render: (row) => <Qty value={row.onHand} emphasis />,
               },
               {
-                key: 'reserved',
+                key: 'committed',
                 header: 'Comprometido',
                 align: 'right',
-                render: (row) => <Qty value={row.reserved} dimZero />,
+                render: (row) => <Qty value={row.committed} dimZero />,
               },
               {
-                key: 'available',
-                header: 'Disponible',
+                key: 'projected',
+                header: 'Proyectado',
                 align: 'right',
-                render: (row) => <Qty value={row.available} emphasis />,
+                render: (row) => <Qty value={row.projected} emphasis />,
               },
               {
                 key: 'flags',
@@ -304,7 +317,7 @@ function ReceiveTab({ orders }: { orders: ListQuery<PurchaseOrder> }) {
                     <EntityLink to="purchase-order" id={row.id} className="font-medium">
                       {row.label}
                     </EntityLink>
-                    <span className="block text-[12.5px] text-ink-3">{row.supplier}</span>
+                    <span className="block text-[12.5px] text-ink-3">{row.supplier.name}</span>
                   </span>
                 ),
               },
@@ -448,6 +461,7 @@ const MOVEMENT_TYPES = [
   { value: 'PRODUCTION_OUTPUT', label: 'Producción' },
   { value: 'DISPATCH', label: 'Despachos' },
   { value: 'ADJUSTMENT', label: 'Ajustes' },
+  { value: 'WASTE', label: 'Mermas' },
 ] as const;
 
 function MovementsTab() {
@@ -705,6 +719,115 @@ function TransferDialog({ onClose }: { onClose: () => void }) {
               value={quantity}
               onChange={(event) => {
                 setQuantity(event.target.value);
+              }}
+            />
+          )}
+        </Field>
+      </div>
+    </Dialog>
+  );
+}
+
+/** What is lost: bulk left in a tank, a damaged or spilled product. It leaves stock as WASTE. */
+function WasteDialog({ onClose }: { onClose: () => void }) {
+  const products = useProducts({ active: true });
+  const warehouses = useWarehouses();
+  const [productId, setProductId] = useState('');
+  const [warehouse, setWarehouse] = useState('PLANTA');
+  const [quantity, setQuantity] = useState('');
+  const [note, setNote] = useState('');
+  const parsed = parseDecimalInput(quantity);
+  const product = products.data?.find((p) => p.id === productId);
+  const waste = useAction(
+    () =>
+      api.post('/v1/inventory/waste', {
+        productId,
+        warehouse,
+        quantity: parsed ?? '0',
+        ...(note.trim() ? { note: note.trim() } : {}),
+      }),
+    { success: 'Merma registrada en el kardex' },
+  );
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title="Registrar merma"
+      description="Lo que se perdió sale del inventario con tu nombre: granel sobrante, producto dañado o derramado."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            loading={waste.isPending}
+            disabled={!productId || parsed === null || Number(parsed) <= 0}
+            onClick={() => {
+              waste.mutate(undefined, { onSuccess: onClose });
+            }}
+          >
+            Registrar merma
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Producto" className="sm:col-span-2">
+          {(props) => (
+            <Select
+              {...props}
+              value={productId}
+              onChange={(event) => {
+                setProductId(event.target.value);
+              }}
+            >
+              <option value="">Elige…</option>
+              {(products.data ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.code} · {p.name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Bodega">
+          {(props) => (
+            <Select
+              {...props}
+              value={warehouse}
+              onChange={(event) => {
+                setWarehouse(event.target.value);
+              }}
+            >
+              {(warehouses.data ?? []).map((w) => (
+                <option key={w.id} value={w.code}>
+                  {w.name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label={`Cantidad perdida${product ? ` (${unitLabel(product.stockUnit)})` : ''}`}>
+          {(props) => (
+            <Input
+              {...props}
+              inputMode="decimal"
+              value={quantity}
+              onChange={(event) => {
+                setQuantity(event.target.value);
+              }}
+            />
+          )}
+        </Field>
+        <Field label="Detalle (opcional)" className="sm:col-span-2">
+          {(props) => (
+            <Textarea
+              {...props}
+              value={note}
+              maxLength={300}
+              placeholder="Sobrante del tanque 2 después de envasar"
+              onChange={(event) => {
+                setNote(event.target.value);
               }}
             />
           )}

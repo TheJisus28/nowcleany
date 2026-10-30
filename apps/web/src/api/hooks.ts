@@ -6,6 +6,7 @@ import type {
   BulkNeed,
   Customer,
   Formula,
+  MapConfig,
   Movement,
   OrderCoverage,
   OversellRow,
@@ -17,9 +18,12 @@ import type {
   PurchaseOrder,
   Role,
   SalesOrder,
+  Seller,
   StockAllocationRow,
   StockStatus,
+  Supplier,
   User,
+  Visit,
   Warehouse,
   WhereUsed,
 } from './types';
@@ -191,10 +195,44 @@ export const useCustomer = (id: string | undefined) =>
     enabled: Boolean(id),
   });
 
-export const useCustomers = (q?: string) =>
+export const useCustomers = (
+  filter: { q?: string | undefined; sellerId?: string | undefined } = {},
+) =>
   useQuery({
-    queryKey: ['customers', q],
-    queryFn: () => api.get<Customer[]>(`/v1/customers${query({ q })}`),
+    queryKey: ['customers', filter],
+    queryFn: () => api.get<Customer[]>(`/v1/customers${query(filter)}`),
+  });
+
+export const useSellers = (enabled = true) =>
+  useQuery({
+    queryKey: ['sellers'],
+    queryFn: () => api.get<Seller[]>('/v1/sellers'),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+
+export const useVisits = (
+  filter: {
+    sellerId?: string | undefined;
+    customerId?: string | undefined;
+    from?: string | undefined;
+    to?: string | undefined;
+  },
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['visits', filter],
+    queryFn: () => api.get<Visit[]>(`/v1/visits${query(filter)}`),
+    enabled,
+  });
+
+// --- maps -----------------------------------------------------------------------------------
+
+export const useMapConfig = () =>
+  useQuery({
+    queryKey: ['map-config'],
+    queryFn: () => api.get<MapConfig>('/v1/maps/config'),
+    staleTime: Infinity,
   });
 
 // --- production & purchasing ------------------------------------------------------------------
@@ -224,6 +262,13 @@ export const usePurchaseOrders = (status?: string, productId?: string, enabled =
   useQuery({
     queryKey: ['purchase-orders', status, productId],
     queryFn: () => api.get<PurchaseOrder[]>(`/v1/purchase-orders${query({ status, productId })}`),
+    enabled,
+  });
+
+export const useSuppliers = (q?: string, enabled = true) =>
+  useQuery({
+    queryKey: ['suppliers', q],
+    queryFn: () => api.get<Supplier[]>(`/v1/suppliers${query({ q })}`),
     enabled,
   });
 

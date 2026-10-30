@@ -2,7 +2,13 @@ import { CircleCheck, PackageCheck, Plus, ShoppingCart, Trash2, Truck } from 'lu
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api } from '../../api/client';
-import { useAction, useProducts, usePurchaseNeeds, usePurchaseOrders } from '../../api/hooks';
+import {
+  useAction,
+  useProducts,
+  usePurchaseNeeds,
+  usePurchaseOrders,
+  useSuppliers,
+} from '../../api/hooks';
 import type { PurchaseNeed, PurchaseOrder } from '../../api/types';
 import { useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
@@ -300,7 +306,7 @@ function PurchaseOrders() {
                     <EntityLink to="purchase-order" id={row.id} className="font-medium">
                       {row.label}
                     </EntityLink>
-                    <span className="block text-[12.5px] text-ink-3">{row.supplier}</span>
+                    <span className="block text-[12.5px] text-ink-3">{row.supplier.name}</span>
                   </span>
                 ),
               },
@@ -399,7 +405,8 @@ function PurchaseOrderDialog({
   onCreated: () => void;
 }) {
   const materials = useProducts({ type: 'RAW_MATERIAL', active: true });
-  const [supplier, setSupplier] = useState('');
+  const suppliers = useSuppliers();
+  const [supplierId, setSupplierId] = useState('');
   const [expectedDate, setExpectedDate] = useState(todayIso(3));
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState(initial);
@@ -408,14 +415,14 @@ function PurchaseOrderDialog({
     [materials.data],
   );
   const valid =
-    supplier.trim().length >= 2 &&
+    Boolean(supplierId) &&
     lines.length > 0 &&
     lines.every((line) => line.productId && Number(parseDecimalInput(line.quantity) ?? 0) > 0);
 
   const create = useAction(
     () =>
       api.post<PurchaseOrder>('/v1/purchase-orders', {
-        supplier,
+        supplierId,
         expectedDate,
         ...(notes.trim() ? { notes: notes.trim() } : {}),
         lines: lines.map((line) => ({
@@ -451,16 +458,26 @@ function PurchaseOrderDialog({
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Proveedor">
+        <Field label="Proveedor" hint="Los proveedores se administran en Compras › Proveedores.">
           {(props) => (
-            <Input
+            <Select
               {...props}
-              value={supplier}
+              value={supplierId}
               autoFocus
               onChange={(event) => {
-                setSupplier(event.target.value);
+                setSupplierId(event.target.value);
               }}
-            />
+            >
+              <option value="">Elige un proveedor…</option>
+              {(suppliers.data ?? [])
+                .filter((item) => item.active)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                    {item.city ? ` · ${item.city}` : ''}
+                  </option>
+                ))}
+            </Select>
           )}
         </Field>
         <Field label="Fecha esperada de llegada">

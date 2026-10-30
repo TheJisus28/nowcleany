@@ -37,7 +37,7 @@ export function ReceiveDialog({ order, onClose }: { order: PurchaseOrder; onClos
       open
       onClose={onClose}
       title={`Recibir ${order.label}`}
-      description={`${order.supplier}. Corrige las cantidades si llegó menos de lo pedido.`}
+      description={`${order.supplier.name}. Corrige las cantidades si llegó menos de lo pedido.`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>

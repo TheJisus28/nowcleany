@@ -1,10 +1,9 @@
 import { ArrowLeft, Check, Plus, Save, Trash2, UserPlus } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { api } from '../../api/client';
 import { useAction, useCustomers, useOrder, useProducts, useStockStatus } from '../../api/hooks';
-import type { Customer, SalesOrder } from '../../api/types';
-import { Dialog } from '../../components/dialog';
+import type { SalesOrder } from '../../api/types';
 import { Qty } from '../../components/qty';
 import {
   Button,
@@ -17,6 +16,7 @@ import {
   Textarea,
 } from '../../components/ui';
 import { parseDecimalInput, todayIso, unitLabel } from '../../lib/format';
+import { CustomerFormDialog } from '../customers/customer-form-dialog';
 
 interface LineDraft {
   key: number;
@@ -43,6 +43,16 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
 
   // A new order opened from a customer page starts with that customer.
   const [customerId, setCustomerId] = useState(order?.customer.id ?? params.get('cliente') ?? '');
+  const [branchId, setBranchId] = useState(order?.branch.id ?? '');
+  const customer = customers.data?.find((item) => item.id === customerId);
+  const branches = (customer?.branches ?? []).filter(
+    (branch) => branch.active || branch.id === order?.branch.id,
+  );
+  // Without a choice, the order ships to the customer's main branch.
+  const selectedBranchId =
+    branches.find((branch) => branch.id === branchId)?.id ??
+    (branches.find((branch) => branch.isMain) ?? branches[0])?.id ??
+    '';
   const [deliveryDate, setDeliveryDate] = useState(order?.estimatedDeliveryDate ?? todayIso(7));
   const [notes, setNotes] = useState(order?.notes ?? '');
   const [lines, setLines] = useState<LineDraft[]>(
@@ -76,11 +86,13 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
   );
   const valid =
     Boolean(customerId) &&
+    Boolean(selectedBranchId) &&
     lineErrors.every((error) => !error.product && !error.quantity) &&
     duplicated.size === 0;
 
   const payload = () => ({
     customerId,
+    branchId: selectedBranchId,
     ...(deliveryDate ? { estimatedDeliveryDate: deliveryDate } : {}),
     ...(notes.trim() ? { notes: notes.trim() } : {}),
     lines: lines.map((line) => ({
@@ -150,15 +162,17 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
                       value={customerId}
                       onChange={(event) => {
                         setCustomerId(event.target.value);
+                        setBranchId('');
                       }}
                     >
                       <option value="">Elige un cliente…</option>
-                      {(customers.data ?? []).map((customer) => (
-                        <option key={customer.id} value={customer.id}>
-                          {customer.name}
-                          {customer.city ? ` · ${customer.city}` : ''}
-                        </option>
-                      ))}
+                      {(customers.data ?? [])
+                        .filter((item) => item.active || item.id === customerId)
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name} · {item.documentTypeLabel} {item.documentNumber}
+                          </option>
+                        ))}
                     </Select>
                     <Button
                       variant="secondary"
@@ -171,6 +185,41 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
                       className="px-3"
                     />
                   </div>
+                )}
+              </Field>
+              <Field
+                label="Sucursal de entrega"
+                hint={
+                  customer
+                    ? [
+                        branches.find((b) => b.id === selectedBranchId)?.address,
+                        branches.find((b) => b.id === selectedBranchId)?.city,
+                      ]
+                        .filter(Boolean)
+                        .join(', ') || undefined
+                    : 'Primero elige el cliente.'
+                }
+                error={
+                  showErrors && customerId && !selectedBranchId ? 'Elige la sucursal.' : undefined
+                }
+              >
+                {(props) => (
+                  <Select
+                    {...props}
+                    value={selectedBranchId}
+                    disabled={!customer}
+                    onChange={(event) => {
+                      setBranchId(event.target.value);
+                    }}
+                  >
+                    {branches.length === 0 ? <option value="">Sin sucursales</option> : null}
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                        {branch.city ? ` · ${branch.city}` : ''}
+                      </option>
+                    ))}
+                  </Select>
                 )}
               </Field>
               <Field
@@ -269,7 +318,7 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
                     <div className="flex items-center justify-between gap-3 sm:mt-7 sm:justify-end">
                       {status ? (
                         <p className="text-[13px] text-ink-3 sm:hidden">
-                          Disponible <Qty value={status.available} />
+                          Proyectado <Qty value={status.projected} />
                         </p>
                       ) : null}
                       <Button
@@ -286,8 +335,8 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
                     {status ? (
                       <p className="-mt-1 hidden text-[13px] text-ink-3 sm:col-span-3 sm:block">
                         En stock <Qty value={status.onHand} /> · comprometido{' '}
-                        <Qty value={status.reserved} /> · disponible{' '}
-                        <Qty value={status.available} />
+                        <Qty value={status.committed} /> · proyectado{' '}
+                        <Qty value={status.projected} />
                       </p>
                     ) : null}
                   </li>
@@ -343,85 +392,16 @@ function OrderForm({ order }: { order: SalesOrder | undefined }) {
         </aside>
       </form>
 
-      <NewCustomerDialog
+      <CustomerFormDialog
         open={newCustomerOpen}
         onClose={() => {
           setNewCustomerOpen(false);
         }}
-        onCreated={(customer) => {
-          setCustomerId(customer.id);
-          setNewCustomerOpen(false);
+        onCreated={(created) => {
+          setCustomerId(created.id);
+          setBranchId('');
         }}
       />
     </>
-  );
-}
-
-function NewCustomerDialog({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (customer: Customer) => void;
-}) {
-  const [form, setForm] = useState({ name: '', taxId: '', city: '', phone: '' });
-  useEffect(() => {
-    if (open) setForm({ name: '', taxId: '', city: '', phone: '' });
-  }, [open]);
-  const create = useAction(
-    () =>
-      api.post<Customer>('/v1/customers', {
-        name: form.name,
-        ...(form.taxId.trim() ? { taxId: form.taxId } : {}),
-        ...(form.city.trim() ? { city: form.city } : {}),
-        ...(form.phone.trim() ? { phone: form.phone } : {}),
-      }),
-    { success: (customer) => `Cliente ${customer.name} creado` },
-  );
-  const set = (key: keyof typeof form) => (event: { target: { value: string } }) => {
-    setForm((current) => ({ ...current, [key]: event.target.value }));
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Nuevo cliente"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            loading={create.isPending}
-            disabled={form.name.trim().length < 2}
-            onClick={() => {
-              create.mutate(undefined, { onSuccess: onCreated });
-            }}
-          >
-            Crear cliente
-          </Button>
-        </>
-      }
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nombre o razón social" className="sm:col-span-2">
-          {(props) => <Input {...props} value={form.name} onChange={set('name')} autoFocus />}
-        </Field>
-        <Field label="NIT o documento (opcional)">
-          {(props) => <Input {...props} value={form.taxId} onChange={set('taxId')} />}
-        </Field>
-        <Field label="Ciudad (opcional)">
-          {(props) => <Input {...props} value={form.city} onChange={set('city')} />}
-        </Field>
-        <Field label="Teléfono (opcional)" className="sm:col-span-2">
-          {(props) => (
-            <Input {...props} value={form.phone} onChange={set('phone')} inputMode="tel" />
-          )}
-        </Field>
-      </div>
-    </Dialog>
   );
 }

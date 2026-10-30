@@ -4,6 +4,10 @@
 /* NOW CLEANY identity, from its logo (navy #003858, aqua #26dacf) and site palette.
    Status colors come from the dataviz reference palette and always ship with icon + label. */
 @theme {
+  --color-rail: #003858;
+  --color-rail-2: #0a4467;
+  --color-rail-ink: #d3e3ec;
+  --color-rail-muted: #86a9bd;
   --font-sans: 'Archivo Variable', system-ui, sans-serif;
   --color-paper: #f2f6f8;
   --color-surface: #ffffff;

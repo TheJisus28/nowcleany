@@ -40,7 +40,7 @@ function PurchaseOrderView({ order }: { order: PurchaseOrder }) {
         description={
           <span className="flex flex-wrap items-center gap-2">
             <PurchaseStatusChip status={order.status} />
-            <span>{order.supplier}</span>
+            <span>{order.supplier.name}</span>
           </span>
         }
         actions={
@@ -111,7 +111,7 @@ function PurchaseOrderView({ order }: { order: PurchaseOrder }) {
         <Panel title="Datos">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
             <dt className="text-ink-3">Proveedor</dt>
-            <dd>{order.supplier}</dd>
+            <dd>{order.supplier.name}</dd>
             <dt className="text-ink-3">Llega</dt>
             <dd>
               {formatDate(order.expectedDate)}

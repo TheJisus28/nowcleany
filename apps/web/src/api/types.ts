@@ -51,7 +51,6 @@ export interface FormulaLine {
   componentType: ProductType;
   componentTypeLabel: string;
   quantity: Q;
-  wasteBps: number;
 }
 
 export interface Formula {
@@ -94,8 +93,10 @@ export interface StockStatus {
   typeLabel: string;
   unit: string;
   onHand: Q;
-  reserved: Q;
-  available: Q;
+  /** Confirmed pre-sales not dispatched yet (informative: stock does not move until dispatch). */
+  committed: Q;
+  /** onHand − committed. */
+  projected: Q;
   negativeOnHand: boolean;
   oversold: boolean;
   byWarehouse: { warehouseCode: string; warehouseName: string; onHand: Q }[];
@@ -121,13 +122,83 @@ export interface Warehouse {
   name: string;
 }
 
-export interface Customer {
+export type DocumentType = 'NIT' | 'CC';
+
+export interface Branch {
   id: string;
   name: string;
-  taxId: string | null;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  isMain: boolean;
+  active: boolean;
+}
+
+export interface Customer {
+  id: string;
+  documentType: DocumentType;
+  documentTypeLabel: string;
+  documentNumber: string;
+  name: string;
+  address: string | null;
   phone: string | null;
   city: string | null;
   active: boolean;
+  seller: { id: string; name: string } | null;
+  branches: Branch[];
+}
+
+export interface Seller {
+  id: string;
+  name: string;
+}
+
+export interface Visit {
+  id: string;
+  seller: { id: string; name: string };
+  customer: { id: string; name: string };
+  branch: {
+    id: string;
+    name: string;
+    address: string | null;
+    city: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  };
+  visitedAt: string;
+  latitude: number;
+  longitude: number;
+  accuracyM: number | null;
+  distanceM: number | null;
+  /** null when the branch has no location yet. */
+  onSite: boolean | null;
+  onSiteRadiusM: number;
+  notes: string | null;
+  order: { id: string; label: string } | null;
+}
+
+export interface Supplier {
+  id: string;
+  documentNumber: string | null;
+  name: string;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  active: boolean;
+}
+
+export interface MapConfig {
+  token: string | null;
+  center: { latitude: number; longitude: number };
+}
+
+export interface Place {
+  label: string;
+  latitude: number;
+  longitude: number;
 }
 
 export type OrderStatus = 'DRAFT' | 'CONFIRMED' | 'DISPATCHED' | 'CANCELLED';
@@ -138,7 +209,8 @@ export interface SalesOrder {
   label: string;
   status: OrderStatus;
   statusLabel: string;
-  customer: { id: string; name: string; taxId: string | null };
+  customer: { id: string; name: string; documentType: DocumentType; documentNumber: string };
+  branch: { id: string; name: string; address: string | null; city: string | null };
   seller: { id: string; name: string };
   estimatedDeliveryDate: string | null;
   notes: string | null;
@@ -186,7 +258,7 @@ export interface ProductionOrder {
 export interface PurchaseOrder {
   id: string;
   label: string;
-  supplier: string;
+  supplier: { id: string; name: string };
   expectedDate: string | null;
   status: 'OPEN' | 'RECEIVED' | 'CANCELLED';
   statusLabel: string;

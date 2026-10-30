@@ -110,7 +110,7 @@ function useResults(term: string): { results: Result[]; loading: boolean } {
         entity: 'customer',
         id: customer.id,
         title: customer.name,
-        detail: [customer.taxId ? `NIT ${customer.taxId}` : null, customer.city]
+        detail: [`${customer.documentTypeLabel} ${customer.documentNumber}`, customer.city]
           .filter(Boolean)
           .join(' · '),
       });
@@ -125,13 +125,13 @@ function useResults(term: string): { results: Result[]; loading: boolean } {
       });
     for (const order of (purchases.data ?? [])
       .filter((o) =>
-        contains(needle, o.label, o.supplier, ...o.lines.map((line) => line.productName)),
+        contains(needle, o.label, o.supplier.name, ...o.lines.map((line) => line.productName)),
       )
       .slice(0, PER_GROUP))
       list.push({
         entity: 'purchase-order',
         id: order.id,
-        title: `${order.label} · ${order.supplier}`,
+        title: `${order.label} · ${order.supplier.name}`,
         detail: order.statusLabel,
       });
     return list;

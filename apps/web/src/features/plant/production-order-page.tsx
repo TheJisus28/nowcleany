@@ -28,14 +28,20 @@ function ProductionOrderView({ order }: { order: ProductionOrder }) {
   const { can } = useSession();
   const [produced, setProduced] = useState('');
   const parsed = parseDecimalInput(produced);
+  const [leftover, setLeftover] = useState('');
+  const parsedLeftover = parseDecimalInput(leftover);
+  const isPackaging = order.product.type === 'FINISHED_GOOD';
+  const bulk = order.materials?.find((material) => material.typeLabel === 'Granel');
   const editable = order.status === 'PLANNED' && can('production:write');
 
   const complete = useAction(
     () =>
-      api.post<ProductionOrder>(
-        `/v1/production-orders/${order.id}/complete`,
-        parsed ? { producedQuantity: parsed } : {},
-      ),
+      api.post<ProductionOrder>(`/v1/production-orders/${order.id}/complete`, {
+        ...(parsed ? { producedQuantity: parsed } : {}),
+        ...(isPackaging && parsedLeftover && Number(parsedLeftover) > 0
+          ? { bulkWaste: parsedLeftover }
+          : {}),
+      }),
     { success: (result) => `${result.label} terminada: inventario actualizado` },
   );
   const cancel = useAction(
@@ -132,7 +138,14 @@ function ProductionOrderView({ order }: { order: ProductionOrder }) {
           ) : null}
 
           {editable ? (
-            <Panel title="Registrar producción">
+            <Panel
+              title={isPackaging ? 'Registrar envasado' : 'Registrar producción'}
+              description={
+                isPackaging
+                  ? 'Entra el producto terminado, se consumen granel y empaques, y lo que sobró en el tanque queda como merma.'
+                  : 'Entra el granel y se consumen las materias primas de la fórmula vigente.'
+              }
+            >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
                 <Field
                   label={`Cantidad producida real (${unitLabel(order.plannedQuantity.unit)})`}
@@ -151,15 +164,38 @@ function ProductionOrderView({ order }: { order: ProductionOrder }) {
                     />
                   )}
                 </Field>
+                {isPackaging ? (
+                  <Field
+                    label="Granel que quedó en el tanque (L)"
+                    hint={`Se registra como merma${bulk ? ` de ${bulk.code}` : ''}. Vacío si no sobró.`}
+                    className="flex-1"
+                  >
+                    {(props) => (
+                      <Input
+                        {...props}
+                        inputMode="decimal"
+                        value={leftover}
+                        placeholder="0"
+                        onChange={(event) => {
+                          setLeftover(event.target.value);
+                        }}
+                      />
+                    )}
+                  </Field>
+                ) : null}
                 <Button
                   icon={<CircleCheck className="size-4" />}
                   loading={complete.isPending}
-                  disabled={produced !== '' && (!parsed || Number(parsed) <= 0)}
+                  disabled={
+                    (produced !== '' && (!parsed || Number(parsed) <= 0)) ||
+                    (leftover !== '' && parsedLeftover === null)
+                  }
                   className="sm:mb-6"
                   onClick={() => {
                     complete.mutate(undefined, {
                       onSuccess: () => {
                         setProduced('');
+                        setLeftover('');
                       },
                     });
                   }}

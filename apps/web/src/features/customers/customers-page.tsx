@@ -1,16 +1,35 @@
-import { Contact, Search } from 'lucide-react';
+import { Contact, MapPin, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useCustomers, useOrders } from '../../api/hooks';
+import { useCustomers, useOrders, useSellers } from '../../api/hooks';
 import type { Customer } from '../../api/types';
+import { useSession } from '../../auth/session';
 import { DataTable } from '../../components/data-table';
 import { EntityLink, pathTo } from '../../components/links';
-import { EmptyState, Input, PageHeader, Panel, QueryView } from '../../components/ui';
+import {
+  Button,
+  EmptyState,
+  Input,
+  PageHeader,
+  Panel,
+  QueryView,
+  Select,
+} from '../../components/ui';
+import { plural } from '../../lib/format';
+import { CustomerFormDialog } from './customer-form-dialog';
 
 export function CustomersPage() {
   const navigate = useNavigate();
+  const { can } = useSession();
+  const seesAll = can('customers:read-all');
   const [search, setSearch] = useState('');
-  const customers = useCustomers(search.trim() || undefined);
+  const [sellerId, setSellerId] = useState('');
+  const [creating, setCreating] = useState(false);
+  const sellers = useSellers(seesAll);
+  const customers = useCustomers({
+    q: search.trim() || undefined,
+    sellerId: sellerId || undefined,
+  });
   const open = useOrders({ status: 'DRAFT,CONFIRMED', limit: '500' });
   const openByCustomer = useMemo(() => {
     const counts = new Map<string, number>();
@@ -23,11 +42,27 @@ export function CustomersPage() {
     <>
       <PageHeader
         title="Clientes"
-        description="A quién se le vende y qué tiene pendiente cada uno."
+        description={
+          seesAll
+            ? 'Las carteras de todos los vendedores, con sus sucursales.'
+            : 'Tu cartera: los clientes que atiendes y sus sucursales.'
+        }
+        actions={
+          can('customers:write') ? (
+            <Button
+              icon={<Plus className="size-4" />}
+              onClick={() => {
+                setCreating(true);
+              }}
+            >
+              Nuevo cliente
+            </Button>
+          ) : null
+        }
       />
       <Panel flush>
-        <div className="border-b border-line px-4 py-3">
-          <label className="relative block md:w-80">
+        <div className="flex flex-col gap-3 border-b border-line px-4 py-3 sm:flex-row">
+          <label className="relative block sm:w-80">
             <span className="sr-only">Buscar cliente</span>
             <Search
               aria-hidden
@@ -38,10 +73,28 @@ export function CustomersPage() {
               onChange={(event) => {
                 setSearch(event.target.value);
               }}
-              placeholder="Nombre o NIT"
+              placeholder="Nombre, razón social o documento"
               className="pl-9"
             />
           </label>
+          {seesAll ? (
+            <div className="sm:w-56">
+              <Select
+                aria-label="Vendedor"
+                value={sellerId}
+                onChange={(event) => {
+                  setSellerId(event.target.value);
+                }}
+              >
+                <option value="">Todos los vendedores</option>
+                {(sellers.data ?? []).map((seller) => (
+                  <option key={seller.id} value={seller.id}>
+                    {seller.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
         </div>
         <QueryView query={customers}>
           {(rows) => (
@@ -52,7 +105,14 @@ export function CustomersPage() {
               onRowClick={(row) => {
                 void navigate(pathTo('customer', row.id));
               }}
-              empty={<EmptyState icon={<Contact />} title="No hay clientes con ese nombre" />}
+              rowClassName={(row) => (row.active ? undefined : 'opacity-60')}
+              empty={
+                <EmptyState
+                  icon={<Contact />}
+                  title={search ? 'Ningún cliente coincide con la búsqueda' : 'Aún no hay clientes'}
+                  description={search ? 'Prueba con parte del nombre o del documento.' : undefined}
+                />
+              }
               columns={[
                 {
                   key: 'name',
@@ -62,11 +122,40 @@ export function CustomersPage() {
                       <EntityLink to="customer" id={row.id} className="font-medium">
                         {row.name}
                       </EntityLink>
-                      {row.taxId ? (
-                        <span className="block text-[12.5px] text-ink-3">NIT {row.taxId}</span>
-                      ) : null}
+                      <span className="block text-[12.5px] text-ink-3">
+                        {row.documentTypeLabel} {row.documentNumber}
+                        {row.active ? '' : ' (inactivo)'}
+                      </span>
                     </span>
                   ),
+                },
+                ...(seesAll
+                  ? [
+                      {
+                        key: 'seller',
+                        header: 'Vendedor',
+                        render: (row: Customer) =>
+                          row.seller?.name ?? <span className="text-ink-3">Sin asignar</span>,
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'branches',
+                  header: 'Sucursales',
+                  hideOnMobile: true,
+                  render: (row) => {
+                    const active = row.branches.filter((branch) => branch.active);
+                    const unplaced = active.filter((branch) => branch.latitude === null).length;
+                    return (
+                      <span className="flex items-center gap-1.5 text-ink-2">
+                        <MapPin aria-hidden className="size-3.5 text-ink-3" />
+                        {plural(active.length, 'sucursal', 'sucursales')}
+                        {unplaced > 0 ? (
+                          <span className="text-[12.5px] text-ink-3">({unplaced} sin ubicar)</span>
+                        ) : null}
+                      </span>
+                    );
+                  },
                 },
                 { key: 'city', header: 'Ciudad', render: (row) => row.city ?? '—' },
                 {
@@ -93,6 +182,12 @@ export function CustomersPage() {
           )}
         </QueryView>
       </Panel>
+      <CustomerFormDialog
+        open={creating}
+        onClose={() => {
+          setCreating(false);
+        }}
+      />
     </>
   );
 }

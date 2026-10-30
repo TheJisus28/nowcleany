@@ -8,8 +8,8 @@ export type Entity = 'product' | 'order' | 'customer' | 'production-order' | 'pu
 /** Panels from which each record is reachable (its page shows only what that panel needs). */
 const ENTITY_PANELS: Record<Entity, readonly Panel[]> = {
   product: ['summary', 'home', 'sales', 'plant', 'purchasing', 'inventory', 'catalog'],
-  order: ['summary', 'home', 'sales', 'plant', 'inventory'],
-  customer: ['summary', 'customers'],
+  order: ['summary', 'home', 'sales', 'visits', 'plant', 'inventory'],
+  customer: ['summary', 'customers', 'visits'],
   'production-order': ['summary', 'plant'],
   'purchase-order': ['summary', 'purchasing', 'inventory'],
 };

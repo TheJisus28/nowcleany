@@ -24,7 +24,6 @@ interface LineDraft {
   key: number;
   componentId: string;
   quantity: string;
-  waste: string;
 }
 
 let lineKey = 1;
@@ -35,18 +34,8 @@ const toDraft = (formula: Formula | undefined): LineDraft[] =>
         key: lineKey++,
         componentId: line.componentId,
         quantity: formatDecimal(line.quantity.quantity),
-        waste: line.wasteBps === 0 ? '' : formatDecimal(String(line.wasteBps / 100)),
       }))
-    : [{ key: lineKey++, componentId: '', quantity: '', waste: '' }];
-
-/** Percent as typed ("1,5") to basis points (150); empty means no waste. */
-const wasteBps = (raw: string): number | null => {
-  if (raw.trim() === '') return 0;
-  const parsed = parseDecimalInput(raw);
-  if (parsed === null) return null;
-  const bps = Math.round(Number(parsed) * 100);
-  return bps <= 10_000 ? bps : null;
-};
+    : [{ key: lineKey++, componentId: '', quantity: '' }];
 
 /**
  * Edits the product's draft formula (starting from the draft, or from the active version for a new
@@ -98,12 +87,11 @@ export function FormulaEditorDialog({
         ? 'Ya está en la fórmula.'
         : undefined,
     quantity: Number(parseDecimalInput(line.quantity) ?? 0) > 0 ? undefined : 'Mayor que cero.',
-    waste: wasteBps(line.waste) === null ? 'Entre 0 y 100 %.' : undefined,
   }));
   const valid =
     Number(parsedYield ?? 0) > 0 &&
     lines.length > 0 &&
-    lineErrors.every((error) => !error.component && !error.quantity && !error.waste);
+    lineErrors.every((error) => !error.component && !error.quantity);
   const [showErrors, setShowErrors] = useState(false);
 
   const save = useAction(
@@ -114,7 +102,6 @@ export function FormulaEditorDialog({
         lines: lines.map((line) => ({
           componentId: line.componentId,
           quantity: parseDecimalInput(line.quantity) ?? '0',
-          wasteBps: wasteBps(line.waste) ?? 0,
         })),
       }),
     { success: (draft) => `Borrador v${String(draft.version)} guardado: falta publicarlo` },
@@ -205,7 +192,7 @@ export function FormulaEditorDialog({
             onClick={() => {
               setLines((current) => [
                 ...current,
-                { key: lineKey++, componentId: '', quantity: '', waste: '' },
+                { key: lineKey++, componentId: '', quantity: '' },
               ]);
             }}
           >
@@ -219,7 +206,7 @@ export function FormulaEditorDialog({
             return (
               <li
                 key={line.key}
-                className="grid grid-cols-[1fr_auto] items-start gap-2 rounded-lg border border-line p-3 sm:grid-cols-[minmax(0,1fr)_130px_100px_auto] sm:border-0 sm:p-0"
+                className="grid grid-cols-[1fr_auto] items-start gap-2 rounded-lg border border-line p-3 sm:grid-cols-[minmax(0,1fr)_160px_auto] sm:border-0 sm:p-0"
               >
                 <Field
                   label={`Componente ${String(index + 1)}`}
@@ -258,19 +245,6 @@ export function FormulaEditorDialog({
                       value={line.quantity}
                       onChange={(event) => {
                         update(line.key, { quantity: event.target.value });
-                      }}
-                    />
-                  )}
-                </Field>
-                <Field label="Merma %" error={showErrors ? errors?.waste : undefined}>
-                  {(props) => (
-                    <Input
-                      {...props}
-                      inputMode="decimal"
-                      placeholder="0"
-                      value={line.waste}
-                      onChange={(event) => {
-                        update(line.key, { waste: event.target.value });
                       }}
                     />
                   )}

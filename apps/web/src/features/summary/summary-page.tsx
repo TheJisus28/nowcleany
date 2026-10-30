@@ -997,7 +997,7 @@ function Delays() {
               <EntityLink to="purchase-order" id={order.id} className="font-medium">
                 {order.label}
               </EntityLink>{' '}
-              <span className="text-ink-2">· {order.supplier}</span>
+              <span className="text-ink-2">· {order.supplier.name}</span>
             </div>
             <DueDate date={order.expectedDate} lateLabel="No ha llegado" />
           </li>

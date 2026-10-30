@@ -179,10 +179,10 @@ function StockStrip({ product }: { product: Product }) {
         <Qty value={row?.onHand ?? zero} emphasis />
       </Stat>
       <Stat label="Comprometido en preventas">
-        <Qty value={row?.reserved ?? zero} emphasis dimZero />
+        <Qty value={row?.committed ?? zero} emphasis dimZero />
       </Stat>
-      <Stat label="Disponible">
-        <Qty value={row?.available ?? zero} emphasis />
+      <Stat label="Proyectado" hint="Físico menos lo comprometido">
+        <Qty value={row?.projected ?? zero} emphasis />
       </Stat>
       <PlanningStat product={product} />
     </div>
@@ -388,7 +388,7 @@ function PurchasesSection({ product }: { product: Product }) {
                     <EntityLink to="purchase-order" id={row.id} className="font-medium">
                       {row.label}
                     </EntityLink>
-                    <span className="block text-[12.5px] text-ink-3">{row.supplier}</span>
+                    <span className="block text-[12.5px] text-ink-3">{row.supplier.name}</span>
                   </span>
                 ),
               },

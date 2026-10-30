@@ -1,4 +1,4 @@
-import { LogOut, Menu, Search, X } from 'lucide-react';
+import { ChevronRight, LogOut, Menu, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useProfile, useSession } from '../auth/session';
@@ -6,37 +6,60 @@ import { BrandLockup } from '../components/brand';
 import { SearchPalette } from '../components/search-palette';
 import { cn } from '../components/ui';
 import { useAccess } from './access';
-import { NAV, ROLE_LABELS } from './nav';
+import { NAV_GROUPS, navItemFor, ROLE_LABELS } from './nav';
 
+/** The module rail: NOW CLEANY navy, one group per ERP module, only the panels of the role. */
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   const { has } = useAccess();
+  const groups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => has(item.panel)),
+  })).filter((group) => group.items.length > 0);
   return (
-    <nav aria-label="Paneles" className="flex flex-col gap-0.5">
-      {NAV.filter((item) => has(item.panel)).map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              'relative flex h-10 items-center gap-3 rounded-md px-3 text-[14.5px] font-medium transition-colors',
-              isActive ? 'bg-brand text-white' : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              {isActive ? (
-                <span
-                  aria-hidden
-                  className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r bg-aqua"
-                />
-              ) : null}
-              <item.icon aria-hidden className="size-[18px]" strokeWidth={2} />
-              {item.label}
-            </>
-          )}
-        </NavLink>
+    <nav aria-label="Módulos" className="flex flex-col gap-5">
+      {groups.map((group) => (
+        <div key={group.label ?? 'start'}>
+          {group.label ? (
+            <p className="mb-1 px-3 text-[12.5px] font-semibold tracking-[0.01em] text-rail-muted [font-stretch:110%]">
+              {group.label}
+            </p>
+          ) : null}
+          <ul className="flex flex-col gap-px">
+            {group.items.map((item) => (
+              <li key={item.to}>
+                <NavLink
+                  to={item.to}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    cn(
+                      'relative flex h-9 items-center gap-3 rounded-md px-3 text-[14px] transition-colors',
+                      isActive
+                        ? 'bg-white/[0.11] font-medium text-white'
+                        : 'text-rail-ink hover:bg-white/[0.06] hover:text-white',
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive ? (
+                        <span
+                          aria-hidden
+                          className="absolute top-1.5 bottom-1.5 -left-4 w-[3px] rounded-r bg-aqua"
+                        />
+                      ) : null}
+                      <item.icon
+                        aria-hidden
+                        className={cn('size-[17px]', isActive ? 'text-aqua' : 'text-rail-muted')}
+                        strokeWidth={2}
+                      />
+                      {item.label}
+                    </>
+                  )}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </div>
       ))}
     </nav>
   );
@@ -52,13 +75,13 @@ function UserCard() {
     .join('')
     .toUpperCase();
   return (
-    <div className="flex items-center gap-3 border-t border-line pt-4">
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-soft text-[13px] font-semibold text-brand">
+    <div className="flex items-center gap-3 border-t border-white/10 pt-4">
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-aqua/15 text-[13px] font-semibold text-aqua">
         {initials}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{profile.fullName}</p>
-        <p className="truncate text-[12.5px] text-ink-3">
+        <p className="truncate text-sm font-medium text-white">{profile.fullName}</p>
+        <p className="truncate text-[12.5px] text-rail-muted">
           {profile.roles.map((role) => ROLE_LABELS[role] ?? role).join(', ')}
         </p>
       </div>
@@ -67,7 +90,7 @@ function UserCard() {
         onClick={() => {
           void logout();
         }}
-        className="rounded-md p-2 text-ink-3 hover:bg-surface-2 hover:text-ink"
+        className="rounded-md p-2 text-rail-muted hover:bg-white/10 hover:text-white"
         aria-label="Cerrar sesión"
         title="Cerrar sesión"
       >
@@ -82,12 +105,40 @@ function SearchButton({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="flex h-10 w-full items-center gap-2.5 rounded-md border border-line bg-surface-2/60 px-3 text-left text-[14px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2"
+      className="flex h-9 w-full max-w-[340px] items-center gap-2.5 rounded-md border border-line bg-surface px-3 text-left text-[14px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2"
     >
       <Search aria-hidden className="size-4" />
-      <span className="flex-1">Buscar…</span>
-      <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 text-[11px]">Ctrl K</kbd>
+      <span className="flex-1 truncate">Buscar en SCIP…</span>
+      <kbd className="hidden rounded border border-line bg-surface-2 px-1.5 py-0.5 text-[11px] sm:inline">
+        Ctrl K
+      </kbd>
     </button>
+  );
+}
+
+/** Where the user is: module › screen. */
+function Breadcrumb() {
+  const location = useLocation();
+  const { has } = useAccess();
+  const item = navItemFor(location.pathname);
+  if (!item || !has(item.panel)) return <span />;
+  const isDetail = location.pathname !== item.to;
+  return (
+    <nav aria-label="Ubicación" className="flex min-w-0 items-center gap-1.5 text-[13.5px]">
+      {item.group ? (
+        <>
+          <span className="text-ink-3">{item.group}</span>
+          <ChevronRight aria-hidden className="size-3.5 shrink-0 text-ink-3" />
+        </>
+      ) : null}
+      {isDetail ? (
+        <NavLink to={item.to} className="truncate text-ink-2 hover:text-brand hover:underline">
+          {item.label}
+        </NavLink>
+      ) : (
+        <span className="truncate font-medium text-ink">{item.label}</span>
+      )}
+    </nav>
   );
 }
 
@@ -119,40 +170,55 @@ export function Shell() {
   };
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
-      <aside className="sticky top-0 hidden h-screen flex-col gap-6 border-r border-line bg-surface px-4 py-5 lg:flex">
-        <BrandLockup />
-        <SearchButton onOpen={openSearch} />
-        <div className="-mt-2 flex-1 overflow-y-auto">
+    <div className="min-h-screen lg:grid lg:grid-cols-[252px_1fr]">
+      <aside className="sticky top-0 hidden h-screen flex-col gap-7 bg-rail px-4 py-5 lg:flex">
+        <BrandLockup inverted />
+        <div className="-mx-1 flex-1 overflow-y-auto px-1">
           <Navigation />
         </div>
         <UserCard />
       </aside>
 
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden">
-        <BrandLockup />
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={openSearch}
-            className="rounded-md p-2 text-ink-2 hover:bg-surface-2"
-            aria-label="Buscar"
-          >
-            <Search className="size-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMenuOpen(true);
-            }}
-            className="rounded-md p-2 text-ink-2 hover:bg-surface-2"
-            aria-label="Abrir menú"
-            aria-expanded={menuOpen}
-          >
-            <Menu className="size-5" />
-          </button>
-        </div>
-      </header>
+      <div className="min-w-0">
+        <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur">
+          <div className="flex h-14 items-center gap-3 bg-rail px-4 lg:hidden">
+            <BrandLockup inverted />
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                onClick={openSearch}
+                className="rounded-md p-2 text-rail-ink hover:bg-white/10"
+                aria-label="Buscar"
+              >
+                <Search className="size-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(true);
+                }}
+                className="rounded-md p-2 text-rail-ink hover:bg-white/10"
+                aria-label="Abrir menú"
+                aria-expanded={menuOpen}
+              >
+                <Menu className="size-5" />
+              </button>
+            </div>
+          </div>
+          <div className="mx-auto flex h-12 max-w-[1320px] items-center justify-between gap-4 px-4 sm:px-6 lg:h-14 lg:px-10">
+            <Breadcrumb />
+            <div className="hidden flex-1 justify-end lg:flex">
+              <SearchButton onOpen={openSearch} />
+            </div>
+          </div>
+        </header>
+
+        <main className="px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+          <div className="mx-auto max-w-[1320px]">
+            <Outlet />
+          </div>
+        </main>
+      </div>
 
       {menuOpen ? (
         <div
@@ -164,20 +230,20 @@ export function Shell() {
           <button
             type="button"
             aria-label="Cerrar menú"
-            className="absolute inset-0 bg-ink/40"
+            className="absolute inset-0 bg-ink/50"
             onClick={() => {
               setMenuOpen(false);
             }}
           />
-          <div className="absolute inset-y-0 left-0 flex w-[min(84vw,300px)] flex-col gap-6 bg-surface px-4 py-5 shadow-xl">
+          <div className="absolute inset-y-0 left-0 flex w-[min(86vw,300px)] flex-col gap-6 bg-rail px-4 py-5 shadow-xl">
             <div className="flex items-center justify-between">
-              <BrandLockup />
+              <BrandLockup inverted />
               <button
                 type="button"
                 onClick={() => {
                   setMenuOpen(false);
                 }}
-                className="rounded-md p-2 text-ink-3 hover:bg-surface-2"
+                className="rounded-md p-2 text-rail-muted hover:bg-white/10 hover:text-white"
                 aria-label="Cerrar menú"
               >
                 <X className="size-5" />
@@ -194,12 +260,6 @@ export function Shell() {
           </div>
         </div>
       ) : null}
-
-      <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-        <div className="mx-auto max-w-[1240px]">
-          <Outlet />
-        </div>
-      </main>
 
       <SearchPalette
         open={searchOpen}

@@ -217,7 +217,6 @@ function FormulaLines({ formula }: { formula: Formula }) {
         <tr className="border-b border-line text-left text-[12.5px] text-ink-2">
           <th className="py-2 font-medium">Componente</th>
           <th className="py-2 text-right font-medium">Por bache</th>
-          <th className="py-2 text-right font-medium">Merma</th>
         </tr>
       </thead>
       <tbody>
@@ -233,13 +232,6 @@ function FormulaLines({ formula }: { formula: Formula }) {
             </td>
             <td className="py-2 text-right">
               <Qty value={line.quantity} />
-            </td>
-            <td className="py-2 text-right tabular-nums">
-              {line.wasteBps === 0 ? (
-                <span className="text-ink-3">—</span>
-              ) : (
-                `${formatDecimal(String(line.wasteBps / 100))} %`
-              )}
             </td>
           </tr>
         ))}

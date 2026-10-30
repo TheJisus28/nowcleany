@@ -189,9 +189,18 @@ function OrderDetail({ order }: { order: SalesOrder }) {
                 <EntityLink to="customer" id={order.customer.id}>
                   {order.customer.name}
                 </EntityLink>
-                {order.customer.taxId ? (
-                  <span className="block text-[12.5px] text-ink-3">NIT {order.customer.taxId}</span>
-                ) : null}
+                <span className="block text-[12.5px] text-ink-3">
+                  {order.customer.documentType === 'NIT' ? 'NIT' : 'Cédula'}{' '}
+                  {order.customer.documentNumber}
+                </span>
+              </dd>
+              <dt className="text-ink-3">Entregar en</dt>
+              <dd>
+                {order.branch.name}
+                <span className="block text-[12.5px] text-ink-3">
+                  {[order.branch.address, order.branch.city].filter(Boolean).join(', ') ||
+                    'Sin dirección'}
+                </span>
               </dd>
               <dt className="text-ink-3">Vendedor</dt>
               <dd>{order.seller.name}</dd>

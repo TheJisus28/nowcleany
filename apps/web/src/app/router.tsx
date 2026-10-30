@@ -12,12 +12,14 @@ import { ProductionOrderPage } from '../features/plant/production-order-page';
 import { ProductPage } from '../features/products/product-page';
 import { PurchaseOrderPage } from '../features/purchasing/purchase-order-page';
 import { PurchasingPage } from '../features/purchasing/purchasing-page';
+import { SuppliersPage } from '../features/purchasing/suppliers-page';
 import { OrderDetailPage } from '../features/sales/order-detail-page';
 import { OrderFormPage } from '../features/sales/order-form-page';
 import { OrdersPage } from '../features/sales/orders-page';
 import { SalesHomePage } from '../features/sales/sales-home-page';
 import { SummaryPage } from '../features/summary/summary-page';
 import { UsersPage } from '../features/users/users-page';
+import { VisitsPage } from '../features/visits/visits-page';
 import { type Entity, useAccess } from './access';
 import type { Panel } from './nav';
 import { Shell } from './shell';
@@ -97,10 +99,12 @@ export const router = createBrowserRouter([
       },
       { path: 'clientes', element: panel('customers', <CustomersPage />) },
       { path: 'clientes/:id', element: entity('customer', <CustomerPage />) },
+      { path: 'visitas', element: panel('visits', <VisitsPage />) },
       { path: 'planta', element: panel('plant', <PlantPage />) },
       { path: 'planta/ordenes/:id', element: entity('production-order', <ProductionOrderPage />) },
       { path: 'compras', element: panel('purchasing', <PurchasingPage />) },
       { path: 'compras/ordenes/:id', element: entity('purchase-order', <PurchaseOrderPage />) },
+      { path: 'proveedores', element: panel('suppliers', <SuppliersPage />) },
       { path: 'inventario', element: panel('inventory', <InventoryPage />) },
       { path: 'productos/:id', element: entity('product', <ProductPage />) },
       { path: 'catalogo', element: panel('catalog', <CatalogPage />) },
