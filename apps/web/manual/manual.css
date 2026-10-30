@@ -1,0 +1,6 @@
+/* The manual uses the panel's Tailwind setup and NOW CLEANY tokens. */
+@import '../src/styles.css';
+
+html {
+  scroll-behavior: smooth;
+}

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, LogOut, Menu, Search, X } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, LogOut, Menu, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 import { useProfile, useSession } from '../auth/session';
@@ -256,8 +256,18 @@ export function Shell() {
             </div>
             <div className="flex h-11 items-end gap-4 pr-4 pl-2 sm:pr-6 lg:pr-10 lg:pl-6">
               <WorkTabsBar />
-              <div className="hidden shrink-0 self-center lg:block">
+              <div className="hidden shrink-0 items-center gap-2 self-center lg:flex">
                 <SearchButton onOpen={openSearch} />
+                <a
+                  href="/manual/"
+                  target="_blank"
+                  rel="noopener"
+                  title="Manual de uso"
+                  aria-label="Manual de uso"
+                  className="grid size-8 place-items-center rounded-md border border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
+                >
+                  <BookOpen aria-hidden className="size-4" />
+                </a>
               </div>
             </div>
           </header>

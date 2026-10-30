@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Manual de uso · SCIP</title>
+    <link rel="stylesheet" href="./manual.css" />
+  </head>
+  <body class="bg-paper text-ink">
+    <header class="bg-rail text-rail-ink">
+      <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6">
+        <div
+          class="grid size-10 place-items-center rounded-lg bg-rail-2 text-lg font-extrabold text-aqua"
+        >
+          S
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-[12px] font-semibold tracking-[0.14em] text-aqua uppercase">
+            Manual de uso
+          </p>
+          <p class="text-lg font-bold [font-stretch:112%]">SCIP · NOW CLEANY S.A.S.</p>
+        </div>
+        <a
+          href="/"
+          class="rounded-md bg-aqua px-3 py-1.5 text-[13.5px] font-semibold text-rail hover:brightness-95"
+          >Abrir el panel</a
+        >
+      </div>
+    </header>
+
+    <div class="mx-auto grid max-w-7xl gap-10 px-4 py-8 sm:px-6 lg:grid-cols-[230px_minmax(0,1fr)]">
+      <nav
+        aria-label="Contenido"
+        class="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto"
+      >
+        <p class="mb-2 text-[12px] font-semibold tracking-[0.12em] text-ink-3 uppercase">
+          Contenido
+        </p>
+        <ol
+          class="grid gap-0.5 text-[14px] text-ink-2 [&_a]:block [&_a]:rounded-md [&_a]:px-2.5 [&_a]:py-1.5 [&_a:hover]:bg-brand-soft [&_a:hover]:text-ink"
+        >
+          <li><a href="#entrar">1. Entrar</a></li>
+          <li><a href="#panel">2. Moverse en el panel</a></li>
+          <li><a href="#flujo">3. El camino de un pedido</a></li>
+          <li><a href="#catalogo">4. Productos y fórmulas</a></li>
+          <li><a href="#compras">5. Compras</a></li>
+          <li><a href="#recepcion">6. Recepción de mercancía</a></li>
+          <li><a href="#produccion">7. Producción</a></li>
+          <li><a href="#ventas">8. Ventas</a></li>
+          <li><a href="#consolidado">9. Consolidado y facturación</a></li>
+          <li><a href="#alistamiento">10. Alistamiento</a></li>
+          <li><a href="#logistica">11. Despacho y entrega</a></li>
+          <li><a href="#contabilidad">12. Contabilidad</a></li>
+          <li><a href="#gerencia">13. Gerencia e inventario</a></li>
+          <li><a href="#app">14. App del vendedor</a></li>
+          <li><a href="#reglas">15. Reglas del negocio</a></li>
+          <li><a href="#glosario">16. Glosario</a></li>
+        </ol>
+      </nav>
+
+      <main
+        class="grid min-w-0 gap-14 [&_h2]:text-[26px] [&_h2]:font-bold [&_h2]:[font-stretch:112%] [&_h2]:text-balance [&_h3]:text-[18px] [&_h3]:font-semibold [&_section]:grid [&_section]:scroll-mt-6 [&_section]:gap-5 [&_p]:max-w-[70ch] [&_p]:leading-relaxed [&_li]:leading-relaxed"
+      >
+        <div class="grid gap-3 border-b border-line pb-8">
+          <h1
+            class="text-[34px] leading-tight font-extrabold text-balance [font-stretch:115%] sm:text-[42px]"
+          >
+            Cómo se usa SCIP, paso a paso
+          </h1>
+          <p class="max-w-[70ch] text-[17px] text-ink-2">
+            Cada persona hace su paso del proceso, lo autoriza y lo pasa a la siguiente. Este manual
+            sigue un caso real de principio a fin: se compran los insumos, se fabrica el cloro, el
+            vendedor toma la preventa, Diego factura, planta alista, logística despacha y
+            contabilidad cobra.
+          </p>
+          <p class="text-[13px] text-ink-3">
+            Versión 1 · 30 de octubre de 2026 · Las pantallas son de un ejemplo, no de datos reales.
+          </p>
+        </div>
+
+        <!-- 1 -->
+        <section id="entrar">
+          <h2>1. Entrar</h2>
+          <p>
+            Se entra con el correo y la contraseña que entrega el administrador. Cada usuario ve
+            solo el menú de su rol.
+          </p>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/01-login.webp" target="_blank"
+              ><img
+                src="/manual/img/01-login.webp"
+                alt="Pantalla de inicio de sesión"
+                loading="lazy"
+                class="w-full"
+            /></a>
+          </figure>
+          <div class="overflow-x-auto rounded-xl border border-line bg-surface">
+            <table class="w-full text-left text-[14px]">
+              <thead class="bg-brand-soft text-[12px] tracking-[0.06em] text-ink-2 uppercase">
+                <tr>
+                  <th class="px-4 py-2">Rol</th>
+                  <th class="px-4 py-2">Usuario de la demo</th>
+                  <th class="px-4 py-2">Qué hace</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-line [&_td]:px-4 [&_td]:py-2 [&_td]:align-top">
+                <tr>
+                  <td>Vendedor</td>
+                  <td><code>vendedor.a@nowcleany.local</code></td>
+                  <td>Clientes, visitas y preventas de su cartera.</td>
+                </tr>
+                <tr>
+                  <td>Consolidado (Diego)</td>
+                  <td><code>consolidado@nowcleany.local</code></td>
+                  <td>Revisa las preventas, decide el turno y factura.</td>
+                </tr>
+                <tr>
+                  <td>Planta</td>
+                  <td><code>planta@nowcleany.local</code></td>
+                  <td>Produce, envasa y alista los pedidos.</td>
+                </tr>
+                <tr>
+                  <td>Logística</td>
+                  <td><code>logistica@nowcleany.local</code></td>
+                  <td>Remisiones, despacho y entregas.</td>
+                </tr>
+                <tr>
+                  <td>Compras (Alfonso)</td>
+                  <td><code>compras@nowcleany.local</code></td>
+                  <td>Plan del mes, compra urgente y órdenes de compra.</td>
+                </tr>
+                <tr>
+                  <td>Recepción (Silvia)</td>
+                  <td><code>recepcion@nowcleany.local</code></td>
+                  <td>Ingresa la factura del proveedor y con ella la mercancía.</td>
+                </tr>
+                <tr>
+                  <td>Contable</td>
+                  <td><code>contable@nowcleany.local</code></td>
+                  <td>Recibos de caja, egresos, cartera y auditoría.</td>
+                </tr>
+                <tr>
+                  <td>Gerencia</td>
+                  <td><code>gerencia@nowcleany.local</code></td>
+                  <td>Tablero de operación, informes y todos los módulos.</td>
+                </tr>
+                <tr>
+                  <td>Administrador</td>
+                  <td><code>admin@nowcleany.local</code></td>
+                  <td>Todo, más los usuarios.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/02-usuarios.webp" target="_blank"
+              ><img
+                src="/manual/img/02-usuarios.webp"
+                alt="Lista de usuarios"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Administración › Usuarios.</b> El administrador crea usuarios,
+              asigna roles y los desactiva.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 2 -->
+        <section id="panel">
+          <h2>2. Moverse en el panel</h2>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="grid content-start gap-2 rounded-xl border border-line bg-surface p-5">
+              <h3>El menú</h3>
+              <p class="text-ink-2">
+                A la izquierda, por módulo. Dentro de cada uno:
+                <b class="text-ink">Documentos</b> (crear),
+                <b class="text-ink">Consultas</b> (buscar y revisar),
+                <b class="text-ink">Informes</b> (decidir) y <b class="text-ink">Maestros</b> (datos
+                base).
+              </p>
+            </div>
+            <div class="grid content-start gap-2 rounded-xl border border-line bg-surface p-5">
+              <h3>Pestañas de trabajo</h3>
+              <p class="text-ink-2">
+                Cada pantalla queda como pestaña arriba. Se pasa de una a otra sin perder lo escrito
+                y se cierran con la ×.
+              </p>
+            </div>
+            <div class="grid content-start gap-2 rounded-xl border border-line bg-surface p-5">
+              <h3>Buscador</h3>
+              <p class="text-ink-2">
+                <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                  >Ctrl K</kbd
+                >
+                o
+                <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                  >F3</kbd
+                >
+                encuentra opciones del menú, clientes, productos y documentos: <code>PV-</code>,
+                <code>FV-</code>, <code>OC-</code>, <code>GU-</code>.
+              </p>
+            </div>
+            <div class="grid content-start gap-2 rounded-xl border border-line bg-surface p-5">
+              <h3>Manual</h3>
+              <p class="text-ink-2">
+                El ícono del libro, junto al buscador, abre este manual en otra pestaña.
+              </p>
+            </div>
+          </div>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/20-pendientes.webp" target="_blank"
+              ><img
+                src="/manual/img/20-pendientes.webp"
+                alt="Pendientes del consolidado"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Inicio › Pendientes.</b> Cada rol operativo entra aquí: los
+              documentos que esperan su paso. Doble clic o Enter abre el documento.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/18-pedidos.webp" target="_blank"
+              ><img
+                src="/manual/img/18-pedidos.webp"
+                alt="Consulta de pedidos"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Una consulta.</b> Filtros arriba y <b>Consultar</b>; clic en un
+              título ordena; <b>Columnas</b> muestra u oculta columnas; <b>Exportar a Excel</b> e
+              <b>Imprimir</b>. Las fechas en rojo con reloj están atrasadas.
+            </figcaption>
+          </figure>
+          <div class="overflow-x-auto rounded-xl border border-line bg-surface">
+            <table class="w-full text-left text-[14px]">
+              <thead class="bg-brand-soft text-[12px] tracking-[0.06em] text-ink-2 uppercase">
+                <tr>
+                  <th class="px-4 py-2">Tecla</th>
+                  <th class="px-4 py-2">En un documento</th>
+                </tr>
+              </thead>
+              <tbody
+                class="divide-y divide-line [&_td]:px-4 [&_td]:py-2 [&_kbd]:rounded [&_kbd]:border [&_kbd]:border-line [&_kbd]:bg-surface-2 [&_kbd]:px-1.5 [&_kbd]:font-mono [&_kbd]:text-[12px]"
+              >
+                <tr>
+                  <td><kbd>Ctrl S</kbd></td>
+                  <td>Guarda.</td>
+                </tr>
+                <tr>
+                  <td><kbd>F9</kbd></td>
+                  <td>
+                    Hace el paso del rol (enviar, facturar, entregar a despacho, despachar). Siempre
+                    pide confirmación.
+                  </td>
+                </tr>
+                <tr>
+                  <td><kbd>F2</kbd></td>
+                  <td>Abre la búsqueda completa de cliente, proveedor o producto.</td>
+                </tr>
+                <tr>
+                  <td><kbd>Enter</kbd></td>
+                  <td>Pasa al siguiente campo; en la última cantidad abre una línea nueva.</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl Supr</kbd></td>
+                  <td>Quita la línea.</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl P</kbd></td>
+                  <td>Imprime.</td>
+                </tr>
+                <tr>
+                  <td><kbd>Esc</kbd></td>
+                  <td>Cierra la lista abierta o la pantalla.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 3 -->
+        <section id="flujo">
+          <h2>3. El camino de un pedido</h2>
+          <p class="text-ink-2">
+            Un pedido pasa por cinco manos. Cada una lo ve en sus Pendientes cuando le toca y todo
+            queda en la auditoría.
+          </p>
+          <ol class="grid gap-2 md:grid-cols-5">
+            <li
+              class="grid content-start gap-1 rounded-lg border border-line border-t-4 border-t-brand bg-surface p-3"
+            >
+              <span class="text-[11.5px] font-bold tracking-[0.08em] text-brand uppercase"
+                >Vendedor</span
+              ><b>Toma la preventa</b
+              ><span class="text-[13.5px] text-ink-2">Cliente, productos y fecha prometida.</span>
+            </li>
+            <li
+              class="grid content-start gap-1 rounded-lg border border-line border-t-4 border-t-brand bg-surface p-3"
+            >
+              <span class="text-[11.5px] font-bold tracking-[0.08em] text-brand uppercase"
+                >Consolidado</span
+              ><b>Factura</b
+              ><span class="text-[13.5px] text-ink-2"
+                >Siempre. Decide el turno y si se permite parcial.</span
+              >
+            </li>
+            <li
+              class="grid content-start gap-1 rounded-lg border border-line border-t-4 border-t-brand bg-surface p-3"
+            >
+              <span class="text-[11.5px] font-bold tracking-[0.08em] text-brand uppercase"
+                >Planta</span
+              ><b>Alista</b
+              ><span class="text-[13.5px] text-ink-2"
+                >Entrega a despacho lo que hay; lo que falta se fabrica.</span
+              >
+            </li>
+            <li
+              class="grid content-start gap-1 rounded-lg border border-line border-t-4 border-t-brand bg-surface p-3"
+            >
+              <span class="text-[11.5px] font-bold tracking-[0.08em] text-brand uppercase"
+                >Logística</span
+              ><b>Despacha</b
+              ><span class="text-[13.5px] text-ink-2">Remisión, despacho y entrega.</span>
+            </li>
+            <li
+              class="grid content-start gap-1 rounded-lg border border-line border-t-4 border-t-brand bg-surface p-3"
+            >
+              <span class="text-[11.5px] font-bold tracking-[0.08em] text-brand uppercase"
+                >Contable</span
+              ><b>Cobra</b
+              ><span class="text-[13.5px] text-ink-2">Recibos de caja contra la factura.</span>
+            </li>
+          </ol>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <p
+              class="rounded-lg border border-dashed border-line-strong bg-surface p-3 text-[14px] text-ink-2"
+            >
+              <b class="text-ink">Compras</b> ve lo que falta comprar para lo ya vendido y arma las
+              órdenes de compra; también compra la mercancía de reventa.
+            </p>
+            <p
+              class="rounded-lg border border-dashed border-line-strong bg-surface p-3 text-[14px] text-ink-2"
+            >
+              <b class="text-ink">Recepción</b> ingresa la factura del proveedor contra la orden de
+              compra; con eso entra la mercancía.
+            </p>
+          </div>
+          <p class="text-ink-2">
+            Estados:
+            <b class="text-ink"
+              >Borrador → Por consolidar → Facturado → Listo o Parcial → Despachado → Entregado</b
+            >. Se puede <b class="text-ink">Anular</b> con un motivo.
+          </p>
+        </section>
+
+        <!-- 4 -->
+        <section id="catalogo">
+          <h2>4. Productos y fórmulas</h2>
+          <p class="text-ink-2">
+            Producción › Maestros › <b class="text-ink">Productos y fórmulas</b>. Hay materias
+            primas, granel (lo que sale del tanque), terminados (envasados) y mercancía de reventa
+            (escobas, recogedores).
+          </p>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/03-catalogo.webp" target="_blank"
+              ><img
+                src="/manual/img/03-catalogo.webp"
+                alt="Catálogo de productos"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">El catálogo.</b> Código, tipo, unidad, precio de venta, costo y
+              existencias.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/04-producto-formula.webp" target="_blank"
+              ><img
+                src="/manual/img/04-producto-formula.webp"
+                alt="Ficha de producto con su fórmula"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">La ficha del producto.</b> Existencias por bodega, pedidos que lo
+              piden, órdenes de producción, últimos movimientos y la fórmula vigente: para 12
+              unidades de cloro x 1 L se usan 12 L de granel, 12 envases, 12 tapas, 12 etiquetas y
+              una caja. Con <b>Nueva versión</b> se crea un borrador; quien la define no la publica
+              (cuatro ojos).
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 5 -->
+        <section id="compras">
+          <h2>5. Compras</h2>
+          <ol
+            class="grid list-decimal gap-1.5 pl-5 text-ink-2 marker:font-semibold marker:text-brand"
+          >
+            <li><b class="text-ink">Proveedores</b>: NIT, contacto, teléfono y ciudad.</li>
+            <li>
+              <b class="text-ink">Compra urgente</b>: lo que falta para pedidos ya vendidos. Se
+              seleccionan las líneas y se abre la orden con esas cantidades.
+            </li>
+            <li>
+              <b class="text-ink">Plan de compras del mes</b>: lo vendido el mes anterior (o el plan
+              de Alfonso) pasado a insumos, menos lo que hay y lo que ya viene en camino.
+            </li>
+            <li>
+              En la orden se elige el proveedor, la fecha esperada y el costo de cada línea.
+              <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                >Ctrl S</kbd
+              >
+              la guarda.
+            </li>
+          </ol>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/05-proveedores.webp" target="_blank"
+              ><img
+                src="/manual/img/05-proveedores.webp"
+                alt="Proveedores"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Compras › Proveedores.</b>
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/07-compras.webp" target="_blank"
+              ><img
+                src="/manual/img/07-compras.webp"
+                alt="Órdenes de compra"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Compras › Órdenes de compra.</b> Arriba las órdenes y su estado
+              (abierta, parcial, recibida); abajo la compra urgente.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/06-orden-compra-nueva.webp" target="_blank"
+              ><img
+                src="/manual/img/06-orden-compra-nueva.webp"
+                alt="Orden de compra nueva"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Orden de compra nueva.</b> Proveedor, fecha esperada, líneas con
+              costo, IVA y total.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/08-orden-compra.webp" target="_blank"
+              ><img
+                src="/manual/img/08-orden-compra.webp"
+                alt="Orden de compra recibida"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">La orden ya recibida.</b> Muestra lo pedido, lo recibido y las
+              facturas del proveedor que entraron contra ella.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 6 -->
+        <section id="recepcion">
+          <h2>6. Recepción de mercancía</h2>
+          <ol
+            class="grid list-decimal gap-1.5 pl-5 text-ink-2 marker:font-semibold marker:text-brand"
+          >
+            <li>
+              Compras › <b class="text-ink">Entradas de almacén</b>: aparecen las órdenes con
+              mercancía por recibir. Enter abre la entrada con lo pendiente.
+            </li>
+            <li>
+              Se escribe el número y la fecha de la factura del proveedor y lo que llegó de verdad.
+            </li>
+            <li>
+              Al guardar entra la mercancía a la bodega de planta. Una orden puede recibir varias
+              facturas hasta completarse.
+            </li>
+          </ol>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/09-recepcion.webp" target="_blank"
+              ><img
+                src="/manual/img/09-recepcion.webp"
+                alt="Órdenes por recibir"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Órdenes por recibir.</b> La de Distribuidora Aseo Total quedó
+              parcial: llegaron las escobas, faltan los recogedores.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/10-entrada-almacen.webp" target="_blank"
+              ><img
+                src="/manual/img/10-entrada-almacen.webp"
+                alt="Entrada de almacén"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Entrada de almacén</b> con lo pendiente de la orden, lista para
+              ingresar la siguiente factura.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 7 -->
+        <section id="produccion">
+          <h2>7. Producción</h2>
+          <ol
+            class="grid list-decimal gap-1.5 pl-5 text-ink-2 marker:font-semibold marker:text-brand"
+          >
+            <li>
+              Producción › <b class="text-ink">Órdenes de producción</b>: las órdenes y lo que hay
+              que envasar o fabricar para cubrir lo vendido. Enter sobre una necesidad abre la orden
+              con la cantidad que falta.
+            </li>
+            <li>
+              La orden se hace por cantidad o por baches, y muestra los insumos de la fórmula.
+            </li>
+            <li>
+              <b class="text-ink">Terminar producción</b>: cantidad real y, en un envasado, el
+              granel que sobró en el tanque (merma). Se descuentan los insumos y entra el producto.
+            </li>
+          </ol>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/11-produccion.webp" target="_blank"
+              ><img
+                src="/manual/img/11-produccion.webp"
+                alt="Órdenes de producción"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Órdenes de producción</b> con sus pestañas de necesidades.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/12-orden-produccion-nueva.webp" target="_blank"
+              ><img
+                src="/manual/img/12-orden-produccion-nueva.webp"
+                alt="Orden de producción nueva"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Orden nueva</b> de 500 L de granel con los insumos que se van a
+              consumir.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/13-orden-produccion.webp" target="_blank"
+              ><img
+                src="/manual/img/13-orden-produccion.webp"
+                alt="Orden de producción terminada"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Envasado terminado:</b> 600 unidades de cloro x 1 L y 3 L de merma
+              de granel.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 8 -->
+        <section id="ventas">
+          <h2>8. Ventas</h2>
+          <p class="text-ink-2">
+            Cada vendedor ve solo su cartera: sus clientes, sus visitas y sus pedidos.
+          </p>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/14-clientes.webp" target="_blank"
+              ><img src="/manual/img/14-clientes.webp" alt="Clientes" loading="lazy" class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Ventas › Clientes.</b> NIT o cédula, ciudad, vendedor y
+              sucursales.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/15-cliente.webp" target="_blank"
+              ><img
+                src="/manual/img/15-cliente.webp"
+                alt="Ficha del cliente"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Ficha del cliente:</b> sucursales en el mapa, sus pedidos y sus
+              visitas.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/16-visitas.webp" target="_blank"
+              ><img
+                src="/manual/img/16-visitas.webp"
+                alt="Visitas de vendedores"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Visitas de vendedores.</b> Dónde marcó cada visita y si fue en
+              sitio (a menos de 150 m de la sucursal).
+            </figcaption>
+          </figure>
+          <h3>Tomar una preventa en el panel</h3>
+          <ol
+            class="grid list-decimal gap-1.5 pl-5 text-ink-2 marker:font-semibold marker:text-brand"
+          >
+            <li>
+              Ventas › <b class="text-ink">Pedido (preventa)</b>. En
+              <b class="text-ink">Cliente</b> se escribe el NIT, la cédula o parte del nombre y se
+              elige de la lista; la sucursal y la dirección se llenan solas.
+            </li>
+            <li>Se pone la fecha prometida al cliente.</li>
+            <li>
+              En cada línea se busca el producto, Enter, la cantidad y Enter otra vez para la
+              siguiente. <b class="text-ink">Disponible</b> muestra cuánto queda libre; si no
+              alcanza, igual se puede vender.
+            </li>
+            <li>En observaciones, cómo llegar o a quién entregar.</li>
+            <li>
+              <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                >F9</kbd
+              >
+              lo envía al consolidado;
+              <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                >Ctrl S</kbd
+              >
+              lo deja como borrador.
+            </li>
+          </ol>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/17-pedido-nuevo.webp" target="_blank"
+              ><img
+                src="/manual/img/17-pedido-nuevo.webp"
+                alt="Pedido nuevo con líneas"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Preventa lista para enviar:</b> 60 unidades de cloro y 12 escobas,
+              con precio de lista, IVA y total.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/19-pedido.webp" target="_blank"
+              ><img
+                src="/manual/img/19-pedido.webp"
+                alt="Pedido entregado con su auditoría"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Un pedido de principio a fin:</b> quién lo elaboró, envió,
+              facturó, alistó, despachó y recibió, con la auditoría al pie.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 9 -->
+        <section id="consolidado">
+          <h2>9. Consolidado y facturación</h2>
+          <ol
+            class="grid list-decimal gap-1.5 pl-5 text-ink-2 marker:font-semibold marker:text-brand"
+          >
+            <li>
+              Ventas › <b class="text-ink">Facturación de pedidos</b>: lo que llegó de los
+              vendedores, con lo que sale del stock, lo que hay que fabricar y lo que hay que
+              comprar.
+            </li>
+            <li>
+              Se ajusta el <b class="text-ink">turno</b> (quién recibe primero el stock) y se marca
+              <b class="text-ink">Parcial</b> si el cliente acepta recibir por partes.
+            </li>
+            <li>
+              Se seleccionan los pedidos y
+              <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                >F9</kbd
+              >
+              <b class="text-ink">Facturar seleccionados</b>. La factura sale aunque falte producto:
+              lo pendiente pasa a planta y a compras.
+            </li>
+          </ol>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/21-facturacion.webp" target="_blank"
+              ><img
+                src="/manual/img/21-facturacion.webp"
+                alt="Facturación de pedidos"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Facturación de pedidos.</b> El pedido del hotel espera factura;
+              abajo, los facturados que esperan despacho.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/22-factura.webp" target="_blank"
+              ><img
+                src="/manual/img/22-factura.webp"
+                alt="Factura de venta"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Factura de venta</b> con IVA del 19 % y vencimiento a 30 días. Las
+              líneas sin stock se marcan como pendientes.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 10 -->
+        <section id="alistamiento">
+          <h2>10. Alistamiento</h2>
+          <ol
+            class="grid list-decimal gap-1.5 pl-5 text-ink-2 marker:font-semibold marker:text-brand"
+          >
+            <li>
+              Producción › <b class="text-ink">Alistamiento de pedidos</b>: los facturados en orden
+              de turno, con lo que se puede cubrir hoy.
+            </li>
+            <li>
+              Al abrir un pedido las cantidades vienen llenas con lo que hay. Si el pedido permite
+              parcial se puede entregar menos.
+            </li>
+            <li>
+              <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                >F9</kbd
+              >
+              <b class="text-ink">Entregar a despacho</b>: la mercancía pasa de la bodega de planta
+              a la de despacho.
+            </li>
+          </ol>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/23-alistamiento.webp" target="_blank"
+              ><img
+                src="/manual/img/23-alistamiento.webp"
+                alt="Alistamiento de pedidos"
+                loading="lazy"
+                class="w-full"
+            /></a>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/24-alistar.webp" target="_blank"
+              ><img
+                src="/manual/img/24-alistar.webp"
+                alt="Pedido alistado parcialmente"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Despacho parcial:</b> la ferretería recibe el cloro; los
+              recogedores quedan pendientes hasta que llegue la compra.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 11 -->
+        <section id="logistica">
+          <h2>11. Despacho y entrega</h2>
+          <ol
+            class="grid list-decimal gap-1.5 pl-5 text-ink-2 marker:font-semibold marker:text-brand"
+          >
+            <li>
+              Logística › <b class="text-ink">Remisiones y guías</b>: se seleccionan los pedidos
+              listos y
+              <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                >F9</kbd
+              >
+              crea la remisión.
+            </li>
+            <li>
+              Transportador, placa, conductor y ruta.
+              <kbd class="rounded border border-line bg-surface-2 px-1.5 font-mono text-[12px]"
+                >F2</kbd
+              >
+              agrega otro pedido a la misma remisión.
+            </li>
+            <li>
+              <b class="text-ink">Despachar</b>: aquí sale la mercancía del inventario. Al volver,
+              <b class="text-ink">Confirmar entrega</b> con el nombre de quien recibió.
+            </li>
+          </ol>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/25-logistica.webp" target="_blank"
+              ><img
+                src="/manual/img/25-logistica.webp"
+                alt="Remisiones y guías"
+                loading="lazy"
+                class="w-full"
+            /></a>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/26-remision.webp" target="_blank"
+              ><img
+                src="/manual/img/26-remision.webp"
+                alt="Remisión despachada"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Remisión</b> con dos pedidos: uno ya entregado y otro en camino.
+              Se imprime para el conductor.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 12 -->
+        <section id="contabilidad">
+          <h2>12. Contabilidad</h2>
+          <ul class="grid list-disc gap-1.5 pl-5 text-ink-2 marker:text-brand">
+            <li>
+              <b class="text-ink">Recibos de caja</b>: se elige el cliente, el medio de pago y se
+              aplica el valor a sus facturas abiertas.
+            </li>
+            <li>
+              <b class="text-ink">Comprobantes de egreso</b>: lo mismo con los pagos a proveedores.
+            </li>
+            <li>
+              <b class="text-ink">Cartera</b> y <b class="text-ink">Cuentas por pagar</b>: saldos
+              por antigüedad.
+            </li>
+            <li>
+              <b class="text-ink">Cobros y pagos</b>: el informe del mes.
+              <b class="text-ink">Auditoría</b>: quién hizo qué y cuándo.
+            </li>
+          </ul>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/27-recibo-caja.webp" target="_blank"
+              ><img
+                src="/manual/img/27-recibo-caja.webp"
+                alt="Recibo de caja"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Recibo de caja</b> abierto desde la factura: el valor a aplicar
+              viene lleno con el saldo.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/28-cartera.webp" target="_blank"
+              ><img src="/manual/img/28-cartera.webp" alt="Cartera" loading="lazy" class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Cartera:</b> al día, 1–30, 31–60 y más de 60 días.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/29-cobros-pagos.webp" target="_blank"
+              ><img
+                src="/manual/img/29-cobros-pagos.webp"
+                alt="Cobros y pagos"
+                loading="lazy"
+                class="w-full"
+            /></a>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/30-auditoria.webp" target="_blank"
+              ><img
+                src="/manual/img/30-auditoria.webp"
+                alt="Auditoría"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Auditoría:</b> cada paso con fecha, documento, usuario y rol.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 13 -->
+        <section id="gerencia">
+          <h2>13. Gerencia e inventario</h2>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/31-tablero.webp" target="_blank"
+              ><img
+                src="/manual/img/31-tablero.webp"
+                alt="Tablero de operación"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Tablero de operación:</b> cuántos pedidos hay en cada paso, quién
+              los tiene, el valor pendiente y los atrasados. <b>Configurar</b> elige qué bloques se
+              ven.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/32-sobreventa.webp" target="_blank"
+              ><img
+                src="/manual/img/32-sobreventa.webp"
+                alt="Sobreventa y cobertura"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Sobreventa y cobertura:</b> lo vendido, cuánto se cubre con lo que
+              hay y qué hay que comprar.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/33-existencias.webp" target="_blank"
+              ><img
+                src="/manual/img/33-existencias.webp"
+                alt="Existencias"
+                loading="lazy"
+                class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Inventario › Existencias:</b> físico por bodega, comprometido y
+              proyectado. Enter abre el kárdex del producto.
+            </figcaption>
+          </figure>
+          <figure class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+            <a href="/manual/img/34-kardex.webp" target="_blank"
+              ><img src="/manual/img/34-kardex.webp" alt="Kárdex" loading="lazy" class="w-full"
+            /></a>
+            <figcaption class="border-t border-line px-4 py-2.5 text-[13.5px] text-ink-2">
+              <b class="text-ink">Kárdex:</b> cada entrada y salida con su documento y el saldo
+              resultante.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- 14 -->
+        <section id="app">
+          <h2>14. App del vendedor</h2>
+          <p class="text-ink-2">
+            En la calle el vendedor usa la app Android. Abajo tiene cuatro pestañas: Mapa, Clientes,
+            Visitas y Preventas.
+          </p>
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="grid content-start gap-2 rounded-xl border border-line bg-surface p-5">
+              <h3>Encontrar al cliente</h3>
+              <p class="text-[14.5px] text-ink-2">
+                Tocar el cliente abre su ficha. <b class="text-ink">Ver en el mapa</b> muestra la
+                sucursal y la posición del vendedor; <b class="text-ink">Cómo llegar</b> abre la
+                ruta en Google Maps.
+              </p>
+            </div>
+            <div class="grid content-start gap-2 rounded-xl border border-line bg-surface p-5">
+              <h3>Registrar la visita</h3>
+              <p class="text-[14.5px] text-ink-2">
+                Con el GPS del teléfono. El sistema mide la distancia a la sucursal y marca si fue
+                en sitio.
+              </p>
+            </div>
+            <div class="grid content-start gap-2 rounded-xl border border-line bg-surface p-5">
+              <h3>Tomar la preventa</h3>
+              <p class="text-[14.5px] text-ink-2">
+                Buscar el producto, escribir la cantidad y va quedando en la lista.
+                <b class="text-ink">Guardar preventa</b>, o
+                <b class="text-ink">Guardar como borrador</b> para terminarla después con
+                <b class="text-ink">Editar</b>.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 15 -->
+        <section id="reglas">
+          <h2>15. Reglas del negocio</h2>
+          <ul class="grid list-disc gap-1.5 pl-5 text-ink-2 marker:text-brand">
+            <li>
+              <b class="text-ink">Se puede vender más de lo que hay.</b> Ventas nunca se bloquea; el
+              faltante se ve como sobreventa.
+            </li>
+            <li>
+              <b class="text-ink">La preventa no descuenta inventario.</b> Queda como comprometido;
+              el físico solo cambia con movimientos reales.
+            </li>
+            <li>
+              <b class="text-ink">Disponible = físico − comprometido.</b> Puede quedar negativo: es
+              lo que hay que producir o comprar.
+            </li>
+            <li>
+              <b class="text-ink">La factura sale siempre.</b> Lo que no hay queda pendiente por
+              fabricar o comprar.
+            </li>
+            <li>
+              <b class="text-ink">Cada vendedor ve solo su cartera.</b> Gerencia y operación ven
+              todo.
+            </li>
+            <li><b class="text-ink">Todo queda en la auditoría</b>, con usuario, rol y hora.</li>
+          </ul>
+        </section>
+
+        <!-- 16 -->
+        <section id="glosario">
+          <h2>16. Glosario</h2>
+          <dl
+            class="grid gap-x-6 gap-y-2 rounded-xl border border-line bg-surface p-5 sm:grid-cols-[200px_minmax(0,1fr)] [&_dd]:text-ink-2 [&_dt]:font-semibold"
+          >
+            <dt>Preventa / pedido</dt>
+            <dd>Lo que el vendedor le promete al cliente (PV-).</dd>
+            <dt>Factura de venta</dt>
+            <dd>IVA del 19 % y plazo de 30 días (FV-).</dd>
+            <dt>Remisión / guía</dt>
+            <dd>El despacho de uno o varios pedidos en un vehículo (GU-).</dd>
+            <dt>Orden de compra</dt>
+            <dd>Lo que se le pide a un proveedor (OC-).</dd>
+            <dt>Entrada de almacén</dt>
+            <dd>La mercancía que entra con la factura del proveedor.</dd>
+            <dt>Recibo de caja</dt>
+            <dd>Un pago recibido de un cliente.</dd>
+            <dt>Comprobante de egreso</dt>
+            <dd>Un pago hecho a un proveedor.</dd>
+            <dt>Granel</dt>
+            <dd>Producto fabricado en tanque, antes de envasar.</dd>
+            <dt>Terminado</dt>
+            <dd>Producto envasado, listo para vender.</dd>
+            <dt>Reventa</dt>
+            <dd>Mercancía que se compra para vender igual.</dd>
+            <dt>Bache</dt>
+            <dd>Una tanda de granel según la fórmula.</dd>
+            <dt>Merma</dt>
+            <dd>Lo que se pierde: sobrante del tanque o producto dañado.</dd>
+            <dt>Comprometido</dt>
+            <dd>Lo vendido que todavía no se ha despachado.</dd>
+            <dt>Kárdex</dt>
+            <dd>La historia de entradas y salidas de un producto.</dd>
+          </dl>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
