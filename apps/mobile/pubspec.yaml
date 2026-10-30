@@ -1,0 +1,32 @@
+name: nowcleany_sellers
+description: App de vendedores de NOW CLEANY (cartera, visitas y preventas).
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+  flutter: '>=3.47.0'
+
+# Only the dependencies approved for the demo; pubspec.lock pins what was resolved.
+dependencies:
+  flutter:
+    sdk: flutter
+  # Part of the Flutter SDK: the SDK date picker and dialogs in Spanish.
+  flutter_localizations:
+    sdk: flutter
+  # Map of the seller's portfolio (official Mapbox SDK); the public token comes from the API.
+  mapbox_maps_flutter: ^3.0.0
+  # Phone position for the visit check-in and the map.
+  geolocator: ^14.1.1
+  # Location permission request and "open settings" when it was denied for good.
+  permission_handler: ^13.0.2
+  # HTTP client for the API.
+  http: ^1.6.0
+  # Refresh token between launches (demo; not a secure store).
+  shared_preferences: ^2.5.6
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
