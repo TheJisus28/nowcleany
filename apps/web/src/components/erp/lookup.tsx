@@ -60,12 +60,7 @@ export function LookupDialog({
   }, [open, initialQuery]);
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title={title}
-      description="Escribe parte del código o del nombre. Enter elige."
-    >
+    <Dialog open={open} onClose={onClose} title={title}>
       <div className="flex flex-col gap-3">
         <div className="relative">
           <Search
@@ -140,8 +135,8 @@ export function LookupDialog({
 }
 
 /**
- * A field that holds a record (customer, supplier…): shows its code and name; F2 or the button opens the
- * search. Typing a code and pressing Enter picks it directly when it matches.
+ * A field that holds a record (customer, supplier…): one box where the user types the code, NIT or
+ * name and picks from the list that opens below (arrows and Enter). F2 opens the full search.
  */
 export function LookupField({
   id,
@@ -150,7 +145,7 @@ export function LookupField({
   value,
   onChange,
   disabled = false,
-  placeholder = 'Código o NIT',
+  placeholder = 'Buscar por código, NIT o nombre',
 }: {
   id?: string;
   title: string;
@@ -161,65 +156,134 @@ export function LookupField({
   placeholder?: string;
 }) {
   const selected = items.find((item) => item.id === value) ?? null;
-  const [text, setText] = useState('');
-  const [open, setOpen] = useState(false);
+  const display = selected ? `${selected.code} · ${selected.label}` : '';
+  const [text, setText] = useState(display);
+  const [listOpen, setListOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const results = useMemo(
+    () => (listOpen ? filterLookup(items, text).slice(0, 50) : []),
+    [items, text, listOpen],
+  );
   useEffect(() => {
-    setText(selected ? selected.code : '');
-  }, [selected]);
+    setText(display);
+  }, [display]);
+
+  const pick = (item: LookupItem) => {
+    onChange(item.id);
+    setText(`${item.code} · ${item.label}`);
+    setListOpen(false);
+  };
+  const listId = id ? `${id}-list` : undefined;
+
   return (
-    <>
-      <div className="flex min-w-0 items-center gap-2">
-        <input
-          id={id}
-          value={text}
-          disabled={disabled}
-          placeholder={placeholder}
-          autoComplete="off"
-          className="h-8 w-36 shrink-0 rounded-[5px] border border-line-strong bg-surface px-2 text-[13.5px] text-ink tabular-nums placeholder:text-ink-3 focus-visible:border-brand disabled:bg-surface-2"
-          onChange={(event) => {
-            setText(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'F2') {
-              event.preventDefault();
-              setOpen(true);
-            } else if (event.key === 'Enter') {
-              event.preventDefault();
-              const [match] = filterLookup(items, text);
-              if (match && filterLookup(items, text).length === 1) onChange(match.id);
-              else setOpen(true);
-            }
-          }}
-        />
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            setOpen(true);
-          }}
-          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 text-[12.5px] text-ink-2 hover:bg-surface-2 disabled:opacity-50"
-          title="Buscar (F2)"
-        >
-          <Search aria-hidden className="size-3.5" />
-          F2
-        </button>
-        <span className="min-w-0 truncate text-[14px]">
-          {selected ? selected.label : <span className="text-ink-3">Sin seleccionar</span>}
-        </span>
-      </div>
-      <LookupDialog
-        open={open}
-        title={title}
-        items={items}
-        initialQuery={text === selected?.code ? '' : text}
-        onPick={(item) => {
-          onChange(item.id);
-          setOpen(false);
+    <div className="relative min-w-0">
+      <Search
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-ink-3"
+      />
+      <input
+        id={id}
+        value={text}
+        disabled={disabled}
+        placeholder={placeholder}
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={listOpen}
+        aria-controls={listId}
+        title={display || undefined}
+        className="h-8 w-full rounded-[5px] border border-line-strong bg-surface pr-2 pl-7 text-[13.5px] text-ink placeholder:text-ink-3 focus-visible:border-brand disabled:bg-surface-2"
+        onFocus={(event) => {
+          event.target.select();
         }}
-        onClose={() => {
-          setOpen(false);
+        onChange={(event) => {
+          setText(event.target.value);
+          setActive(0);
+          setListOpen(true);
+        }}
+        onBlur={() => {
+          setListOpen(false);
+          setText(display);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'F2') {
+            event.preventDefault();
+            setDialogOpen(true);
+          } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            if (!listOpen) setListOpen(true);
+            else setActive((index) => Math.min(index + 1, results.length - 1));
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setActive((index) => Math.max(index - 1, 0));
+          } else if (event.key === 'Enter' && listOpen) {
+            event.preventDefault();
+            const item = results[active];
+            if (item) pick(item);
+          } else if (event.key === 'Escape' && listOpen) {
+            // Closes the list only, not the screen.
+            event.stopPropagation();
+            setListOpen(false);
+            setText(display);
+          }
         }}
       />
-    </>
+      {listOpen ? (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label={title}
+          className="absolute top-full right-0 left-0 z-30 mt-1 max-h-72 overflow-y-auto rounded-md border border-line-strong bg-surface py-1 shadow-lg"
+        >
+          {results.length === 0 ? (
+            <li className="px-3 py-3 text-center text-[13px] text-ink-3">Sin resultados</li>
+          ) : (
+            results.map((item, index) => (
+              <li
+                key={item.id}
+                role="option"
+                aria-selected={index === active}
+                onMouseDown={(event) => {
+                  // Keeps the focus in the box so the pick happens before the blur.
+                  event.preventDefault();
+                  pick(item);
+                }}
+                onMouseEnter={() => {
+                  setActive(index);
+                }}
+                className={cn(
+                  'grid cursor-pointer grid-cols-[110px_1fr] gap-3 px-3 py-1.5 text-[13.5px]',
+                  index === active ? 'bg-brand text-white' : 'text-ink',
+                )}
+              >
+                <span className="truncate tabular-nums">{item.code}</span>
+                <span className="truncate">
+                  {item.label}
+                  {item.detail ? (
+                    <span className={index === active ? 'text-white/75' : 'text-ink-3'}>
+                      {' '}
+                      · {item.detail}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))
+          )}
+        </ul>
+      ) : null}
+      <LookupDialog
+        open={dialogOpen}
+        title={title}
+        items={items}
+        initialQuery={text === display ? '' : text}
+        onPick={(item) => {
+          pick(item);
+          setDialogOpen(false);
+        }}
+        onClose={() => {
+          setDialogOpen(false);
+        }}
+      />
+    </div>
   );
 }

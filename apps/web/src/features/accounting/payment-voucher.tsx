@@ -468,7 +468,7 @@ export function PaymentVoucher({
               title={`Buscar ${partyLabel.toLowerCase()} con facturas abiertas`}
               items={parties}
               value={partyId || null}
-              placeholder="NIT o nombre (F2)"
+              placeholder="Buscar por NIT o nombre"
               onChange={(id) => {
                 setPartyId(id);
                 setUsePreselect(false);

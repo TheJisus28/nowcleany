@@ -272,7 +272,7 @@ export function ProductionOrderFormPage() {
               title="Buscar granel o producto terminado"
               items={items}
               value={form.productId || null}
-              placeholder="Código"
+              placeholder="Buscar producto"
               onChange={(id) => {
                 setForm((current) => ({
                   ...current,

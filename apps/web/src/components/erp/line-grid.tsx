@@ -233,9 +233,7 @@ export function LineGrid({
                     {product ? (
                       product.name
                     ) : (
-                      <span className="text-ink-3">
-                        {error ?? 'Escribe el código y Enter, o F2'}
-                      </span>
+                      <span className="text-ink-3">{error ?? 'Buscar producto'}</span>
                     )}
                   </td>
                   <td className="px-2 text-ink-2">{product ? unitLabel(product.unit) : ''}</td>

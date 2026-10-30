@@ -272,7 +272,7 @@ export function KardexPage() {
                 title="Buscar producto"
                 items={items}
                 value={filters.draft.producto || null}
-                placeholder="Código (F2)"
+                placeholder="Buscar producto"
                 onChange={(id) => {
                   filters.set('producto', id);
                 }}
