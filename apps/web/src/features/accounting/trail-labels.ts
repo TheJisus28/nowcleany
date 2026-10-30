@@ -3,7 +3,7 @@ import type { Entity } from '../../app/access';
 /** What each trail action means, as a verb the auditor reads ("Facturó", "Despachó"…). */
 export const ACTION_LABELS: Partial<Record<string, string>> = {
   created: 'Creó',
-  submitted: 'Envió',
+  submitted: 'Guardó',
   prioritized: 'Priorizó',
   invoiced: 'Facturó',
   ready: 'Alistó',
@@ -36,7 +36,7 @@ export const ENTITY_LINKS: Partial<Record<string, Entity>> = {
 export const ENTITY_TYPES: readonly { value: string; label: string }[] = [
   { value: 'sales_order', label: 'Pedidos' },
   { value: 'invoice', label: 'Facturas de venta' },
-  { value: 'shipment', label: 'Remisiones' },
+  { value: 'shipment', label: 'Guías de despacho' },
   { value: 'purchase_order', label: 'Órdenes de compra' },
   { value: 'production_order', label: 'Órdenes de producción' },
 ];
@@ -45,7 +45,7 @@ export const ENTITY_TYPES: readonly { value: string; label: string }[] = [
 export const ENTITY_NAMES: Partial<Record<string, string>> = {
   sales_order: 'Pedido',
   invoice: 'Factura de venta',
-  shipment: 'Remisión',
+  shipment: 'Guía de despacho',
   purchase_order: 'Orden de compra',
   production_order: 'Orden de producción',
 };

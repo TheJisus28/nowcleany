@@ -102,6 +102,31 @@ export class ProductsRepository {
     }
   }
 
+  /** Fails with a conflict when the product has stock movements or is used by a formula or a document. */
+  async remove(id: string, code: string): Promise<void> {
+    const moved = await sql<{ moved: boolean }>`
+      SELECT EXISTS (SELECT 1 FROM stock_movements WHERE product_id = ${id}) AS moved
+    `.execute(this.host.tx);
+    if (moved.rows[0]?.moved) {
+      throw new ConflictError(
+        'product.has_movements',
+        `${code} ya tiene movimientos de inventario: no se puede eliminar, desactívalo.`,
+      );
+    }
+    try {
+      await sql`DELETE FROM stock_balances WHERE product_id = ${id}`.execute(this.host.tx);
+      await this.host.tx.deleteFrom('products').where('id', '=', id).execute();
+    } catch (error) {
+      if ((error as { code?: string }).code === '23503') {
+        throw new ConflictError(
+          'product.in_use',
+          `${code} ya se usa en una fórmula, un pedido o una orden: no se puede eliminar, desactívalo.`,
+        );
+      }
+      throw error;
+    }
+  }
+
   async update(
     id: string,
     changes: {

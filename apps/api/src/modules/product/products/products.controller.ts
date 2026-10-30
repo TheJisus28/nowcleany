@@ -76,12 +76,12 @@ export class ProductsController {
     return this.products.update(id, body);
   }
 
-  /** Deactivates: products are never deleted. */
+  /** Deletes a product registered by mistake: only while it has no movements and nothing uses it. */
   @Permission('products:write')
   @Delete(':id')
   @HttpCode(204)
-  async deactivate(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.products.deactivate(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.products.remove(id);
   }
 
   @Permission('products:read')

@@ -281,7 +281,10 @@ CREATE INDEX visits_seller_idx ON visits (seller_id, visited_at DESC);
 
 CREATE TABLE invoices (
   id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  number            bigint      GENERATED ALWAYS AS IDENTITY UNIQUE,
+  -- FEL: electronic invoice with VAT; REM: remisión, a sale document without taxes (the customer chooses).
+  document_type     text        NOT NULL DEFAULT 'FEL' CHECK (document_type IN ('FEL', 'REM')),
+  -- Consecutive per document type.
+  number            bigint      NOT NULL,
   order_id          uuid        NOT NULL UNIQUE REFERENCES sales_orders (id),
   order_label       text        NOT NULL,
   customer_id       uuid        NOT NULL REFERENCES customers (id),
@@ -296,7 +299,8 @@ CREATE TABLE invoices (
   tax               bigint      NOT NULL,
   total             bigint      NOT NULL,
   paid              bigint      NOT NULL DEFAULT 0,
-  issued_by_name    text        NOT NULL
+  issued_by_name    text        NOT NULL,
+  UNIQUE (document_type, number)
 );
 
 CREATE INDEX invoices_customer_idx ON invoices (customer_id, issued_at DESC);

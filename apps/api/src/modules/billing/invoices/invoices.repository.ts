@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectTransactionHost } from '@nestjs-cls/transactional';
+import { sql } from 'kysely';
 import type { ModuleTransactionHost } from '../../../platform/db/module-transaction.js';
 import type { BillingTables } from '../billing.tables.js';
+import type { InvoiceDocumentType } from '../domain/invoice.js';
 
 export interface InvoiceLineRecord {
   readonly productId: string;
@@ -28,6 +30,7 @@ export interface PaymentRecord {
 
 export interface InvoiceRecord {
   readonly id: string;
+  readonly documentType: InvoiceDocumentType;
   readonly number: bigint;
   readonly orderId: string;
   readonly orderLabel: string;
@@ -56,9 +59,20 @@ export class InvoicesRepository {
   ) {}
 
   async insert(invoice: NewInvoice): Promise<{ id: string; number: bigint }> {
+    // Consecutive per document type: one issuer at a time per type.
+    await sql`SELECT pg_advisory_xact_lock(hashtext(${`invoices:${invoice.documentType}`}))`.execute(
+      this.host.tx,
+    );
+    const last = await this.host.tx
+      .selectFrom('invoices')
+      .select((eb) => eb.fn.max('number').as('last'))
+      .where('document_type', '=', invoice.documentType)
+      .executeTakeFirst();
     const row = await this.host.tx
       .insertInto('invoices')
       .values({
+        document_type: invoice.documentType,
+        number: BigInt(last?.last ?? 0) + 1n,
         order_id: invoice.orderId,
         order_label: invoice.orderLabel,
         customer_id: invoice.customer.id,
@@ -219,6 +233,7 @@ export class InvoicesRepository {
     }
     return rows.map((row) => ({
       id: row.id,
+      documentType: row.document_type,
       number: row.number,
       orderId: row.order_id,
       orderLabel: row.order_label,
@@ -239,6 +254,7 @@ export class InvoicesRepository {
 
 interface BillingRow {
   id: string;
+  document_type: InvoiceDocumentType;
   number: bigint;
   order_id: string;
   order_label: string;

@@ -113,7 +113,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         kind: 'Consultas',
         items: [
           { panel: 'sales', to: '/ventas', label: 'Pedidos', icon: NotebookTabs },
-          { panel: 'invoices', to: '/facturas', label: 'Facturas de venta', icon: FileText },
+          { panel: 'invoices', to: '/facturas', label: 'Facturas y remisiones', icon: FileText },
           { panel: 'visits', to: '/visitas', label: 'Visitas de vendedores', icon: MapPinned },
         ],
       },
@@ -153,7 +153,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     sections: [
       {
         kind: 'Documentos',
-        items: [{ panel: 'shipments', to: '/logistica', label: 'Remisiones y guías', icon: Truck }],
+        items: [{ panel: 'shipments', to: '/logistica', label: 'Guías de despacho', icon: Truck }],
       },
     ],
   },
@@ -343,7 +343,7 @@ export const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
   manager: 'Gerencia',
   sales: 'Vendedor',
-  consolidator: 'Consolidado y facturación',
+  consolidator: 'Facturación',
   plant: 'Planta',
   logistics: 'Logística',
   purchasing: 'Compras',

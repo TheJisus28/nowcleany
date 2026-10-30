@@ -14,7 +14,7 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   DRAFT: 'Borrador',
-  CONFIRMED: 'Por consolidar',
+  CONFIRMED: 'Por facturar',
   INVOICED: 'Facturada',
   READY: 'Lista para despacho',
   PARTIAL: 'Despachada parcial',
@@ -42,8 +42,8 @@ export const INVOICED_STATUSES: readonly OrderStatus[] = [
 
 /** Who must act on an order in each status: the flow passes it from one role to the next. */
 export const NEXT_STEP: Record<OrderStatus, string | null> = {
-  DRAFT: 'El vendedor debe enviarla al consolidado',
-  CONFIRMED: 'El consolidado debe facturarla',
+  DRAFT: 'El vendedor debe guardarla como preventa',
+  CONFIRMED: 'Facturación debe facturarla',
   INVOICED: 'Planta debe alistarla y entregarla a despacho',
   READY: 'Logística debe incluirla en una guía y despacharla',
   PARTIAL: 'Planta debe alistar lo que falta cuando se fabrique o se compre',
@@ -106,8 +106,8 @@ const TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
 
 const TRANSITION_ERRORS: Record<OrderStatus, string> = {
   DRAFT: 'Una preventa no puede volver a borrador.',
-  CONFIRMED: 'Solo se puede enviar al consolidado una preventa en borrador.',
-  INVOICED: 'Solo se facturan preventas enviadas al consolidado.',
+  CONFIRMED: 'Solo se puede guardar como preventa un borrador.',
+  INVOICED: 'Solo se facturan preventas guardadas.',
   READY: 'Solo se alista un pedido facturado o con despacho parcial.',
   PARTIAL: 'Solo se despacha un pedido alistado.',
   DISPATCHED: 'Solo se despacha un pedido alistado.',

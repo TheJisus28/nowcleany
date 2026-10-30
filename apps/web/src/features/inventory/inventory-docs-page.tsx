@@ -335,7 +335,7 @@ export function InventoryDocsPage() {
             {form.type === 'ADJUSTMENT'
               ? 'El saldo de la bodega queda igual a lo contado; la diferencia se registra con tu nombre y el motivo.'
               : form.type === 'TRANSFER'
-                ? 'Sale de la bodega de planta y entra a la de despacho: así queda listo para la remisión.'
+                ? 'Sale de la bodega de planta y entra a la de despacho: así queda listo para la guía de despacho.'
                 : form.type === 'WASTE'
                   ? 'Lo perdido sale del inventario: granel sobrante, producto dañado o derramado.'
                   : 'Mercancía que entra sin orden de compra. Lo pedido a proveedores entra con la entrada de almacén.'}{' '}

@@ -49,7 +49,7 @@ export function SalesHomePage() {
       <div className="flex flex-col gap-6">
         <Panel
           title="Mis entregas"
-          description="Enviadas al consolidado, en el orden en que se atienden: primero la prioridad del consolidado y la entrega más cercana."
+          description="Guardadas, en el orden en que se atienden: primero la prioridad de facturación y la entrega más cercana."
           actions={
             <Link to="/ventas" className="text-sm font-medium text-brand hover:underline">
               Ver todas mis preventas
@@ -63,7 +63,7 @@ export function SalesHomePage() {
         {drafts.data && drafts.data.length > 0 ? (
           <Panel
             title="Borradores por enviar"
-            description="No comprometen producto ni cuentan para planta y compras hasta que los envíes al consolidado."
+            description="No comprometen producto ni cuentan para planta y compras hasta que las guardes como preventa."
             flush
           >
             <DraftsTable rows={drafts.data} />
@@ -133,7 +133,7 @@ function DeliveriesTable({ rows }: { rows: OrderCoverage[] }) {
         <EmptyState
           icon={<ClipboardList />}
           title="No tienes preventas enviadas por entregar"
-          description="Cuando envíes una preventa al consolidado, aquí verás si se puede cumplir a tiempo."
+          description="Cuando guardes una preventa, aquí verás si se puede cumplir a tiempo."
         />
       }
       columns={[

@@ -67,6 +67,12 @@ export class ProductsService {
   }
 
   @Transactional()
+  async remove(id: string): Promise<void> {
+    const product = await this.require(id);
+    await this.products.remove(id, product.code);
+  }
+
+  @Transactional()
   async update(id: string, command: UpdateProductCommand): Promise<ProductView> {
     const product = await this.require(id);
     await this.products.update(id, {

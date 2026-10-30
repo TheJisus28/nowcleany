@@ -122,7 +122,7 @@ export class FinanceService {
             date: payment.paidOn,
             direction: 'IN' as const,
             party: invoice?.customer.name ?? '—',
-            document: invoice ? invoiceLabel(invoice.number) : '—',
+            document: invoice ? invoiceLabel(invoice.number, invoice.documentType) : '—',
             method: METHOD(payment.method),
             reference: payment.reference,
             amount: payment.amount.toString(),

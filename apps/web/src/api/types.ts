@@ -353,6 +353,9 @@ export type PaymentMethod = 'TRANSFER' | 'CASH' | 'DEPOSIT' | 'CHECK';
 export interface Invoice {
   id: string;
   label: string;
+  /** FEL: electronic invoice with VAT; REM: remisión without taxes. */
+  documentType: 'FEL' | 'REM';
+  documentName: string;
   order: { id: string; label: string };
   customer: { id: string; name: string; document: string };
   branchName: string;

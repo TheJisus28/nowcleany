@@ -3,7 +3,8 @@ import type { Generated } from 'kysely';
 export interface BillingTables {
   invoices: {
     id: Generated<string>;
-    number: Generated<bigint>;
+    document_type: 'FEL' | 'REM';
+    number: bigint;
     order_id: string;
     order_label: string;
     customer_id: string;

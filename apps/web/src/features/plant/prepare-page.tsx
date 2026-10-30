@@ -272,13 +272,13 @@ function PrepareDocument({
           </DocumentNotice>
         ) : blockedWhole ? (
           <DocumentNotice>
-            El consolidado no autorizó despacho parcial: este pedido sale completo. Espera a que se
+            Facturación no autorizó despacho parcial: este pedido sale completo. Espera a que se
             fabrique lo que falta (columna Observación).
           </DocumentNotice>
         ) : order.allowPartial && !prep.complete ? (
           <DocumentNotice>
             Despacho parcial autorizado: las cantidades vienen con lo que cubre el stock hoy. Lo que
-            no entregues queda pendiente y sale en otra remisión.
+            no entregues queda pendiente y sale en otra guía.
           </DocumentNotice>
         ) : null}
 
@@ -319,7 +319,7 @@ function PrepareDocument({
             />
           </HeaderField>
           <HeaderField label="Despacho parcial">
-            {order.allowPartial ? 'Sí, autorizado por el consolidado' : 'No, sale completo'}
+            {order.allowPartial ? 'Sí, autorizado por facturación' : 'No, sale completo'}
           </HeaderField>
           <HeaderField label="Facturado">
             {formatDateTime(order.invoicedAt)}
@@ -459,8 +459,8 @@ function PrepareDocument({
         }
         description={
           complete
-            ? 'Logística lo podrá incluir en la próxima remisión.'
-            : 'Lo que no entregas ahora queda pendiente en el pedido y sale en otra remisión cuando se fabrique.'
+            ? 'Logística lo podrá incluir en la próxima guía.'
+            : 'Lo que no entregas ahora queda pendiente en el pedido y sale en otra guía cuando se fabrique.'
         }
         confirmLabel="Entregar a despacho"
         loading={prepare.isPending}

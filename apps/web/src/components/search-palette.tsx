@@ -52,11 +52,11 @@ interface Result {
 const GROUPS: { group: Group; label: string; icon: LucideIcon }[] = [
   { group: 'menu', label: 'Opciones del menú', icon: Menu },
   { group: 'order', label: 'Pedidos', icon: Tags },
-  { group: 'invoice', label: 'Facturas de venta', icon: FileText },
+  { group: 'invoice', label: 'Facturas y remisiones', icon: FileText },
   { group: 'customer', label: 'Clientes', icon: Contact },
   { group: 'product', label: 'Productos', icon: Package },
   { group: 'purchase-order', label: 'Órdenes de compra', icon: ShoppingCart },
-  { group: 'shipment', label: 'Remisiones', icon: Truck },
+  { group: 'shipment', label: 'Guías de despacho', icon: Truck },
   { group: 'production-order', label: 'Órdenes de producción', icon: Factory },
 ];
 
@@ -140,9 +140,8 @@ function useResults(term: string): { results: Result[]; loading: boolean } {
   const results = useMemo(() => {
     if (!active) return [];
     const list: Result[] = [];
-    for (const item of NAV.filter(
-      (entry) =>
-        has(entry.panel) && contains(needle, entry.label, entry.group ?? '', entry.kind ?? ''),
+    for (const item of NAV.filter((entry) =>
+      contains(needle, entry.label, entry.group ?? '', entry.kind ?? ''),
     ).slice(0, 6))
       list.push({
         group: 'menu',

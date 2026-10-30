@@ -3,8 +3,20 @@ import { ValidationError } from '../../../shared-kernel/index.js';
 /** Days a customer has to pay an invoice. */
 export const CREDIT_DAYS = 30;
 
-export function invoiceLabel(number: bigint | number): string {
-  return `FV-${number.toString().padStart(5, '0')}`;
+/**
+ * The billing department issues, as the customer asks, an electronic invoice (FEL, with VAT) or a
+ * remisión (REM, without taxes).
+ */
+export const INVOICE_DOCUMENT_TYPES = ['FEL', 'REM'] as const;
+export type InvoiceDocumentType = (typeof INVOICE_DOCUMENT_TYPES)[number];
+
+export const INVOICE_DOCUMENT_NAMES: Record<InvoiceDocumentType, string> = {
+  FEL: 'Factura electrónica',
+  REM: 'Remisión',
+};
+
+export function invoiceLabel(number: bigint | number, type: InvoiceDocumentType = 'FEL'): string {
+  return `${type === 'FEL' ? 'FV' : 'RM'}-${number.toString().padStart(5, '0')}`;
 }
 
 export const PAYMENT_METHODS = ['TRANSFER', 'CASH', 'DEPOSIT', 'CHECK'] as const;

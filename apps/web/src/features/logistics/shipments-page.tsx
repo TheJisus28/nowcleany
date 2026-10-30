@@ -46,7 +46,7 @@ const FILTERS = { estado: 'PLANNED,IN_TRANSIT', desde: '', hasta: '', q: '' };
  * F9 to build the shipping guide) and the guides by status.
  */
 export function ShipmentsPage() {
-  useWorkTab('Remisiones y guías');
+  useWorkTab('Guías de despacho');
   const navigate = useNavigate();
   const { can } = useSession();
   const { canOpen } = useAccess();
@@ -215,8 +215,8 @@ export function ShipmentsPage() {
           {
             label:
               chosen.length > 0
-                ? `Nueva remisión con ${String(chosen.length)} pedido${chosen.length === 1 ? '' : 's'}`
-                : 'Nueva remisión',
+                ? `Nueva guía con ${String(chosen.length)} pedido${chosen.length === 1 ? '' : 's'}`
+                : 'Nueva guía',
             icon: FilePlus2,
             shortcut: 'F9',
             primary: true,
@@ -234,8 +234,8 @@ export function ShipmentsPage() {
         ]}
       />
       <ScreenTitle
-        title="Remisiones y guías de despacho"
-        subtitle="Marca los pedidos que van en el mismo vehículo y pulsa F9 para armar la remisión. El stock baja cuando se despacha."
+        title="Guías de despacho"
+        subtitle="Marca los pedidos que van en el mismo vehículo y pulsa F9 para armar la guía. El stock baja cuando se despacha."
       />
 
       <QueryPanel
@@ -266,7 +266,7 @@ export function ShipmentsPage() {
       </QueryPanel>
 
       <QueryPanel
-        title="Remisiones"
+        title="Guías"
         filters={
           <FilterBar
             onSubmit={() => {
@@ -323,14 +323,14 @@ export function ShipmentsPage() {
         <QueryView query={shipments}>
           {() => (
             <QueryGrid<Shipment>
-              title="Remisiones"
+              title="Guías"
               columns={GUIDE_COLUMNS}
               rows={guideRows}
               rowKey={(row) => row.id}
               onOpen={(row) => {
                 void navigate(`/logistica/guias/${row.id}`);
               }}
-              empty="No hay remisiones con estos filtros."
+              empty="No hay guías con estos filtros."
             />
           )}
         </QueryView>

@@ -1,3 +1,4 @@
+import { Lock } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { createBrowserRouter, Navigate, useLocation } from 'react-router';
 import { useSession } from '../auth/session';
@@ -60,8 +61,9 @@ function RequireSession({ children }: { children: ReactNode }) {
 function NoAccess() {
   return (
     <EmptyState
-      title="Este panel no es parte de tu trabajo"
-      description="Si lo necesitas, pide a un administrador que te asigne el rol correspondiente."
+      icon={<Lock aria-hidden />}
+      title="No tienes permisos para ver esto"
+      description="Pide al administrador que te asigne el rol."
     />
   );
 }

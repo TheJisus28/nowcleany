@@ -35,7 +35,7 @@ import {
   parseDecimalInput,
   todayIso,
 } from '../../lib/format';
-import { colombiaDay, vatOf } from '../billing/billing-format';
+import { colombiaDay } from '../billing/billing-format';
 import { FILTER_INPUT } from '../billing/erp-kit';
 import { CustomerFormDialog } from '../customers/customer-form-dialog';
 import { CancelOrderDialog } from './order-shared';
@@ -194,7 +194,6 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
     (sum, row) => (row.productId ? sum + BigInt(lineAmount(row.quantity, row.price)) : sum),
     0n,
   );
-  const vat = vatOf(subtotal);
   const withoutPrice = priced
     .filter((row) => row.productId && !row.price)
     .map((row) => productById.get(row.productId)?.code ?? '');
@@ -247,8 +246,8 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
     {
       success: (saved) =>
         saved.status === 'CONFIRMED'
-          ? `${saved.label} enviado al consolidado para facturar`
-          : `${saved.label} guardado como preventa (borrador)`,
+          ? `Preventa ${saved.label} guardada`
+          : `Borrador ${saved.label} guardado`,
     },
   );
   const submit = (send: boolean) => {
@@ -277,10 +276,10 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
           }),
     },
     {
-      label: 'Guardar',
+      label: 'Guardar borrador',
       icon: Save,
       shortcut: 'Ctrl+S',
-      title: 'Guarda la preventa sin enviarla: no compromete producto',
+      title: 'Queda como borrador: todavía no compromete producto',
       disabled: save.isPending,
       loading: save.isPending && !save.variables,
       onClick: () => {
@@ -288,11 +287,11 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
       },
     },
     {
-      label: 'Enviar al consolidado',
+      label: 'Guardar preventa',
       icon: Send,
       shortcut: 'F9',
       primary: true,
-      title: 'Guarda y envía el pedido para que lo facturen',
+      title: 'La preventa queda lista para facturación',
       disabled: save.isPending,
       loading: save.isPending && save.variables,
       onClick: () => {
@@ -346,9 +345,7 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
         notes={
           <div className="flex flex-col gap-2">
             <label className="flex flex-col gap-1">
-              <span className="text-[12px] font-medium text-ink-3">
-                Observaciones para el consolidado, planta o bodega
-              </span>
+              <span className="text-[12px] font-medium text-ink-3">Observaciones de entrega</span>
               <Textarea
                 value={notes}
                 maxLength={500}
@@ -360,16 +357,15 @@ function OrderForm({ order, onNew }: { order: SalesOrder | undefined; onNew?: ()
             </label>
             {withoutPrice.length > 0 ? (
               <p className="text-[12.5px] text-ink-2">
-                Sin precio de lista: {withoutPrice.join(', ')}. El consolidado no podrá facturarlos
+                Sin precio de lista: {withoutPrice.join(', ')}. Facturación no podrá facturarlos
                 hasta que tengan precio.
               </p>
             ) : null}
           </div>
         }
         totals={[
-          { label: 'Subtotal', value: formatCop(subtotal.toString()) },
-          { label: 'IVA 19 %', value: formatCop(vat.toString()) },
-          { label: 'Total', value: formatCop((subtotal + vat).toString()), strong: true },
+          // Taxes are set by billing: electronic invoice (with VAT) or remisión (without).
+          { label: 'Valor sin impuestos', value: formatCop(subtotal.toString()), strong: true },
         ]}
         signatures={[
           {

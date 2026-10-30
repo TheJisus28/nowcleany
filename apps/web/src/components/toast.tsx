@@ -1,5 +1,14 @@
 import { CircleAlert, CircleCheck, X } from 'lucide-react';
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 interface Toast {
   id: number;
@@ -39,12 +48,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
   const value = useMemo(() => ({ show }), [show]);
 
+  // Forms are native modal dialogs (browser top layer): the messages go in the top layer too, shown
+  // last so they sit in front of any open dialog instead of behind it.
+  const layer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = layer.current;
+    if (!element || toasts.length === 0) return;
+    if (element.matches(':popover-open')) element.hidePopover();
+    element.showPopover();
+  }, [toasts]);
+
   return (
     <ToastContext value={value}>
       {children}
       <div
+        ref={layer}
+        popover="manual"
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-center gap-2 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:items-end"
+        className="pointer-events-none fixed inset-x-4 top-auto bottom-4 z-50 m-0 flex flex-col items-center gap-2 overflow-visible border-0 bg-transparent p-0 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:items-end"
       >
         {toasts.map((toast) => (
           <div

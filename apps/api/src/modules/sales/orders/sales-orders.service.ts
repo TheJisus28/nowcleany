@@ -126,7 +126,7 @@ export class SalesOrdersService {
     if (order.status !== 'DRAFT') return toOrderView(order);
     assertTransition(order.status, 'CONFIRMED');
     await this.orders.markConfirmed(id);
-    await this.step(order, 'submitted', 'Envió la preventa al consolidado.');
+    await this.step(order, 'submitted', 'Guardó la preventa.');
     return this.get(id);
   }
 
@@ -170,7 +170,7 @@ export class SalesOrdersService {
     if (!complete && !order.allowPartial) {
       throw new ConflictError(
         'sales.partial_not_allowed',
-        'Este pedido se despacha completo: el consolidado no autorizó despacho parcial.',
+        'Este pedido se despacha completo: facturación no autorizó despacho parcial.',
       );
     }
     // What the plant hands over moves from the plant warehouse to dispatch, where the shipment takes it.
@@ -259,7 +259,7 @@ export class SalesOrdersService {
     await this.step(
       order,
       'invoiced',
-      `Consolidó y facturó: ${invoice.label} por ${invoice.total}${extras.length ? ` (${extras.join('; ')})` : ''}.`,
+      `Facturó: ${invoice.label} por ${invoice.total}${extras.length ? ` (${extras.join('; ')})` : ''}.`,
       at,
     );
   }

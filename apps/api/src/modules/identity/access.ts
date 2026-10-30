@@ -26,8 +26,9 @@ export const ROLES = [
   },
   {
     code: 'consolidator',
-    name: 'Consolidado y facturación',
-    description: 'Consolida las preventas enviadas y genera las facturas.',
+    name: 'Facturación',
+    description:
+      'Factura las preventas guardadas (factura electrónica o remisión) y decide el turno.',
   },
   {
     code: 'plant',
@@ -223,7 +224,7 @@ export const PERMISSIONS: readonly {
   },
   {
     code: 'invoices:issue',
-    description: 'Consolidar preventas enviadas y generar sus facturas',
+    description: 'Facturar las preventas guardadas',
     roles: ['consolidator'],
   },
   {

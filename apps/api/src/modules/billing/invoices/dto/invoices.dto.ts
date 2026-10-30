@@ -15,7 +15,11 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { PAYMENT_METHODS } from '../../domain/invoice.js';
+import {
+  INVOICE_DOCUMENT_TYPES,
+  type InvoiceDocumentType,
+  PAYMENT_METHODS,
+} from '../../domain/invoice.js';
 
 class IssueOrderDto {
   @IsUUID()
@@ -30,6 +34,12 @@ class IssueOrderDto {
   @Min(1)
   @Max(9999)
   priority?: number;
+
+  @IsOptional()
+  @IsIn(INVOICE_DOCUMENT_TYPES, {
+    message: 'El documento es FEL (factura electrónica) o REM (remisión).',
+  })
+  documentType?: InvoiceDocumentType;
 }
 
 /** The consolidation: the pre-sales the consolidator invoices now. */

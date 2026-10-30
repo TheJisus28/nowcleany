@@ -23,7 +23,7 @@ export const IN_PROGRESS: readonly OrderStatus[] = [
 export const ORDER_STATUS_OPTIONS: readonly { value: string; label: string }[] = [
   { value: 'open', label: 'En curso' },
   { value: 'DRAFT', label: 'Borrador (preventa)' },
-  { value: 'CONFIRMED', label: 'Por consolidar' },
+  { value: 'CONFIRMED', label: 'Por facturar' },
   { value: 'INVOICED', label: 'Facturado' },
   { value: 'READY', label: 'Listo para despacho' },
   { value: 'PARTIAL', label: 'Despachado parcial' },
@@ -97,8 +97,8 @@ export function CancelOrderDialog({
       title={`Anular el pedido ${order.label}`}
       description={
         order.status === 'DRAFT'
-          ? 'La preventa queda anulada y no se podrá enviar al consolidado. Esta acción no se puede deshacer.'
-          : 'El pedido deja de comprometer producto y sale de la lista del consolidado, de planta y de compras. Esta acción no se puede deshacer.'
+          ? 'La preventa queda anulada. Esta acción no se puede deshacer.'
+          : 'El pedido deja de comprometer producto y sale de la lista de facturación, de planta y de compras. Esta acción no se puede deshacer.'
       }
       confirmLabel="Sí, anular el pedido"
       loading={cancel.isPending}

@@ -17,14 +17,7 @@ import { EntityLink } from '../../components/links';
 import { COVERAGE, CoverageChip, DueDate, OrderStatusChip } from '../../components/status';
 import { cn, QueryView } from '../../components/ui';
 import { formatCop, formatDate, isZero, plural } from '../../lib/format';
-import {
-  amountFor,
-  colombiaDay,
-  formatUnits,
-  normalizeText,
-  sumPesos,
-  withVat,
-} from './billing-format';
+import { amountFor, colombiaDay, formatUnits, normalizeText, sumPesos } from './billing-format';
 import {
   ConfirmDialog,
   type DocColumn,
@@ -41,9 +34,11 @@ type CoverageFilter = 'all' | CoverageStatus;
 interface Decision {
   priority: string;
   allowPartial: boolean;
+  /** What the customer asked for: electronic invoice (with VAT) or remisión (no taxes). */
+  documentType: 'FEL' | 'REM';
 }
 
-const NO_DECISION: Decision = { priority: '', allowPartial: false };
+const NO_DECISION: Decision = { priority: '', allowPartial: false, documentType: 'FEL' };
 
 /** A priority as typed: 1–9999, empty for none. */
 function parsePriority(raw: string): number | null | 'invalid' {
@@ -96,7 +91,7 @@ interface OrderValue {
   missing: string[];
 }
 
-/** Estimated invoice value (VAT included) at list prices; empty while prices load. */
+/** Value at list prices before taxes (they depend on FEL or REM); empty while prices load. */
 function useOrderValues(orders: readonly SalesOrder[] | undefined) {
   const products = useProducts();
   return useMemo(() => {
@@ -113,7 +108,7 @@ function useOrderValues(orders: readonly SalesOrder[] | undefined) {
         }
         return sum + amountFor(line.quantity.quantity, price);
       }, 0n);
-      values.set(order.id, { total: withVat(subtotal), missing });
+      values.set(order.id, { total: subtotal, missing });
     }
     return values;
   }, [products.data, orders]);
@@ -200,8 +195,14 @@ export function ConsolidationPage() {
   const chosenTotal = sumPesos(chosen.map((order) => values.get(order.id)?.total ?? 0n));
 
   const issue = useAction(
-    (body: { orders: { orderId: string; allowPartial: boolean; priority?: number }[] }) =>
-      api.post<Invoice[]>('/v1/invoices', body),
+    (body: {
+      orders: {
+        orderId: string;
+        allowPartial: boolean;
+        priority?: number;
+        documentType: 'FEL' | 'REM';
+      }[];
+    }) => api.post<Invoice[]>('/v1/invoices', body),
     {
       success: (result) =>
         result.length === 1
@@ -216,6 +217,7 @@ export function ConsolidationPage() {
       return {
         orderId: order.id,
         allowPartial: decision.allowPartial,
+        documentType: decision.documentType,
         ...(typeof priority === 'number' ? { priority } : {}),
       };
     });
@@ -384,7 +386,7 @@ export function ConsolidationPage() {
     },
     {
       key: 'value',
-      header: 'Valor con IVA',
+      header: 'Valor sin impuestos',
       align: 'right',
       render: (order) => {
         const value = values.get(order.id);
@@ -443,6 +445,33 @@ export function ConsolidationPage() {
                 </span>
               );
             },
+          },
+          {
+            key: 'document',
+            header: 'Documento',
+            align: 'center',
+            render: (order) => (
+              <span
+                onDoubleClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                <select
+                  aria-label={`Documento de ${order.label}`}
+                  title="FEL: factura electrónica con IVA · REM: remisión sin impuestos"
+                  value={decisionOf(order.id).documentType}
+                  onChange={(event) => {
+                    decide(order.id, {
+                      documentType: event.target.value === 'REM' ? 'REM' : 'FEL',
+                    });
+                  }}
+                  className="h-7 rounded-[5px] border border-line-strong bg-surface px-1.5 text-[12.5px] font-medium"
+                >
+                  <option value="FEL">FEL</option>
+                  <option value="REM">REM</option>
+                </select>
+              </span>
+            ),
           },
           {
             key: 'partial',

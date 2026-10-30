@@ -33,7 +33,7 @@ import {
 import { QueryView } from '../../components/ui';
 import { formatCop, formatDate, formatDateTime, relativeDays, unitLabel } from '../../lib/format';
 import { actionLabel } from '../accounting/trail-labels';
-import { amountFor, colombiaDateTime, colombiaDay, vatOf } from '../billing/billing-format';
+import { amountFor, colombiaDateTime, colombiaDay } from '../billing/billing-format';
 import { type DocColumn, DocTable, Money, StatusLine } from '../billing/erp-kit';
 import { CancelOrderDialog, COMMITTED, Num, useOrderNeighbors } from './order-shared';
 
@@ -73,7 +73,7 @@ function OrderDocument({ order }: { order: SalesOrder }) {
   const canManage =
     can('sales-orders:write') && (order.seller.id === profile.id || can('sales-orders:manage-all'));
   const send = useAction(() => api.post<SalesOrder>(`/v1/sales-orders/${order.id}/confirm`), {
-    success: `${order.label} enviado al consolidado para facturar`,
+    success: `Preventa ${order.label} guardada`,
   });
 
   // Invoiced orders carry the invoice price; the rest, today's list price.
@@ -90,7 +90,7 @@ function OrderDocument({ order }: { order: SalesOrder }) {
         const price = priceOf(line.productId);
         return price ? sum + amountFor(line.quantity.quantity, price) : sum;
       }, 0n);
-  const vat = invoice ? BigInt(invoice.tax) : vatOf(subtotal);
+  const vat = invoice ? BigInt(invoice.tax) : 0n;
   const total = invoice ? BigInt(invoice.total) : subtotal + vat;
 
   const fulfilment = order.invoicedAt !== null && order.status !== 'CANCELLED';
@@ -221,7 +221,7 @@ function OrderDocument({ order }: { order: SalesOrder }) {
       hidden: !(order.status === 'DRAFT' && canManage),
     },
     {
-      label: 'Enviar al consolidado',
+      label: 'Guardar preventa',
       icon: Send,
       shortcut: 'F9',
       primary: true,
@@ -268,7 +268,7 @@ function OrderDocument({ order }: { order: SalesOrder }) {
   const signatures = [
     { label: 'Elaboró', name: order.seller.name, at: formatDateTime(order.createdAt) },
     ...(order.confirmedAt
-      ? [{ label: 'Envió', name: order.seller.name, at: formatDateTime(order.confirmedAt) }]
+      ? [{ label: 'Guardó', name: order.seller.name, at: formatDateTime(order.confirmedAt) }]
       : []),
     ...(order.invoicedAt
       ? [{ label: 'Facturó', name: order.invoicedBy, at: formatDateTime(order.invoicedAt) }]
@@ -335,11 +335,27 @@ function OrderDocument({ order }: { order: SalesOrder }) {
             </p>
           </div>
         }
-        totals={[
-          { label: 'Subtotal', value: formatCop(subtotal.toString()) },
-          { label: 'IVA 19 %', value: formatCop(vat.toString()) },
-          { label: 'Total', value: formatCop(total.toString()), strong: true },
-        ]}
+        totals={
+          invoice
+            ? [
+                { label: 'Subtotal', value: formatCop(subtotal.toString()) },
+                ...(invoice.documentType === 'FEL'
+                  ? [{ label: 'IVA 19 %', value: formatCop(vat.toString()) }]
+                  : []),
+                {
+                  label: invoice.documentType === 'FEL' ? 'Total factura' : 'Total remisión',
+                  value: formatCop(total.toString()),
+                  strong: true,
+                },
+              ]
+            : [
+                {
+                  label: 'Valor sin impuestos',
+                  value: formatCop(subtotal.toString()),
+                  strong: true,
+                },
+              ]
+        }
         signatures={signatures}
       >
         {status}
@@ -530,16 +546,16 @@ function ShipmentsSection({
   onOpen: (shipment: Shipment) => void;
 }) {
   return (
-    <DocumentSection title="Remisiones (guías de despacho)" flush>
+    <DocumentSection title="Guías de despacho" flush>
       <DocTable
-        label="Remisiones del pedido"
+        label="Guías del pedido"
         rows={shipments}
         rowKey={(row) => row.id}
         onOpen={onOpen}
         columns={[
           {
             key: 'label',
-            header: 'Remisión',
+            header: 'Guía',
             render: (row) => (
               <EntityLink to="shipment" id={row.id} className="font-medium">
                 {row.label}

@@ -232,7 +232,7 @@ export function PlantPage() {
       />
       <ScreenTitle
         title="Alistamiento de pedidos"
-        subtitle="Pedidos facturados y saldos de despachos parciales, en el orden de prioridad del consolidado. Enter o doble clic abre el alistamiento."
+        subtitle="Pedidos facturados y saldos de despachos parciales, en el orden de prioridad de facturación. Enter o doble clic abre el alistamiento."
       />
       <QueryPanel
         filters={
@@ -292,7 +292,7 @@ export function PlantPage() {
                 void navigate(`/planta/alistar/${row.order.id}`);
               }}
               rowClassName={(row) => (readiness(row) === 'waiting' ? 'text-ink-2' : undefined)}
-              empty="No hay pedidos por alistar con estos filtros. Cuando el consolidado facture un pedido, aparecerá aquí."
+              empty="No hay pedidos por alistar con estos filtros. Cuando se facture un pedido, aparecerá aquí."
             />
           )}
         </QueryView>

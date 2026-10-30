@@ -32,7 +32,7 @@ const COLLECTION_FILTERS: readonly {
 /** "Facturas de venta": consultation by date, customer and collection status, with totals. */
 export function InvoicesPage() {
   const navigate = useNavigate();
-  useWorkTab('Facturas de venta');
+  useWorkTab('Facturas y remisiones');
   const filters = useQueryFilters({
     desde: todayIso(-90),
     hasta: todayIso(),
@@ -66,8 +66,15 @@ export function InvoicesPage() {
 
   const columns: QueryColumn<Invoice>[] = [
     {
+      key: 'type',
+      header: 'Tipo',
+      render: (invoice) => invoice.documentType,
+      csv: (invoice) => invoice.documentType,
+      sort: (invoice) => invoice.documentType,
+    },
+    {
       key: 'label',
-      header: 'Factura',
+      header: 'Documento',
       render: (invoice) => (
         <span className="inline-flex items-center gap-1.5">
           <EntityLink to="invoice" id={invoice.id} className="font-medium">

@@ -75,7 +75,7 @@ export function CoverageChip({ status }: { status: CoverageStatus }) {
 
 const ORDER: Record<OrderStatus, { tone: Tone; icon: LucideIcon; label: string }> = {
   DRAFT: { tone: 'neutral', icon: CircleDashed, label: 'Borrador' },
-  CONFIRMED: { tone: 'brand', icon: Send, label: 'Por consolidar' },
+  CONFIRMED: { tone: 'brand', icon: Send, label: 'Por facturar' },
   INVOICED: { tone: 'brand', icon: FileText, label: 'Facturada' },
   READY: { tone: 'brand', icon: PackageCheck, label: 'Lista para despacho' },
   PARTIAL: { tone: 'warning', icon: PackageOpen, label: 'Despachada parcial' },
@@ -87,8 +87,8 @@ const ORDER: Record<OrderStatus, { tone: Tone; icon: LucideIcon; label: string }
 /** The flow every order follows; each step is done and authorized by one role. */
 export const ORDER_FLOW: readonly { status: OrderStatus; label: string; role: string }[] = [
   { status: 'DRAFT', label: 'Preventa', role: 'Vendedor' },
-  { status: 'CONFIRMED', label: 'Por consolidar', role: 'Vendedor' },
-  { status: 'INVOICED', label: 'Facturada', role: 'Consolidado' },
+  { status: 'CONFIRMED', label: 'Por facturar', role: 'Vendedor' },
+  { status: 'INVOICED', label: 'Facturada', role: 'Facturación' },
   { status: 'READY', label: 'Alistada', role: 'Planta' },
   { status: 'DISPATCHED', label: 'En ruta', role: 'Logística' },
   { status: 'DELIVERED', label: 'Entregada', role: 'Logística' },

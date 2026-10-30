@@ -180,7 +180,7 @@ function InvoiceDocument({ invoice }: { invoice: Invoice }) {
         closeTo={has('invoices') ? '/facturas' : has('receivables') ? '/contabilidad/cartera' : '/'}
       />
       <DocumentScreen
-        kind="Factura de venta"
+        kind={invoice.documentName}
         number={invoice.label}
         status={<CollectionChip status={invoice.status} />}
         notes={
@@ -190,15 +190,22 @@ function InvoiceDocument({ invoice }: { invoice: Invoice }) {
               <EntityLink to="order" id={invoice.order.id} className="font-medium">
                 {invoice.order.label}
               </EntityLink>
-              . Precios de lista por unidad; IVA 19 %. Plazo de pago hasta el{' '}
-              {formatDate(invoice.dueDate)}.
+              . Precios de lista por unidad
+              {invoice.documentType === 'FEL' ? '; IVA 19 %' : ', sin impuestos'}. Plazo de pago
+              hasta el {formatDate(invoice.dueDate)}.
             </p>
           </div>
         }
         totals={[
           { label: 'Subtotal', value: formatCop(invoice.subtotal) },
-          { label: 'IVA 19 %', value: formatCop(invoice.tax) },
-          { label: 'Total factura', value: formatCop(invoice.total), strong: true },
+          ...(invoice.documentType === 'FEL'
+            ? [{ label: 'IVA 19 %', value: formatCop(invoice.tax) }]
+            : []),
+          {
+            label: invoice.documentType === 'FEL' ? 'Total factura' : 'Total remisión',
+            value: formatCop(invoice.total),
+            strong: true,
+          },
           { label: 'Abonos', value: isZero(invoice.paid) ? '$ 0' : `− ${formatCop(invoice.paid)}` },
           {
             label: 'Saldo por cobrar',

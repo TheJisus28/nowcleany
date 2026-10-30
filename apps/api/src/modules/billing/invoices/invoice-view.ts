@@ -6,6 +6,8 @@ import {
   COLLECTION_STATUS_LABELS,
   type CollectionStatus,
   collectionStatus,
+  INVOICE_DOCUMENT_NAMES,
+  type InvoiceDocumentType,
   invoiceLabel,
   PAYMENT_METHOD_LABELS,
 } from '../domain/invoice.js';
@@ -24,6 +26,9 @@ export interface PaymentView {
 export interface InvoiceView {
   readonly id: string;
   readonly label: string;
+  /** FEL (electronic invoice, with VAT) or REM (remisión, no taxes). */
+  readonly documentType: InvoiceDocumentType;
+  readonly documentName: string;
   readonly order: { id: string; label: string };
   readonly customer: { id: string; name: string; document: string };
   readonly branchName: string;
@@ -78,7 +83,9 @@ export function toInvoiceView(
   const aging = balance > 0n ? agingBucket(invoice.dueDate, today) : null;
   return {
     id: invoice.id,
-    label: invoiceLabel(invoice.number),
+    label: invoiceLabel(invoice.number, invoice.documentType),
+    documentType: invoice.documentType,
+    documentName: INVOICE_DOCUMENT_NAMES[invoice.documentType],
     order: { id: invoice.orderId, label: invoice.orderLabel },
     customer: invoice.customer,
     branchName: invoice.branchName,

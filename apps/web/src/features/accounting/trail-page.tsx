@@ -142,7 +142,7 @@ export function TrailPage() {
     <>
       <ScreenTitle
         title="Auditoría (traza)"
-        description="Quién hizo y autorizó cada paso, con qué rol y cuándo: pedidos, facturas, recibos de caja, remisiones, compras y producción. Enter o doble clic abre el documento."
+        description="Quién hizo y autorizó cada paso, con qué rol y cuándo: pedidos, facturas, recibos de caja, guías, compras y producción. Enter o doble clic abre el documento."
         aside={
           trail.data && trail.data.length >= LIMIT
             ? `Se muestran los ${String(LIMIT)} eventos más recientes: acota las fechas o el texto.`

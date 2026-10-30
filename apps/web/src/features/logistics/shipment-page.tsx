@@ -85,7 +85,7 @@ function ShipmentDocument({ shipment, ids }: { shipment: Shipment; ids: string[]
   return (
     <>
       <DocumentScreen
-        kind="Remisión / guía de despacho"
+        kind="Guía de despacho"
         number={shipment.label}
         status={<ShipmentStatusChip status={shipment.status} />}
         toolbar={
@@ -191,7 +191,7 @@ function ShipmentDocument({ shipment, ids }: { shipment: Shipment; ids: string[]
           </HeaderField>
         </HeaderGrid>
 
-        <DocumentSection title="Detalle de la remisión" flush>
+        <DocumentSection title="Detalle de la guía" flush>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] border-collapse text-[13.5px]">
               <thead>
@@ -448,9 +448,7 @@ function DeliverDialog({
               setReceivedBy(event.target.value);
             }}
           />
-          <span className="text-[12px] text-ink-3">
-            Nombre de quien firmó la remisión en el cliente.
-          </span>
+          <span className="text-[12px] text-ink-3">Nombre de quien recibió en el cliente.</span>
         </label>
       </form>
     </Dialog>

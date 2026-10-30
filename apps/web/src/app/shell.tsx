@@ -6,7 +6,6 @@ import { BrandLockup } from '../components/brand';
 import { WorkTabsBar, WorkTabsProvider } from '../components/erp/work-tabs';
 import { SearchPalette } from '../components/search-palette';
 import { cn } from '../components/ui';
-import { useAccess } from './access';
 import { NAV_GROUPS, navItemFor, ROLE_LABELS } from './nav';
 
 const OPEN_MODULES = 'scip.menu.open';
@@ -24,16 +23,11 @@ function readOpen(): string[] {
  * Maestros, only with what the role uses. Open modules are remembered.
  */
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
-  const { has } = useAccess();
   const location = useLocation();
   const active = navItemFor(location.pathname);
   const [open, setOpen] = useState<string[]>(readOpen);
-  const groups = NAV_GROUPS.map((group) => ({
-    ...group,
-    sections: group.sections
-      .map((section) => ({ ...section, items: section.items.filter((item) => has(item.panel)) }))
-      .filter((section) => section.items.length > 0),
-  })).filter((group) => group.sections.length > 0);
+  // The whole menu for everyone, as in traditional systems: a screen outside the role says so.
+  const groups = NAV_GROUPS;
 
   const toggle = (label: string) => {
     setOpen((current) => {

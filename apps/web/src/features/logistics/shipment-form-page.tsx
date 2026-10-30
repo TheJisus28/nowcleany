@@ -55,7 +55,7 @@ const routeOf = (orders: SalesOrder[]) =>
  * their products in the grid (F2 adds an order ready for dispatch), the load per product below.
  */
 export function ShipmentFormPage() {
-  useWorkTab('Nueva remisión');
+  useWorkTab('Nueva guía de despacho');
   const navigate = useNavigate();
   const profile = useProfile();
   const [params] = useSearchParams();
@@ -193,7 +193,7 @@ export function ShipmentFormPage() {
         />
       ) : null}
       <DocumentScreen
-        kind="Remisión / guía de despacho"
+        kind="Guía de despacho"
         number="Nueva"
         toolbar={
           <DocumentToolbar
@@ -246,7 +246,7 @@ export function ShipmentFormPage() {
         {missingIds.length > 0 ? (
           <DocumentNotice>
             {plural(missingIds.length, 'pedido ya no está', 'pedidos ya no están')} por despachar
-            (otra remisión los llevó) y se quitaron de esta.
+            (otra guía los llevó) y se quitaron de esta.
           </DocumentNotice>
         ) : null}
         <HeaderGrid>
@@ -450,7 +450,7 @@ export function ShipmentFormPage() {
                                     );
                                   }}
                                   className="no-print mt-1 rounded p-1 text-ink-3 hover:bg-critical-soft hover:text-critical"
-                                  title={`Quitar ${order.label} de la remisión`}
+                                  title={`Quitar ${order.label} de la guía`}
                                 >
                                   <Trash2 aria-hidden className="size-3.5" />
                                   <span className="sr-only">Quitar {order.label}</span>

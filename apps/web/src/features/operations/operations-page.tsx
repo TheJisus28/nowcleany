@@ -162,8 +162,8 @@ const STAGES: readonly { status: OrderStatus; label: string; actor: string; to: 
   },
   {
     status: 'CONFIRMED',
-    label: 'Por consolidar y facturar',
-    actor: 'Consolidado (Diego)',
+    label: 'Por facturar',
+    actor: 'Facturación (Diego)',
     to: '/consolidado',
   },
   { status: 'INVOICED', label: 'Facturados por alistar', actor: 'Planta', to: '/planta' },

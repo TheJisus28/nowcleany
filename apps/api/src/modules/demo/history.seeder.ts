@@ -242,9 +242,14 @@ export class HistorySeeder {
       return draft;
     });
     const [invoice] = await this.actors.as(TEAM.consolidator, () =>
-      this.invoices.issue([{ orderId: created.id }], at(addDays(day, 1), 10 + next() * 6), {
-        historic: true,
-      }),
+      this.invoices.issue(
+        // About a third of the customers ask for a remisión instead of an electronic invoice.
+        [{ orderId: created.id, documentType: next() < 0.3 ? 'REM' : 'FEL' }],
+        at(addDays(day, 1), 10 + next() * 6),
+        {
+          historic: true,
+        },
+      ),
     );
     await this.actors.as(TEAM.plant, () =>
       this.orders.prepare(created.id, undefined, at(addDays(day, 2), 7.5 + next() * 3)),

@@ -22,6 +22,7 @@ import {
   type PaymentMethod,
   todayInColombia,
   validatePayment,
+  type InvoiceDocumentType,
 } from '../domain/invoice.js';
 import { type InvoiceView, toInvoiceView } from './invoice-view.js';
 import { type InvoiceRecord, InvoicesRepository } from './invoices.repository.js';
@@ -32,6 +33,8 @@ export interface IssueCommand {
   readonly allowPartial?: boolean;
   /** Which invoices get the available stock first (1 first). */
   readonly priority?: number | null;
+  /** FEL (with VAT) unless the customer asked for a remisión. */
+  readonly documentType?: InvoiceDocumentType;
 }
 
 /**
@@ -106,7 +109,7 @@ export class InvoicesService {
       if (order.status !== 'CONFIRMED') {
         throw new ConflictError(
           'billing.not_to_invoice',
-          `${order.label} no está por consolidar (estado actual: ${order.status}).`,
+          `${order.label} no está por facturar (estado actual: ${order.status}).`,
         );
       }
       const id = await this.invoiceOrder(
@@ -153,9 +156,9 @@ export class InvoicesService {
     await this.trail.record({
       entity: 'sales_order',
       id: invoice.orderId,
-      label: invoiceLabel(invoice.number),
+      label: invoiceLabel(invoice.number, invoice.documentType),
       action: 'collected',
-      summary: `Registró un cobro de ${formatCop(amount)} a la ${invoiceLabel(invoice.number)}${
+      summary: `Registró un cobro de ${formatCop(amount)} a la ${invoiceLabel(invoice.number, invoice.documentType)}${
         balance > 0n ? `; queda un saldo de ${formatCop(balance)}` : '; la factura quedó pagada'
       }.`,
       at,
@@ -207,10 +210,12 @@ export class InvoicesService {
       };
     });
     const subtotal = lines.reduce((sum, line) => sum + line.amount, 0n);
-    const tax = vatOf(subtotal);
+    const documentType = command.documentType ?? 'FEL';
+    const tax = documentType === 'FEL' ? vatOf(subtotal) : 0n;
     const issuedOn = at ? todayInColombia(at) : todayInColombia();
     const actor = this.currentActor.require();
     const { id, number } = await this.invoices.insert({
+      documentType,
       orderId: order.id,
       orderLabel: order.label,
       customer: {
@@ -231,7 +236,7 @@ export class InvoicesService {
     await this.sales.markInvoiced(
       order.id,
       {
-        label: invoiceLabel(number),
+        label: invoiceLabel(number, documentType),
         total: formatCop(subtotal + tax),
         allowPartial: command.allowPartial ?? false,
         priority: command.priority ?? null,

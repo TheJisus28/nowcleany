@@ -236,7 +236,7 @@ export function ProductFormDialog({
             {showPrice ? (
               <Field
                 label={`Precio de venta (pesos por ${unitLabel(product?.stockUnit ?? unit)})`}
-                hint="Antes de IVA. Con este precio factura el consolidado."
+                hint="Antes de impuestos. Con este precio se factura."
                 error={parsedPrice === null ? 'Escribe pesos enteros, p. ej. 12.500.' : undefined}
               >
                 {(props) => (
