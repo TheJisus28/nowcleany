@@ -8,11 +8,11 @@ import { Dialog } from '../../components/dialog';
 import { pathTo } from '../../components/links';
 import { LocationPicker } from '../../components/map/location-picker';
 import type { LatLng } from '../../components/map/types';
-import { Button, Field, Input, Segmented, Select } from '../../components/ui';
+import { Button, Field, Input, Select } from '../../components/ui';
 
 const DOCUMENT_OPTIONS: readonly { value: DocumentType; label: string }[] = [
-  { value: 'NIT', label: 'NIT (empresa)' },
-  { value: 'CC', label: 'Cédula (persona)' },
+  { value: 'NIT', label: 'NIT' },
+  { value: 'CC', label: 'Cédula' },
 ];
 
 /** Creates a customer (with its main branch) or edits one. The name field follows the document. */
@@ -113,18 +113,26 @@ function CustomerForm({
   const isCompany = documentType === 'NIT';
   return (
     <form onSubmit={submit} className="flex flex-col gap-5 p-5">
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-medium text-ink-2">Tipo de documento</span>
-        <Segmented
-          label="Tipo de documento"
-          value={documentType}
-          options={DOCUMENT_OPTIONS}
-          onChange={setDocumentType}
-        />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-[200px_1fr]">
+      <div className="grid gap-4 sm:grid-cols-[120px_180px_1fr]">
+        <Field label="Tipo">
+          {(props) => (
+            <Select
+              {...props}
+              value={documentType}
+              onChange={(event) => {
+                setDocumentType(event.target.value as DocumentType);
+              }}
+            >
+              {DOCUMENT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
         <Field
-          label={isCompany ? 'NIT' : 'Número de cédula'}
+          label="Número"
           hint={isCompany ? 'Con dígito de verificación: 900123456-7' : 'Solo números'}
         >
           {(props) => (
@@ -221,7 +229,7 @@ function CustomerForm({
           <LocationPicker
             value={location}
             onChange={setLocation}
-            initialQuery={[address, city].filter(Boolean).join(', ')}
+            initialQuery={address ? [address, city].filter(Boolean).join(', ') : ''}
           />
         </div>
       ) : null}

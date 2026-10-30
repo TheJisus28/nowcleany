@@ -138,7 +138,7 @@ function BranchForm({
         <LocationPicker
           value={location}
           onChange={setLocation}
-          initialQuery={[address, city].filter(Boolean).join(', ')}
+          initialQuery={address ? [address, city].filter(Boolean).join(', ') : ''}
         />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
