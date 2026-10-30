@@ -17,7 +17,7 @@ export const DEMO_STOCK: readonly (readonly [code: string, quantity: string, war
     ['MP-CAJA-6', '2000', 'PLANTA'],
     ['MP-ENV-1L', '500', 'PLANTA'],
     ['MP-ETQ-CL1', '500', 'PLANTA'],
-    ['00225', '600', 'DESPACHO'],
+    ['00225', '600', 'PLANTA'],
     // Limpiapisos: el granel alcanza; falta envasar.
     ['GR-LIMP-LAV', '3000', 'PLANTA'],
     ['MP-GALON', '1000', 'PLANTA'],
@@ -26,7 +26,7 @@ export const DEMO_STOCK: readonly (readonly [code: string, quantity: string, war
     ['MP-LAS', '200', 'PLANTA'],
     ['MP-FRAG-LAV', '10', 'PLANTA'],
     ['MP-COL-VIO', '2000', 'PLANTA'],
-    ['00310', '50', 'DESPACHO'],
+    ['00310', '50', 'PLANTA'],
   ];
 
 @Injectable()

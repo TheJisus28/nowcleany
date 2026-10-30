@@ -375,6 +375,16 @@ export class StockService {
 
   /** Totals across warehouses, for planning. */
   @Transactional()
+  /** Physical stock of some products in one warehouse, in base units. */
+  async warehouseLevels(code: string, productIds: readonly string[]): Promise<Map<string, bigint>> {
+    const warehouse = this.warehouse(await this.stock.warehouses(), code);
+    const levels = new Map<string, bigint>();
+    for (const balance of await this.stock.balances(productIds)) {
+      if (balance.warehouseId === warehouse.id) levels.set(balance.productId, balance.onHand);
+    }
+    return levels;
+  }
+
   async levels(productIds?: readonly string[]): Promise<{ productId: string; onHand: bigint }[]> {
     const totals = new Map<string, bigint>();
     for (const balance of await this.stock.balances(productIds))

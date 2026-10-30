@@ -8,19 +8,20 @@ import { StockService } from '../stock/stock.service.js';
  * atomizadores, etiquetas de limpiavidrios) para que compras tenga qué pedir.
  */
 const SHOWCASE_STOCK: readonly (readonly [code: string, quantity: string, warehouse: string])[] = [
-  ['00226', '180', 'DESPACHO'],
-  ['00311', '240', 'DESPACHO'],
-  ['00410', '420', 'DESPACHO'],
-  ['00510', '60', 'DESPACHO'],
-  ['00610', '900', 'DESPACHO'],
-  ['00810', '350', 'DESPACHO'],
-  ['00811', '40', 'DESPACHO'],
-  ['01010', '180', 'DESPACHO'],
-  ['01011', '140', 'DESPACHO'],
-  ['01012', '60', 'DESPACHO'],
-  ['01013', '300', 'DESPACHO'],
-  ['01014', '260', 'DESPACHO'],
-  ['01015', '400', 'DESPACHO'],
+  ['00226', '180', 'PLANTA'],
+  ['00227', '60', 'PLANTA'],
+  ['00311', '240', 'PLANTA'],
+  ['00410', '420', 'PLANTA'],
+  ['00510', '60', 'PLANTA'],
+  ['00610', '900', 'PLANTA'],
+  ['00810', '350', 'PLANTA'],
+  ['00811', '40', 'PLANTA'],
+  ['01010', '180', 'PLANTA'],
+  ['01011', '140', 'PLANTA'],
+  ['01012', '60', 'PLANTA'],
+  ['01013', '300', 'PLANTA'],
+  ['01014', '260', 'PLANTA'],
+  ['01015', '400', 'PLANTA'],
   ['GR-SUAV', '2500', 'PLANTA'],
   ['GR-LAVALOZA', '1800', 'PLANTA'],
   ['GR-DET', '900', 'PLANTA'],
@@ -52,12 +53,6 @@ const SHOWCASE_STOCK: readonly (readonly [code: string, quantity: string, wareho
   ['MP-ETQ-FABG', '300', 'PLANTA'],
 ];
 
-/** What planta packaged today and hands over to dispatch (same quantities as today's dispatches). */
-export const SHOWCASE_HANDOVERS: readonly (readonly [code: string, quantity: string])[] = [
-  ['00411', '120'],
-  ['00611', '200'],
-];
-
 @Injectable()
 export class ShowcaseStockSeeder {
   private readonly logger = new Logger('inventory');
@@ -76,28 +71,5 @@ export class ShowcaseStockSeeder {
     );
     const result = await this.stock.initialLoad(csv);
     this.logger.log(`Inventario ampliado: ${String(result.movements)} saldos`);
-  }
-
-  /** Runs after today's production: moves the packaged goods to the dispatch warehouse. */
-  async handOver(): Promise<void> {
-    const products = new Map(
-      (await this.catalog.findByCodes(SHOWCASE_HANDOVERS.map(([code]) => code))).map((p) => [
-        p.code,
-        p,
-      ]),
-    );
-    for (const [code, quantity] of SHOWCASE_HANDOVERS) {
-      const product = products.get(code);
-      // Only what is still in the plant (idempotent on a second run).
-      const [status] = await this.stock.status({ search: code });
-      const inPlant = status?.byWarehouse.find((w) => w.warehouseCode === 'PLANTA')?.onHand;
-      if (!product || !inPlant || Number(inPlant.quantity) <= 0) continue;
-      await this.stock.transfer({
-        line: { productId: product.id, quantity },
-        fromCode: 'PLANTA',
-        toCode: 'DESPACHO',
-        note: 'Entrega del envasado del día',
-      });
-    }
   }
 }

@@ -40,7 +40,6 @@ const STEPS: readonly Step[] = [
   ['clientes adicionales y visitas', 'showcase', (app) => app.get(ShowcaseCustomersSeeder).seed()],
   ['producción de demo', 'demo', (app) => app.get(DemoProductionSeeder).seed()],
   ['producción adicional', 'showcase', (app) => app.get(ShowcaseProductionSeeder).seed()],
-  ['entrega a despacho', 'showcase', (app) => app.get(ShowcaseStockSeeder).handOver()],
   ['historia de seis meses', 'showcase', (app) => app.get(HistorySeeder).seed()],
   ['operación de hoy', 'showcase', (app) => app.get(PipelineSeeder).seed()],
 ];

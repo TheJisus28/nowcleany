@@ -140,6 +140,8 @@ export class SalesOrdersService {
     id: string,
     quantities?: readonly { productId: string; quantity: string }[],
     at?: Date,
+    /** Seeded history marks the steps without moving stock (it is sales history only). */
+    options: { historic?: boolean } = {},
   ): Promise<SalesOrderView> {
     this.currentActor.requirePermission('sales-orders:prepare');
     const order = await this.require(id);
@@ -156,6 +158,19 @@ export class SalesOrdersService {
         );
       }
       ready.set(line.productId, quantity);
+    }
+    // The plant hands over only what is in its warehouse.
+    if (!options.historic) {
+      const inPlant = await this.inventory.plantStock(order.lines.map((line) => line.productId));
+      for (const line of order.lines) {
+        const available = inPlant.get(line.productId) ?? 0n;
+        if ((ready.get(line.productId) ?? 0n) > available) {
+          throw new ValidationError(
+            'sales.not_in_plant',
+            `En la bodega de planta hay ${toQuantityDto(available > 0n ? available : 0n, line.unit).quantity} de ${line.productCode}: no se puede entregar más.`,
+          );
+        }
+      }
     }
     const total = [...ready.values()].reduce((sum, value) => sum + value, 0n);
     if (total === 0n) {
@@ -174,16 +189,17 @@ export class SalesOrdersService {
       );
     }
     // What the plant hands over moves from the plant warehouse to dispatch, where the shipment takes it.
-    await this.inventory.handOver({
-      note: `Alistamiento ${orderLabel(order.number)}`,
-      lines: order.lines
-        .filter((line) => (ready.get(line.productId) ?? 0n) > 0n)
-        .map((line) => ({
-          productId: line.productId,
-          quantity: toQuantityDto(ready.get(line.productId) ?? 0n, line.unit).quantity,
-          unit: line.unit,
-        })),
-    });
+    if (!options.historic)
+      await this.inventory.handOver({
+        note: `Alistamiento ${orderLabel(order.number)}`,
+        lines: order.lines
+          .filter((line) => (ready.get(line.productId) ?? 0n) > 0n)
+          .map((line) => ({
+            productId: line.productId,
+            quantity: toQuantityDto(ready.get(line.productId) ?? 0n, line.unit).quantity,
+            unit: line.unit,
+          })),
+      });
     await this.orders.markReady(
       id,
       order.status,

@@ -252,7 +252,9 @@ export class HistorySeeder {
       ),
     );
     await this.actors.as(TEAM.plant, () =>
-      this.orders.prepare(created.id, undefined, at(addDays(day, 2), 7.5 + next() * 3)),
+      this.orders.prepare(created.id, undefined, at(addDays(day, 2), 7.5 + next() * 3), {
+        historic: true,
+      }),
     );
     await this.actors.as(TEAM.logistics, () =>
       this.orders.completeHistory(created.id, {

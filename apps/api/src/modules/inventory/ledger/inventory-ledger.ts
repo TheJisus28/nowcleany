@@ -58,6 +58,12 @@ export class InventoryLedger {
     });
   }
 
+  /** What is in the plant warehouse now, per product (base units). */
+  plantStock(productIds: readonly string[]): Promise<Map<string, bigint>> {
+    this.currentActor.requirePermission('sales-orders:prepare');
+    return this.stock.warehouseLevels('PLANTA', productIds);
+  }
+
   /** The plant hands an order's goods over to the dispatch warehouse. */
   async handOver(command: { lines: readonly QuantityInput[]; note: string }): Promise<void> {
     this.currentActor.requirePermission('sales-orders:prepare');
