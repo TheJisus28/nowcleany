@@ -256,6 +256,11 @@ function OrderDocument({ order }: { order: SalesOrder }) {
       },
     },
     {
+      label: 'Cotización PDF',
+      icon: FileText,
+      to: `/ventas/${order.id}/cotizacion`,
+    },
+    {
       label: 'Imprimir',
       icon: Printer,
       shortcut: 'Ctrl+P',

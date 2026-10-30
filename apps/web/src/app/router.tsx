@@ -38,6 +38,7 @@ import { PurchasingPage } from '../features/purchasing/purchasing-page';
 import { ReceivingPage } from '../features/purchasing/receiving-page';
 import { SuppliersPage } from '../features/purchasing/suppliers-page';
 import { OrderDetailPage } from '../features/sales/order-detail-page';
+import { QuotePage } from '../features/sales/quote-page';
 import { OrderFormPage } from '../features/sales/order-form-page';
 import { OrdersPage } from '../features/sales/orders-page';
 import { SalesHomePage } from '../features/sales/sales-home-page';
@@ -145,6 +146,7 @@ export const router = createBrowserRouter([
       { path: 'ventas', element: panel('sales', <OrdersPage />) },
       { path: 'ventas/nueva', element: panel('newOrder', <OrderFormPage />, 'sales-orders:write') },
       { path: 'ventas/:id', element: entity('order', <OrderDetailPage />) },
+      { path: 'ventas/:id/cotizacion', element: entity('order', <QuotePage />) },
       {
         path: 'ventas/:id/editar',
         element: panel('sales', <OrderFormPage />, 'sales-orders:write'),
