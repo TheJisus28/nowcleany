@@ -37,12 +37,13 @@ services:
       timeout: 3s
       retries: 20
 
-  # Creates the schema and loads the demo data only on an empty database; then exits.
+  # Creates the schema and loads the data only on an empty database; then exits.
+  # SEED_MODE: --showcase (full demo) or --users (only the users of each role).
   migrate:
     build:
       context: ..
       dockerfile: ops/Dockerfile
-    command: ['dist/migrate.js', '--showcase']
+    command: ['dist/migrate.js', '${SEED_MODE:---showcase}']
     environment: *api-env
     restart: 'no'
     depends_on:

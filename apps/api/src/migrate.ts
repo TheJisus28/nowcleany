@@ -12,6 +12,7 @@ import { SeedModule } from './seed.module.js';
 // Creates the schema on an empty database and loads data.
 //   node dist/migrate.js              schema
 //   node dist/migrate.js --seed       + initial administrator
+//   node dist/migrate.js --users      + one user per role, no data
 //   node dist/migrate.js --demo       + the proposal's demo data
 //   node dist/migrate.js --showcase   + extra volume on top of the demo
 const logger = pino({
@@ -20,7 +21,8 @@ const logger = pino({
 });
 const showcase = process.argv.includes('--showcase');
 const demo = showcase || process.argv.includes('--demo');
-const seed = demo || process.argv.includes('--seed');
+const users = demo || process.argv.includes('--users');
+const seed = users || process.argv.includes('--seed');
 
 try {
   const config = AppConfig.fromEnv(process.env);
@@ -41,7 +43,7 @@ try {
   if (seed && created) {
     const app = await NestFactory.createApplicationContext(SeedModule, { bufferLogs: true });
     app.useLogger(app.get(Logger));
-    await runSeeds(app, { demo, showcase });
+    await runSeeds(app, { users, demo, showcase });
     await app.close();
     logger.info(demo ? 'Semillas y datos de demo cargados.' : 'Semillas cargadas.');
   }

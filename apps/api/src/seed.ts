@@ -16,7 +16,7 @@ import { ShowcaseCustomersSeeder } from './modules/sales/seeds/showcase-customer
 import { systemActor } from './platform/security/actor.js';
 import { CurrentActor } from './platform/security/current-actor.js';
 
-type Profile = 'base' | 'demo' | 'showcase';
+type Profile = 'base' | 'users' | 'demo' | 'showcase';
 type Step = readonly [
   name: string,
   profile: Profile,
@@ -24,13 +24,14 @@ type Step = readonly [
 ];
 
 /**
- * Seeds in order: base (administrator), demo (the proposal's example) and showcase (extra volume).
+ * Seeds in order: base (administrator), users (one per role), demo (the proposal's example) and
+ * showcase (extra volume).
  * The order matters: products before stock, customers before orders, history before today.
  */
 const STEPS: readonly Step[] = [
   ['administrador', 'base', (app) => app.get(AdminSeeder).seed()],
-  ['usuarios de demo', 'demo', (app) => app.get(DemoUsersSeeder).seed()],
-  ['usuarios adicionales', 'showcase', (app) => app.get(ShowcaseUsersSeeder).seed()],
+  ['usuarios de demo', 'users', (app) => app.get(DemoUsersSeeder).seed()],
+  ['usuarios adicionales', 'users', (app) => app.get(ShowcaseUsersSeeder).seed()],
   ['catálogo de demo', 'demo', (app) => app.get(DemoCatalogSeeder).seed()],
   ['catálogo ampliado', 'showcase', (app) => app.get(ShowcaseCatalogSeeder).seed()],
   ['inventario de demo', 'demo', (app) => app.get(DemoStockSeeder).seed()],
@@ -46,12 +47,13 @@ const STEPS: readonly Step[] = [
 
 export async function runSeeds(
   app: INestApplicationContext,
-  options: { demo: boolean; showcase: boolean },
+  options: { users: boolean; demo: boolean; showcase: boolean },
 ): Promise<void> {
   const logger = new Logger('seed');
   const actor = systemActor('seed', allPermissions(), 'Carga inicial');
   const currentActor = app.get(CurrentActor);
   for (const [name, profile, run] of STEPS) {
+    if (profile === 'users' && !options.users) continue;
     if (profile === 'demo' && !options.demo) continue;
     if (profile === 'showcase' && !options.showcase) continue;
     await currentActor.runAs(actor, () => run(app));
