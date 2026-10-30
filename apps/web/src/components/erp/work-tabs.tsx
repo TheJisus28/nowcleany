@@ -1,4 +1,4 @@
-import { LayoutGrid, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import {
   createContext,
   type ReactNode,
@@ -74,9 +74,9 @@ export function WorkTabsProvider({
 
   const setTitle = useCallback((tabPath: string, title: string) => {
     setTabs((current) =>
-      current.map((tab) =>
-        tab.path.split('?')[0] === tabPath && tab.title !== title ? { ...tab, title } : tab,
-      ),
+      current.some((tab) => tab.path.split('?')[0] === tabPath && tab.title !== title)
+        ? current.map((tab) => (tab.path.split('?')[0] === tabPath ? { ...tab, title } : tab))
+        : current,
     );
   }, []);
   const close = useCallback((tabPath: string) => {
@@ -88,11 +88,11 @@ export function WorkTabsProvider({
 
 /** Names the current screen's tab ("PV-00031 · La Economía"). */
 export function useWorkTab(title: string | undefined): void {
-  const api = useContext(Context);
+  const setTitle = useContext(Context)?.setTitle;
   const location = useLocation();
   useEffect(() => {
-    if (api && title) api.setTitle(location.pathname, title);
-  }, [api, title, location.pathname]);
+    if (setTitle && title) setTitle(location.pathname, title);
+  }, [setTitle, title, location.pathname]);
 }
 
 export function WorkTabsBar() {
@@ -104,9 +104,12 @@ export function WorkTabsBar() {
   const closeTab = (path: string) => {
     const index = api.tabs.findIndex((tab) => tab.path === path);
     api.close(path);
-    if (path === current) {
+    const remaining = api.tabs.filter((tab) => tab.path !== path);
+    if (remaining.length === 0) {
+      void navigate(EMPTY_DESK);
+    } else if (path === current) {
       const neighbor = api.tabs[index + 1] ?? api.tabs[index - 1];
-      void navigate(neighbor ? neighbor.path : EMPTY_DESK);
+      if (neighbor) void navigate(neighbor.path);
     }
   };
   return (
@@ -152,18 +155,7 @@ export function WorkTabsBar() {
   );
 }
 
-/** No screen open: the desk waits for the user to pick something from the menu or the search. */
+/** No screen open: a blank desk until the user opens something from the menu. */
 export function EmptyDesk() {
-  return (
-    <div className="grid min-h-[60vh] place-items-center text-center">
-      <div className="flex max-w-sm flex-col items-center gap-3 text-ink-3">
-        <LayoutGrid aria-hidden className="size-10 text-line-strong" strokeWidth={1.5} />
-        <p className="text-[15px] font-medium text-ink-2">No tienes pantallas abiertas</p>
-        <p className="text-[13.5px]">
-          Abre una opción del menú o busca un documento con Ctrl+K. Cada pantalla que abras queda
-          como pestaña arriba.
-        </p>
-      </div>
-    </div>
-  );
+  return <div aria-label="Sin pantallas abiertas" className="min-h-[60vh]" />;
 }
