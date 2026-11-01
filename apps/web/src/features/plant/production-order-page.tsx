@@ -2,7 +2,7 @@ import { Ban, CircleCheck, Printer } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { api } from '../../api/client';
-import { useAction, useProductionOrder, useProductionOrders } from '../../api/hooks';
+import { useAction, useProductionOrder, useProductionOrders, useWarehouses } from '../../api/hooks';
 import type { ProductionOrder } from '../../api/types';
 import { useSession } from '../../auth/session';
 import {
@@ -32,6 +32,7 @@ import {
   GRID_TD,
   GRID_TH,
   INPUT,
+  SELECT,
   neighbors,
 } from '../inventory/erp-kit';
 import { compareDecimals } from './decimal';
@@ -74,6 +75,12 @@ function ProductionOrderDocument({
   const [produced, setProduced] = useState(formatDecimal(order.plannedQuantity.quantity));
   const [leftover, setLeftover] = useState('');
   const [pending, setPending] = useState<'complete' | 'cancel' | null>(null);
+  const warehouses = useWarehouses();
+  const [fromWarehouse, setFromWarehouse] = useState('');
+  const [toWarehouse, setToWarehouse] = useState('');
+  const firstWarehouse = warehouses.data?.[0]?.code ?? '';
+  const consumeFrom = fromWarehouse || firstWarehouse;
+  const outputTo = toWarehouse || firstWarehouse;
   const parsedProduced = parseDecimalInput(produced);
   const parsedLeftover = leftover.trim() === '' ? '0' : parseDecimalInput(leftover);
   const producedError =
@@ -88,6 +95,8 @@ function ProductionOrderDocument({
     () =>
       api.post<ProductionOrder>(`/v1/production-orders/${order.id}/complete`, {
         producedQuantity: parsedProduced ?? order.plannedQuantity.quantity,
+        ...(consumeFrom ? { fromWarehouse: consumeFrom } : {}),
+        ...(outputTo ? { toWarehouse: outputTo } : {}),
         ...(isPackaging && parsedLeftover && compareDecimals(parsedLeftover, '0') > 0
           ? { bulkWaste: parsedLeftover }
           : {}),
@@ -379,6 +388,40 @@ function ProductionOrderDocument({
           });
         }}
       >
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-[12.5px] text-ink-2">
+            Consume insumos de
+            <select
+              className={cn(SELECT, 'w-full')}
+              value={consumeFrom}
+              onChange={(event) => {
+                setFromWarehouse(event.target.value);
+              }}
+            >
+              {(warehouses.data ?? []).map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-[12.5px] text-ink-2">
+            Lo producido entra a
+            <select
+              className={cn(SELECT, 'w-full')}
+              value={outputTo}
+              onChange={(event) => {
+                setToWarehouse(event.target.value);
+              }}
+            >
+              {(warehouses.data ?? []).map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <dl className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 text-[13.5px]">
           <dt className="text-ink-2">Entra a bodega</dt>
           <dd className="text-right font-semibold tabular-nums">

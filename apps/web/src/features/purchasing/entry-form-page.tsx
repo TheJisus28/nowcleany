@@ -2,7 +2,7 @@ import { Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { api } from '../../api/client';
-import { useAction, usePurchaseOrder, usePurchaseOrders } from '../../api/hooks';
+import { useAction, usePurchaseOrder, usePurchaseOrders, useWarehouses } from '../../api/hooks';
 import type { PurchaseOrder, SupplierInvoice } from '../../api/types';
 import { useProfile } from '../../auth/session';
 import {
@@ -30,7 +30,15 @@ import {
   unitLabel,
 } from '../../lib/format';
 import { compareDecimals } from '../plant/decimal';
-import { DateCell, DocumentNotice, GRID_HEAD, GRID_TD, GRID_TH, INPUT } from '../inventory/erp-kit';
+import {
+  DateCell,
+  DocumentNotice,
+  GRID_HEAD,
+  GRID_TD,
+  GRID_TH,
+  INPUT,
+  SELECT,
+} from '../inventory/erp-kit';
 import { amountOf, moneyInput, parseMoneyInput, vatOf } from './money';
 
 interface Form {
@@ -160,11 +168,15 @@ function EntryDocument({
       <span className="mt-1 block text-[12px] text-critical">{message}</span>
     ) : null;
 
+  const warehouses = useWarehouses();
+  const [chosenWarehouse, setWarehouse] = useState('');
+  const warehouse = chosenWarehouse || (warehouses.data?.[0]?.code ?? '');
   const register = useAction(
     () =>
       api.post<SupplierInvoice>(`/v1/purchase-orders/${order?.id ?? ''}/supplier-invoices`, {
         documentNumber: form.documentNumber.trim(),
         invoiceDate: form.invoiceDate,
+        ...(warehouse ? { warehouse } : {}),
         lines: arriving.map((row) => ({
           productId: row.line.productId,
           quantity: row.quantity ?? '0',
@@ -305,7 +317,22 @@ function EntryDocument({
               <span className="text-ink-3">—</span>
             )}
           </HeaderField>
-          <HeaderField label="Bodega">Planta</HeaderField>
+          <HeaderField label="Entra a la bodega" htmlFor="entry-warehouse">
+            <select
+              id="entry-warehouse"
+              className={cn(SELECT, 'w-full')}
+              value={warehouse}
+              onChange={(event) => {
+                setWarehouse(event.target.value);
+              }}
+            >
+              {(warehouses.data ?? []).map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </HeaderField>
         </HeaderGrid>
 
         <DocumentSection title="Lo que llegó" flush>

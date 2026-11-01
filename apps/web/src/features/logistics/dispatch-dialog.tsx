@@ -7,7 +7,7 @@ import { Qty } from '../../components/qty';
 import { Button } from '../../components/ui';
 import { Plate } from './plate';
 
-/** Total per product carried by a guide (what leaves the dispatch warehouse). */
+/** Total per product carried by a guide (what leaves the warehouses where it was prepared). */
 export function shipmentTotals(shipment: Shipment): { id: string; name: string; quantity: Q }[] {
   const totals = new Map<string, { id: string; name: string; quantity: Q }>();
   for (const order of shipment.orders) {
@@ -54,7 +54,7 @@ export function DispatchDialog({ shipment, onClose }: { shipment: Shipment; onCl
       open
       onClose={onClose}
       title={`¿Despachar ${shipment.label}?`}
-      description="Confirma que el vehículo sale ahora: el producto sale de la bodega de despacho y los pedidos quedan en ruta. Queda en la auditoría con tu nombre."
+      description="Confirma que el vehículo sale ahora: el producto sale de la bodega donde se alistó cada pedido y los pedidos quedan en ruta. Queda en la auditoría con tu nombre."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>

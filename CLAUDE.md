@@ -10,7 +10,8 @@ funcional detallado: `docs/alcance-scip.md`; por qué se simplificó: `docs/adr/
 - Problema: las preventas no se cruzan con las materias primas disponibles ("teléfono roto" entre ventas y
   planta). Planta se queda sin insumos y compras compra de urgencia.
 - Objetivo: desde que se confirma una preventa, saber qué hay que producir, envasar y comprar.
-- **La sobreventa es válida**: ventas nunca se bloquea; el **físico** puede quedar negativo.
+- **La sobreventa es válida**: ventas nunca se bloquea; lo vendido que el stock no cubre queda como faltante.
+  El **físico** nunca baja de cero: ningún movimiento saca de una bodega lo que no tiene.
 - **La preventa no descuenta inventario**: lo confirmado queda como comprometido y el inventario proyectado
   (físico − comprometido) es informativo. El físico solo cambia con movimientos reales (despacho, producción…).
 - **Cartera por vendedor**: cada cliente tiene un vendedor; un vendedor no ve clientes, preventas ni visitas de
@@ -42,7 +43,7 @@ funcional detallado: `docs/alcance-scip.md`; por qué se simplificó: `docs/adr/
 | merma (sobrante del tanque, daño)        | waste (movimiento `WASTE`)                               |
 | borrador / vigente / retirada            | `DRAFT` / `ACTIVE` / `RETIRED`                           |
 | requerimientos                           | requirements                                             |
-| bodega (PLANTA, DESPACHO)                | warehouse (códigos de datos `PLANTA`, `DESPACHO`)        |
+| bodega                                   | warehouse (dato: código y nombre)                        |
 | movimiento / saldo / kardex              | stock movement / stock balance / kardex                  |
 | físico / comprometido / proyectado       | `onHand` / `committed` / `projected`                     |
 | recepción / traslado / despacho / ajuste | receipt / transfer / dispatch / adjustment               |
@@ -141,13 +142,14 @@ Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing
 
 **inventory** (único que escribe stock)
 
-- Bodegas `PLANTA` y `DESPACHO` (`warehouse_id` en todo el modelo). Movimientos: libro inmutable (solo
-  `INSERT`), cantidad con signo y saldo resultante (kardex). Saldos (`onHand`) actualizados en la
-  misma transacción, con `SELECT ... FOR UPDATE` en orden fijo. Sin `CHECK` de no negativos.
+- Bodegas como datos (hoy `B1` y `B2`; se crean y renombran; cualquiera guarda cualquier producto) y
+  `warehouse_id` en todo el modelo. Movimientos: libro inmutable (solo `INSERT`), cantidad con signo y saldo
+  resultante (kardex). Saldos (`onHand`) actualizados en la misma transacción, con `SELECT ... FOR UPDATE` en
+  orden fijo. Ningún saldo baja de cero: el servicio rechaza el movimiento y la base tiene `CHECK (on_hand >= 0)`.
 - Sin reservas: el comprometido se calcula de las preventas confirmadas (lectura de las tablas de ventas).
 - Merma: movimiento `WASTE` (permiso `inventory:waste`) o al completar un envasado (granel sobrante).
 - Operaciones con clave de idempotencia: recepción, consumo/producción (desde `production`), traslado
-  PLANTA → DESPACHO, despacho, ajuste (permiso restringido y auditado), carga inicial por CSV.
+  entre bodegas, despacho, ajuste (permiso restringido y auditado), carga inicial por CSV.
 - Estado: físico (total y por bodega), comprometido y proyectado. La capacidad de fabricación vive en planning.
 
 **sales**
@@ -158,7 +160,8 @@ Módulos: `identity`, `product`, `inventory`, `sales`, `production`, `purchasing
 - Visitas: el vendedor registra su posición GPS en el cliente; se calcula la distancia a la sucursal y si fue
   en sitio (150 m + precisión). Una visita puede quedar ligada a la preventa que se tomó.
 - `DRAFT → CONFIRMED (por consolidar) → INVOICED → READY ⇄ PARTIAL → DISPATCHED → DELIVERED | CANCELLED`.
-  Lo comprometido es lo vendido menos lo despachado; solo el despacho (por guía) mueve stock.
+  Lo comprometido es lo vendido menos lo despachado. Planta alista en la bodega que elija (solo lo que hay
+  y no está separado para otro pedido); la guía despacha desde esa bodega y es lo único que saca stock.
 
 **production**
 
@@ -186,7 +189,7 @@ CANCELLED`. Recibir registra la recepción en inventory con las cantidades reale
 
 **billing**
 
-- Facturas de venta (una por preventa, precio del producto + IVA 19 %, plazo 30 días) con la cobertura al facturar
+- Una por preventa: factura electrónica (FEL, precio + IVA 19 %) o remisión (REM, sin impuestos), plazo 30 días, con la cobertura al facturar
   (sale del stock / pendiente). Cobros del contable. Reporte financiero: por cobrar, por pagar, cobros y pagos.
 
 **logistics**

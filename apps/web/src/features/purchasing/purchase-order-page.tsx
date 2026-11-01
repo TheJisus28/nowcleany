@@ -192,7 +192,6 @@ function PurchaseOrderDocument({
               <span className="text-ink-3">—</span>
             )}
           </HeaderField>
-          <HeaderField label="Bodega de entrega">Planta</HeaderField>
           <HeaderField label="Condición de pago">Crédito 30 días</HeaderField>
         </HeaderGrid>
 

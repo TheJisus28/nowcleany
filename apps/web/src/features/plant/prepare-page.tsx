@@ -8,6 +8,8 @@ import {
   useOrderCoverage,
   useOrders,
   useProductionNeeds,
+  useStockStatus,
+  useWarehouses,
 } from '../../api/hooks';
 import type { OrderCoverage, PackagingNeed, SalesOrder } from '../../api/types';
 import { useProfile, useSession } from '../../auth/session';
@@ -36,6 +38,7 @@ import {
   GRID_TH,
   neighbors,
   QtyTotal,
+  SELECT,
 } from '../inventory/erp-kit';
 import { compareDecimals, isPositive } from './decimal';
 import {
@@ -109,6 +112,25 @@ function PrepareDocument({
   const [values, setValues] = useState<Record<string, string>>(initial);
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
+  const warehouses = useWarehouses();
+  const stock = useStockStatus();
+  const [chosenWarehouse, setWarehouse] = useState('');
+  // Where the goods are: by default the first warehouse that has everything pending, else the first one.
+  const inWarehouse = (productId: string, code: string) =>
+    stock.data
+      ?.find((row) => row.productId === productId)
+      ?.byWarehouse.find((entry) => entry.warehouseCode === code)?.onHand.quantity ?? '0';
+  const suggested =
+    (warehouses.data ?? []).find((item) =>
+      prep.lines.every(
+        (line) =>
+          compareDecimals(inWarehouse(line.productId, item.code), line.pending.quantity) >= 0,
+      ),
+    )?.code ??
+    warehouses.data?.[0]?.code ??
+    '';
+  const warehouse = chosenWarehouse || suggested;
+  const warehouseName = warehouses.data?.find((item) => item.code === warehouse)?.name ?? '';
   const draft = useDraft(`prepare.${order.id}`, values, { enabled: editable });
   useWorkTab(`Alistamiento ${order.label} · ${order.customer.name}`);
 
@@ -139,23 +161,23 @@ function PrepareDocument({
 
   const prepare = useAction(
     () =>
-      api.post<SalesOrder>(
-        `/v1/sales-orders/${order.id}/prepare`,
-        complete
-          ? undefined
+      api.post<SalesOrder>(`/v1/sales-orders/${order.id}/prepare`, {
+        ...(warehouse ? { warehouse } : {}),
+        // Every line goes explicitly when it is partial: a line left out would be separated complete.
+        ...(complete
+          ? {}
           : {
-              // Every line goes explicitly: a line left out would be handed over complete.
               lines: parsed.map((item) => ({
                 productId: item.line.productId,
                 quantity: item.quantity ?? '0',
               })),
-            },
-      ),
+            }),
+      }),
     {
       success: (result) =>
         complete
-          ? `${result.label} alistado completo y entregado a despacho`
-          : `${result.label}: lo disponible quedó entregado a despacho`,
+          ? `${result.label} alistado completo en ${warehouseName}`
+          : `${result.label}: lo disponible quedó alistado en ${warehouseName}`,
     },
   );
 
@@ -318,6 +340,23 @@ function PrepareDocument({
               lateLabel="Atrasado"
             />
           </HeaderField>
+          <HeaderField label="Alistar desde" htmlFor="prepare-warehouse">
+            <select
+              id="prepare-warehouse"
+              className={cn(SELECT, 'w-full')}
+              value={warehouse}
+              disabled={!preparable}
+              onChange={(event) => {
+                setWarehouse(event.target.value);
+              }}
+            >
+              {(warehouses.data ?? []).map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </HeaderField>
           <HeaderField label="Despacho parcial">
             {order.allowPartial ? 'Sí, autorizado por facturación' : 'No, sale completo'}
           </HeaderField>
@@ -340,6 +379,7 @@ function PrepareDocument({
                   <th className={cn(GRID_TH, 'text-right')}>Despachado</th>
                   <th className={cn(GRID_TH, 'text-right')}>Pendiente</th>
                   <th className={cn(GRID_TH, 'text-right')}>Cubre hoy</th>
+                  <th className={cn(GRID_TH, 'text-right')}>En la bodega</th>
                   <th className={cn(GRID_TH, 'w-32 text-right')}>A entregar</th>
                   <th className={GRID_TH}>Observación</th>
                 </tr>
@@ -347,7 +387,7 @@ function PrepareDocument({
               <tbody>
                 {parsed.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-ink-3">
+                    <td colSpan={11} className="px-4 py-8 text-center text-ink-3">
                       Nada pendiente por despachar en este pedido.
                     </td>
                   </tr>
@@ -388,6 +428,9 @@ function PrepareDocument({
                           )}
                         >
                           {formatDecimal(line.available.quantity)}
+                        </td>
+                        <td className={cn(GRID_TD, 'text-right tabular-nums text-ink-2')}>
+                          {formatDecimal(inWarehouse(line.productId, warehouse))}
                         </td>
                         <td className="px-1 py-0.5 text-right">
                           {editable ? (

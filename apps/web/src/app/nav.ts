@@ -48,6 +48,7 @@ export type Panel =
   | 'inventory'
   | 'kardex'
   | 'inventoryDocs'
+  | 'warehouses'
   | 'purchasing'
   | 'receiving'
   | 'monthlyPlan'
@@ -177,6 +178,12 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         items: [
           { panel: 'inventory', to: '/inventario', label: 'Existencias', icon: Warehouse },
           { panel: 'kardex', to: '/inventario/kardex', label: 'Kárdex', icon: PackageSearch },
+        ],
+      },
+      {
+        kind: 'Maestros',
+        items: [
+          { panel: 'warehouses', to: '/inventario/bodegas', label: 'Bodegas', icon: Warehouse },
         ],
       },
     ],
@@ -312,6 +319,7 @@ export const PANELS_BY_ROLE: Record<string, readonly Panel[]> = {
     'shipments',
     'inventory',
     'kardex',
+    'warehouses',
     'purchasing',
     'monthlyPlan',
     'suppliers',
@@ -323,10 +331,19 @@ export const PANELS_BY_ROLE: Record<string, readonly Panel[]> = {
   ],
   sales: ['home', 'newOrder', 'sales', 'visits', 'customers'],
   consolidator: ['tasks', 'consolidation', 'sales', 'invoices', 'customers', 'inventory'],
-  plant: ['tasks', 'plant', 'production', 'catalog', 'inventory', 'kardex', 'inventoryDocs'],
-  logistics: ['tasks', 'shipments', 'sales', 'inventory', 'kardex', 'inventoryDocs'],
+  plant: [
+    'tasks',
+    'plant',
+    'production',
+    'catalog',
+    'inventory',
+    'kardex',
+    'inventoryDocs',
+    'warehouses',
+  ],
+  logistics: ['tasks', 'shipments', 'sales', 'inventory', 'kardex', 'inventoryDocs', 'warehouses'],
   purchasing: ['tasks', 'purchasing', 'monthlyPlan', 'suppliers', 'inventory', 'kardex'],
-  receiving: ['tasks', 'receiving', 'purchasing', 'inventory', 'kardex'],
+  receiving: ['tasks', 'receiving', 'purchasing', 'inventory', 'kardex', 'warehouses'],
   accountant: [
     'tasks',
     'receipts',

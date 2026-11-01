@@ -10,6 +10,7 @@ import {
   useProducts,
   usePurchaseNeeds,
   useStockStatus,
+  useWarehouses,
   useWhereUsed,
 } from '../../api/hooks';
 import type { Product, Q, WhereUsed } from '../../api/types';
@@ -308,6 +309,7 @@ function StockFigures({ product }: { product: Product }) {
   const status = useStockStatus({ q: product.code });
   const row = status.data?.find((candidate) => candidate.productId === product.id);
   const zero: Q = { quantity: '0', unit: product.stockUnit };
+  const warehouses = useWarehouses();
   const at = (code: string) =>
     row?.byWarehouse.find((warehouse) => warehouse.warehouseCode === code)?.onHand ?? zero;
   const purchasable = product.type === 'RAW_MATERIAL' || product.type === 'RESALE';
@@ -315,12 +317,11 @@ function StockFigures({ product }: { product: Product }) {
   return (
     <DocumentSection title="Existencias" flush>
       <HeaderGrid className="border-t border-b-0 lg:grid-cols-6">
-        <Figure label="Planta">
-          <Qty value={at('PLANTA')} />
-        </Figure>
-        <Figure label="Despacho">
-          <Qty value={at('DESPACHO')} />
-        </Figure>
+        {(warehouses.data ?? []).map((warehouse) => (
+          <Figure key={warehouse.id} label={warehouse.name}>
+            <Qty value={at(warehouse.code)} dimZero />
+          </Figure>
+        ))}
         <Figure label="Físico total">
           <Qty value={row?.onHand ?? zero} emphasis />
         </Figure>

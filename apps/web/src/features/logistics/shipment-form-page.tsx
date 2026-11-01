@@ -331,7 +331,6 @@ export function ShipmentFormPage() {
               }}
             />
           </HeaderField>
-          <HeaderField label="Bodega de salida">Despacho</HeaderField>
         </HeaderGrid>
         <datalist id="sh-carriers">
           {known.carriers.map((value) => (

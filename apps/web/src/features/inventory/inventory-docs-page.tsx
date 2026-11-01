@@ -55,9 +55,9 @@ const KINDS: Record<DocType, DocKind> = {
     movementType: 'ADJUSTMENT',
   },
   TRANSFER: {
-    label: 'Traslado Planta → Despacho',
+    label: 'Traslado entre bodegas',
     permission: 'inventory:transfer',
-    types: ['FINISHED_GOOD', 'RESALE'],
+    types: ['RAW_MATERIAL', 'BULK', 'FINISHED_GOOD', 'RESALE'],
     quantityLabel: 'Cantidad',
     reasonLabel: 'Detalle (opcional)',
     reasonRequired: false,
@@ -86,6 +86,8 @@ const KINDS: Record<DocType, DocKind> = {
 interface Form {
   type: DocType;
   warehouse: string;
+  /** Transfers: where the goods go. */
+  toWarehouse: string;
   reason: string;
   document: string;
   rows: LineRow[];
@@ -94,7 +96,7 @@ interface Form {
 const filled = (row: LineRow) => Boolean(row.productId);
 
 /**
- * Inventory documents (adjustment by count, transfer to dispatch, waste, goods in without an order) in
+ * Inventory documents (adjustment by count, transfer between warehouses, waste, goods in without an order) in
  * one screen: type, warehouse and reason in the header, products in the grid. Each line becomes a
  * movement in the kardex with the user's name.
  */
@@ -110,7 +112,8 @@ export function InventoryDocsPage() {
   const allowed = (Object.keys(KINDS) as DocType[]).filter((type) => can(KINDS[type].permission));
   const [form, setForm] = useState<Form>(() => ({
     type: allowed[0] ?? 'ADJUSTMENT',
-    warehouse: 'PLANTA',
+    warehouse: '',
+    toWarehouse: '',
     reason: '',
     document: '',
     rows: [newLine()],
@@ -156,7 +159,10 @@ export function InventoryDocsPage() {
       ),
     [stock.data],
   );
-  const warehouse = form.type === 'TRANSFER' ? 'PLANTA' : form.warehouse;
+  // The first warehouse until the user picks one; a transfer goes to another one.
+  const codes = (warehouses.data ?? []).map((item) => item.code);
+  const warehouse = form.warehouse || (codes[0] ?? '');
+  const toWarehouse = form.toWarehouse || (codes.find((code) => code !== warehouse) ?? '');
   const balanceOf = (productId: string) => balances.get(productId)?.get(warehouse);
 
   const lines = form.rows.filter(filled);
@@ -194,8 +200,8 @@ export function InventoryDocsPage() {
       await api.post('/v1/inventory/transfers', {
         productId: row.productId,
         quantity,
-        from: 'PLANTA',
-        to: 'DESPACHO',
+        from: warehouse,
+        to: toWarehouse,
         ...(note ? { note } : {}),
       });
     } else {
@@ -335,7 +341,7 @@ export function InventoryDocsPage() {
             {form.type === 'ADJUSTMENT'
               ? 'El saldo de la bodega queda igual a lo contado; la diferencia se registra con tu nombre y el motivo.'
               : form.type === 'TRANSFER'
-                ? 'Sale de la bodega de planta y entra a la de despacho: así queda listo para la guía de despacho.'
+                ? 'Sale de la bodega de origen y entra a la de destino.'
                 : form.type === 'WASTE'
                   ? 'Lo perdido sale del inventario: granel sobrante, producto dañado o derramado.'
                   : 'Mercancía que entra sin orden de compra. Lo pedido a proveedores entra con la entrada de almacén.'}{' '}
@@ -379,7 +385,6 @@ export function InventoryDocsPage() {
                 setForm((current) => ({
                   ...current,
                   type,
-                  warehouse: type === 'TRANSFER' ? 'PLANTA' : current.warehouse,
                 }));
               }}
             >
@@ -390,28 +395,45 @@ export function InventoryDocsPage() {
               ))}
             </select>
           </HeaderField>
-          <HeaderField label="Bodega" htmlFor="doc-warehouse">
-            {form.type === 'TRANSFER' ? (
-              <span className="font-medium">Planta → Despacho</span>
-            ) : (
+          <HeaderField
+            label={form.type === 'TRANSFER' ? 'Bodega de origen' : 'Bodega'}
+            htmlFor="doc-warehouse"
+          >
+            <select
+              id="doc-warehouse"
+              className={cn(SELECT, 'w-full')}
+              value={warehouse}
+              onChange={(event) => {
+                set('warehouse', event.target.value);
+              }}
+            >
+              {(warehouses.data ?? []).map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </HeaderField>
+          {form.type === 'TRANSFER' ? (
+            <HeaderField label="Bodega de destino" htmlFor="doc-to-warehouse">
               <select
-                id="doc-warehouse"
+                id="doc-to-warehouse"
                 className={cn(SELECT, 'w-full')}
-                value={form.warehouse}
+                value={toWarehouse}
                 onChange={(event) => {
-                  set('warehouse', event.target.value);
+                  set('toWarehouse', event.target.value);
                 }}
               >
-                {(warehouses.data ?? [{ id: 'PLANTA', code: 'PLANTA', name: 'Planta' }]).map(
-                  (item) => (
+                {(warehouses.data ?? [])
+                  .filter((item) => item.code !== warehouse)
+                  .map((item) => (
                     <option key={item.id} value={item.code}>
                       {item.name}
                     </option>
-                  ),
-                )}
+                  ))}
               </select>
-            )}
-          </HeaderField>
+            </HeaderField>
+          ) : null}
           <HeaderField label="Fecha">{formatDate(todayIso())}</HeaderField>
           <HeaderField label="Elaboró">{profile.fullName}</HeaderField>
           {form.type === 'RECEIPT' ? (

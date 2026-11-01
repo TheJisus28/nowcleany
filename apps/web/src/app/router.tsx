@@ -20,6 +20,7 @@ import { CustomersPage } from '../features/customers/customers-page';
 import { InventoryDocsPage } from '../features/inventory/inventory-docs-page';
 import { InventoryPage } from '../features/inventory/inventory-page';
 import { KardexPage } from '../features/inventory/kardex-page';
+import { WarehousesPage } from '../features/inventory/warehouses-page';
 import { ShipmentFormPage } from '../features/logistics/shipment-form-page';
 import { ShipmentPage } from '../features/logistics/shipment-page';
 import { ShipmentsPage } from '../features/logistics/shipments-page';
@@ -174,6 +175,7 @@ export const router = createBrowserRouter([
       { path: 'proveedores', element: panel('suppliers', <SuppliersPage />) },
       { path: 'inventario', element: panel('inventory', <InventoryPage />) },
       { path: 'inventario/kardex', element: panel('kardex', <KardexPage />) },
+      { path: 'inventario/bodegas', element: panel('warehouses', <WarehousesPage />) },
       { path: 'inventario/documentos', element: panel('inventoryDocs', <InventoryDocsPage />) },
       { path: 'productos/:id', element: entity('product', <ProductPage />) },
       { path: 'catalogo', element: panel('catalog', <CatalogPage />) },

@@ -94,13 +94,7 @@ export function InventoryPage() {
       csv: (row) => unitLabel(row.unit),
       render: (row) => <span className="text-ink-2">{unitLabel(row.unit)}</span>,
     },
-    ...(codes.length > 0
-      ? codes
-      : [
-          { code: 'PLANTA', name: 'Planta' },
-          { code: 'DESPACHO', name: 'Despacho' },
-        ]
-    ).map((warehouse): QueryColumn<StockStatus> => ({
+    ...codes.map((warehouse): QueryColumn<StockStatus> => ({
       key: `w-${warehouse.code}`,
       header: warehouse.name,
       align: 'right',
@@ -323,7 +317,7 @@ function InitialLoadDialog({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Carga inicial de inventario"
-      description="Archivo CSV con columnas codigo; cantidad; bodega (opcional, PLANTA por defecto). Cada saldo queda en la cantidad indicada."
+      description="Archivo CSV con columnas codigo; cantidad; bodega (código; opcional, la primera bodega si va vacía). Cada saldo queda en la cantidad indicada."
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose}>
