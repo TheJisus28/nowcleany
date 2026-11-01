@@ -79,6 +79,12 @@ export class SupplierInvoiceDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   invoiceDate!: string;
 
+  /** Warehouse the goods enter (the first one when empty). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  warehouse?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(100)

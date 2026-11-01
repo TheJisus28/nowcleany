@@ -48,6 +48,7 @@ export interface SalesTables {
     invoiced_by_name: string | null;
     ready_at: Date | null;
     ready_by_name: string | null;
+    ready_warehouse: string | null;
     dispatched_at: Date | null;
     dispatched_by_name: string | null;
     delivered_at: Date | null;

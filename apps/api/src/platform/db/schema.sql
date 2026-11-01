@@ -73,19 +73,19 @@ CREATE TABLE formula_lines (
   PRIMARY KEY (formula_id, line_no)
 );
 
--- Inventory: balances may be negative (overselling is allowed)
+-- Inventory: warehouses are data (the company names them); a balance never goes below zero.
 CREATE TABLE warehouses (
   id     uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
   code   text    NOT NULL UNIQUE,
   name   text    NOT NULL,
   active boolean NOT NULL DEFAULT true
 );
-INSERT INTO warehouses (code, name) VALUES ('PLANTA', 'Bodega de planta'), ('DESPACHO', 'Bodega de despacho');
+INSERT INTO warehouses (code, name) VALUES ('B1', 'Bodega principal'), ('B2', 'Bodega auxiliar');
 
 CREATE TABLE stock_balances (
   warehouse_id uuid        NOT NULL REFERENCES warehouses (id),
   product_id   uuid        NOT NULL REFERENCES products (id),
-  on_hand      bigint      NOT NULL DEFAULT 0,
+  on_hand      bigint      NOT NULL DEFAULT 0 CHECK (on_hand >= 0),
   updated_at   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (warehouse_id, product_id)
 );
@@ -167,6 +167,8 @@ CREATE TABLE sales_orders (
   invoiced_by_name        text,
   ready_at                timestamptz,
   ready_by_name           text,
+  -- Warehouse (code) where plant separated the goods waiting for dispatch.
+  ready_warehouse         text,
   dispatched_at           timestamptz,
   dispatched_by_name      text,
   delivered_at            timestamptz,

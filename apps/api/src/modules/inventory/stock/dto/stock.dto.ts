@@ -60,15 +60,13 @@ export class ReceiptDto {
 }
 
 export class TransferDto extends QuantityLineDto {
-  @IsOptional()
   @IsString()
   @MaxLength(20)
-  from?: string;
+  from!: string;
 
-  @IsOptional()
   @IsString()
   @MaxLength(20)
-  to?: string;
+  to!: string;
 
   @IsOptional()
   @IsString()
@@ -109,7 +107,7 @@ export class WasteDto {
   @IsIn(UNIT_CODES)
   unit?: string;
 
-  /** PLANTA by default. */
+  /** The first warehouse when none is named. */
   @IsOptional()
   @IsString()
   @MaxLength(20)
@@ -165,4 +163,20 @@ export class MovementsQuery {
   @Min(1)
   @Max(200)
   limit?: number;
+}
+
+export class WarehouseDto {
+  @IsString()
+  @MaxLength(20)
+  code!: string;
+
+  @IsString()
+  @MaxLength(60)
+  name!: string;
+}
+
+export class RenameWarehouseDto {
+  @IsString()
+  @MaxLength(60)
+  name!: string;
 }

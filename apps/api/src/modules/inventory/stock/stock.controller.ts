@@ -1,14 +1,16 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { Permission } from '../../../platform/security/decorators.js';
 import { ValidationError } from '../../../shared-kernel/index.js';
 import {
   AdjustmentDto,
-  WasteDto,
   MovementsQuery,
   ReceiptDto,
+  RenameWarehouseDto,
   StatusQuery,
   TransferDto,
+  WarehouseDto,
+  WasteDto,
 } from './dto/stock.dto.js';
 import type { MovementView, StockStatusView, WarehouseView } from './stock-view.js';
 import { type OperationResult, StockService } from './stock.service.js';
@@ -48,6 +50,21 @@ export class StockController {
     return this.stock.warehouses();
   }
 
+  @Permission('inventory:warehouses')
+  @Post('warehouses')
+  createWarehouse(@Body() body: WarehouseDto): Promise<WarehouseView> {
+    return this.stock.createWarehouse(body);
+  }
+
+  @Permission('inventory:warehouses')
+  @Patch('warehouses/:code')
+  renameWarehouse(
+    @Param('code') code: string,
+    @Body() body: RenameWarehouseDto,
+  ): Promise<WarehouseView> {
+    return this.stock.renameWarehouse(code, body.name);
+  }
+
   @Permission('inventory:receive')
   @Post('receipts')
   receive(@Body() body: ReceiptDto): Promise<OperationResult> {
@@ -70,8 +87,8 @@ export class StockController {
         quantity: body.quantity,
         ...(body.unit ? { unit: body.unit } : {}),
       },
-      ...(body.from ? { fromCode: body.from } : {}),
-      ...(body.to ? { toCode: body.to } : {}),
+      fromCode: body.from,
+      toCode: body.to,
       ...(body.note ? { note: body.note } : {}),
     });
   }

@@ -51,6 +51,18 @@ export class CompleteProductionOrderDto {
   @IsOptional()
   @Matches(DECIMAL)
   bulkWaste?: string;
+
+  /** Warehouse the formula is consumed from (the first one when empty). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  fromWarehouse?: string;
+
+  /** Warehouse the output goes to (the first one when empty). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  toWarehouse?: string;
 }
 
 export class ListProductionOrdersQuery {

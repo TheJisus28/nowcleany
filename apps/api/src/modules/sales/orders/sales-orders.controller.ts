@@ -65,7 +65,7 @@ export class SalesOrdersController {
     return this.orders.confirm(id);
   }
 
-  /** Plant prepared the invoiced order and handed it over to dispatch. */
+  /** Plant separated the invoiced order in a warehouse, ready for dispatch. */
   @Permission('sales-orders:prepare')
   @Post(':id/prepare')
   @HttpCode(200)
@@ -73,7 +73,9 @@ export class SalesOrdersController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: PrepareOrderDto,
   ): Promise<SalesOrderView> {
-    return this.orders.prepare(id, body.lines);
+    return this.orders.prepare(id, body.lines, undefined, {
+      ...(body.warehouse ? { warehouse: body.warehouse } : {}),
+    });
   }
 
   /** The consolidator's order to share the available stock among invoices. */

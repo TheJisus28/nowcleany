@@ -27,6 +27,8 @@ export class InventoryLedger {
     orderId: string;
     reference: Reference;
     lines: readonly StockLine[];
+    /** Where the order was prepared. */
+    warehouseCode?: string;
   }): Promise<OperationResult> {
     this.currentActor.requirePermission('sales-orders:dispatch');
     return this.stock.dispatch(command);
@@ -38,6 +40,8 @@ export class InventoryLedger {
     consumptions: readonly StockLine[];
     reference: Reference;
     note?: string;
+    fromWarehouseCode?: string;
+    toWarehouseCode?: string;
   }): Promise<OperationResult> {
     this.currentActor.requirePermission('inventory:produce');
     return this.stock.recordProduction(command);
@@ -49,32 +53,24 @@ export class InventoryLedger {
     quantity: string;
     reference: Reference;
     note?: string;
+    warehouseCode?: string;
   }): Promise<OperationResult> {
     this.currentActor.requirePermission('inventory:produce');
     return this.stock.waste({
       line: { productId: command.productId, quantity: command.quantity },
       reference: command.reference,
+      ...(command.warehouseCode ? { warehouseCode: command.warehouseCode } : {}),
       ...(command.note ? { note: command.note } : {}),
     });
   }
 
-  /** What is in the plant warehouse now, per product (base units). */
-  plantStock(productIds: readonly string[]): Promise<Map<string, bigint>> {
+  /** Physical stock of some products in a warehouse (the first one when none is named). */
+  stockIn(
+    warehouseCode: string | undefined,
+    productIds: readonly string[],
+  ): Promise<{ warehouse: { code: string; name: string }; levels: Map<string, bigint> }> {
     this.currentActor.requirePermission('sales-orders:prepare');
-    return this.stock.warehouseLevels('PLANTA', productIds);
-  }
-
-  /** The plant hands an order's goods over to the dispatch warehouse. */
-  async handOver(command: { lines: readonly QuantityInput[]; note: string }): Promise<void> {
-    this.currentActor.requirePermission('sales-orders:prepare');
-    for (const line of command.lines) {
-      await this.stock.transfer({
-        line,
-        fromCode: 'PLANTA',
-        toCode: 'DESPACHO',
-        note: command.note,
-      });
-    }
+    return this.stock.stockIn(warehouseCode, productIds);
   }
 
   receive(command: {
@@ -82,6 +78,7 @@ export class InventoryLedger {
     lines: readonly QuantityInput[];
     reference: Reference;
     note?: string;
+    warehouseCode?: string;
   }): Promise<OperationResult> {
     this.currentActor.requirePermission('inventory:receive');
     return this.stock.receive(command);

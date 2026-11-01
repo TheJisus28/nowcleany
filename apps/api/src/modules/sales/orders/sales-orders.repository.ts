@@ -40,6 +40,8 @@ export interface OrderRecord {
   readonly invoicedAt: Date | null;
   readonly invoicedByName: string | null;
   readonly readyAt: Date | null;
+  /** Warehouse (code) where the goods waiting for dispatch were separated. */
+  readonly readyWarehouse: string | null;
   readonly readyByName: string | null;
   readonly dispatchedAt: Date | null;
   readonly dispatchedByName: string | null;
@@ -135,6 +137,7 @@ export class SalesOrdersRepository {
         invoiced_by_name: null,
         ready_at: null,
         ready_by_name: null,
+        ready_warehouse: null,
         dispatched_at: null,
         dispatched_by_name: null,
         delivered_at: null,
@@ -200,6 +203,7 @@ export class SalesOrdersRepository {
     ready: ReadonlyMap<string, bigint>,
     byName: string,
     at = new Date(),
+    warehouse: string | null = null,
   ): Promise<void> {
     for (const [productId, quantity] of ready) {
       await this.host.tx
@@ -209,7 +213,32 @@ export class SalesOrdersRepository {
         .where('product_id', '=', productId)
         .execute();
     }
-    await this.setStatus(id, from, { status: 'READY', ready_at: at, ready_by_name: byName });
+    await this.setStatus(id, from, {
+      status: 'READY',
+      ready_at: at,
+      ready_by_name: byName,
+      ready_warehouse: warehouse,
+    });
+  }
+
+  /** What other orders separated in a warehouse and still wait for dispatch, per product. */
+  async separatedIn(
+    warehouse: string,
+    productIds: readonly string[],
+    exceptOrderId: string,
+  ): Promise<Map<string, bigint>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.host.tx
+      .selectFrom('sales_order_lines as l')
+      .innerJoin('sales_orders as o', 'o.id', 'l.order_id')
+      .select((eb) => ['l.product_id', eb.fn.sum<string>('l.ready_quantity').as('separated')])
+      .where('o.status', '=', 'READY')
+      .where('o.ready_warehouse', '=', warehouse)
+      .where('o.id', '!=', exceptOrderId)
+      .where('l.product_id', 'in', productIds)
+      .groupBy('l.product_id')
+      .execute();
+    return new Map(rows.map((row) => [row.product_id, BigInt(row.separated)]));
   }
 
   /** A guide took these quantities: they leave "ready" and count as dispatched. */
@@ -332,6 +361,7 @@ export class SalesOrdersRepository {
       priority?: number | null;
       ready_at?: Date;
       ready_by_name?: string;
+      ready_warehouse?: string | null;
       dispatched_at?: Date;
       dispatched_by_name?: string;
       delivered_at?: Date;
@@ -375,6 +405,7 @@ export class SalesOrdersRepository {
         'o.invoiced_by_name',
         'o.ready_at',
         'o.ready_by_name',
+        'o.ready_warehouse',
         'o.dispatched_at',
         'o.dispatched_by_name',
         'o.delivered_at',
@@ -457,6 +488,7 @@ export class SalesOrdersRepository {
       invoicedByName: row.invoiced_by_name,
       readyAt: row.ready_at,
       readyByName: row.ready_by_name,
+      readyWarehouse: row.ready_warehouse,
       dispatchedAt: row.dispatched_at,
       dispatchedByName: row.dispatched_by_name,
       deliveredAt: row.delivered_at,

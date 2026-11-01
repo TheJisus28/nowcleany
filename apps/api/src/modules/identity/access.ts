@@ -121,8 +121,13 @@ export const PERMISSIONS: readonly {
     roles: ['receiving'],
   },
   {
+    code: 'inventory:warehouses',
+    description: 'Crear y renombrar bodegas',
+    roles: ['manager'],
+  },
+  {
     code: 'inventory:transfer',
-    description: 'Trasladar producto entre bodegas (entrega a despacho)',
+    description: 'Trasladar producto entre bodegas',
     roles: ['plant', 'logistics'],
   },
   {

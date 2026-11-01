@@ -3,19 +3,19 @@ import { Injectable } from '@nestjs/common';
 import { Transactional } from '@nestjs-cls/transactional';
 import { CurrentActor } from '../../../platform/security/current-actor.js';
 import {
+  ConflictError,
   normaliseDecimal,
   NotFoundError,
   parseCsv,
   Quantity,
+  toQuantityDto,
   unit,
   ValidationError,
 } from '../../../shared-kernel/index.js';
 import { ProductCatalog, type ProductSummary } from '../../product/index.js';
 import {
   adjustmentDelta,
-  DISPATCH_WAREHOUSE,
   type MovementType,
-  PLANT_WAREHOUSE,
   requireDifferentWarehouses,
   requirePositive,
   requireReason,
@@ -78,6 +78,45 @@ export class StockService {
     return this.stock.warehouses();
   }
 
+  /** A new warehouse: the company names it; the code is short and never changes. */
+  @Transactional()
+  async createWarehouse(command: { code: string; name: string }): Promise<Warehouse> {
+    const code = command.code.trim().toUpperCase();
+    const name = command.name.trim();
+    if (!/^[A-Z0-9-]{1,20}$/.test(code)) {
+      throw new ValidationError(
+        'inventory.warehouse_code',
+        'El código de la bodega lleva letras, números o guion (máximo 20).',
+      );
+    }
+    if (name.length < 2) {
+      throw new ValidationError('inventory.warehouse_name', 'Escribe el nombre de la bodega.');
+    }
+    try {
+      return await this.stock.insertWarehouse(code, name);
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new ConflictError(
+          'inventory.warehouse_taken',
+          `Ya existe una bodega con el código ${code}.`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  @Transactional()
+  async renameWarehouse(code: string, name: string): Promise<Warehouse> {
+    if (name.trim().length < 2) {
+      throw new ValidationError('inventory.warehouse_name', 'Escribe el nombre de la bodega.');
+    }
+    const warehouse = await this.stock.renameWarehouse(code.trim().toUpperCase(), name.trim());
+    if (!warehouse) {
+      throw new NotFoundError('inventory.unknown_warehouse', `No existe la bodega ${code}.`);
+    }
+    return warehouse;
+  }
+
   @Transactional()
   async status(filter: {
     type?: ProductSummary['type'];
@@ -127,7 +166,7 @@ export class StockService {
     );
   }
 
-  /** Raw-material receipt (default warehouse PLANTA). */
+  /** Receipt into a warehouse (the first one when none is named). */
   @Transactional()
   async receive(command: {
     warehouseCode?: string;
@@ -136,10 +175,7 @@ export class StockService {
     note?: string;
     idempotencyKey?: string;
   }): Promise<OperationResult> {
-    const warehouse = this.warehouse(
-      await this.stock.warehouses(),
-      command.warehouseCode ?? PLANT_WAREHOUSE,
-    );
+    const warehouse = await this.pick(command.warehouseCode);
     const lines = await this.resolve(command.lines);
     return this.post({
       kind: 'RECEIPT',
@@ -155,7 +191,7 @@ export class StockService {
     });
   }
 
-  /** Output of a production or packaging order and the consumption of its formula, in PLANTA. */
+  /** Output of a production or packaging order and the consumption of its formula: plant chooses the warehouses. */
   @Transactional()
   async recordProduction(command: {
     idempotencyKey: string;
@@ -163,8 +199,13 @@ export class StockService {
     consumptions: readonly StockLine[];
     reference: Reference;
     note?: string;
+    /** Where the formula is consumed from. */
+    fromWarehouseCode?: string;
+    /** Where the output goes. */
+    toWarehouseCode?: string;
   }): Promise<OperationResult> {
-    const plant = this.warehouse(await this.stock.warehouses(), PLANT_WAREHOUSE);
+    const from = await this.pick(command.fromWarehouseCode);
+    const to = await this.pick(command.toWarehouseCode);
     return this.post({
       kind: 'PRODUCTION',
       key: command.idempotencyKey,
@@ -172,13 +213,13 @@ export class StockService {
       note: command.note ?? null,
       entries: [
         {
-          warehouseId: plant.id,
+          warehouseId: to.id,
           productId: command.output.productId,
           type: 'PRODUCTION_OUTPUT',
           delta: command.output.quantity,
         },
         ...command.consumptions.map((line) => ({
-          warehouseId: plant.id,
+          warehouseId: from.id,
           productId: line.productId,
           type: 'PRODUCTION_CONSUMPTION' as const,
           delta: -line.quantity,
@@ -187,17 +228,16 @@ export class StockService {
     });
   }
 
-  /** Delivery of finished goods from the plant to the dispatch warehouse (or any other pair). */
+  /** Moves a product from one warehouse to another. */
   @Transactional()
   async transfer(command: {
     line: QuantityInput;
-    fromCode?: string;
-    toCode?: string;
+    fromCode: string;
+    toCode: string;
     note?: string;
   }): Promise<OperationResult> {
     const warehouses = await this.stock.warehouses();
-    const fromCode = command.fromCode ?? PLANT_WAREHOUSE;
-    const toCode = command.toCode ?? DISPATCH_WAREHOUSE;
+    const { fromCode, toCode } = command;
     requireDifferentWarehouses(fromCode, toCode);
     const [from, to] = [this.warehouse(warehouses, fromCode), this.warehouse(warehouses, toCode)];
     const [line] = await this.resolve([command.line]);
@@ -252,6 +292,7 @@ export class StockService {
       throw new ValidationError('inventory.load_empty', 'El archivo no tiene filas.');
     }
     const warehouses = await this.stock.warehouses();
+    const fallback = warehouses[0]?.code ?? '';
     const products = new Map(
       (
         await this.catalog.findByCodes(
@@ -267,10 +308,7 @@ export class StockService {
         const product = products.get(code);
         if (!product)
           throw new ValidationError('inventory.unknown_product', `No existe el producto ${code}.`);
-        const warehouse = this.warehouse(
-          warehouses,
-          (row.values['bodega'] ?? '') || PLANT_WAREHOUSE,
-        );
+        const warehouse = this.warehouse(warehouses, (row.values['bodega'] ?? '') || fallback);
         const quantity = Quantity.parse(
           normaliseDecimal(row.values['cantidad'] ?? ''),
           product.stockUnit,
@@ -314,15 +352,16 @@ export class StockService {
     return { rows: rows.length, movements: entries.length };
   }
 
-  /** Ships an order from DESPACHO: the stock goes out. */
+  /** Ships an order from the warehouse where it was prepared: the stock goes out. */
   @Transactional()
   async dispatch(command: {
     idempotencyKey: string;
     orderId: string;
     reference: Reference;
     lines: readonly StockLine[];
+    warehouseCode?: string;
   }): Promise<OperationResult> {
-    const dispatch = this.warehouse(await this.stock.warehouses(), DISPATCH_WAREHOUSE);
+    const dispatch = await this.pick(command.warehouseCode);
     const lines = mergeLines(command.lines);
     return this.post({
       kind: 'DISPATCH',
@@ -342,7 +381,7 @@ export class StockService {
 
   /**
    * Waste: what is lost (the bulk left in the tank after packaging, a damaged product). Taken from
-   * PLANTA unless another warehouse is given.
+   * the named warehouse (the first one when none is named).
    */
   @Transactional()
   async waste(command: {
@@ -351,10 +390,7 @@ export class StockService {
     note?: string;
     reference?: Reference;
   }): Promise<OperationResult> {
-    const warehouse = this.warehouse(
-      await this.stock.warehouses(),
-      command.warehouseCode ?? PLANT_WAREHOUSE,
-    );
+    const warehouse = await this.pick(command.warehouseCode);
     const [line] = await this.resolve([command.line]);
     if (!line) throw new Error('Línea de merma vacía');
     requirePositive(line.quantity, 'La merma');
@@ -373,18 +409,22 @@ export class StockService {
     });
   }
 
-  /** Totals across warehouses, for planning. */
+  /** Physical stock of some products in one warehouse (the first one when none is named), in base units. */
   @Transactional()
-  /** Physical stock of some products in one warehouse, in base units. */
-  async warehouseLevels(code: string, productIds: readonly string[]): Promise<Map<string, bigint>> {
-    const warehouse = this.warehouse(await this.stock.warehouses(), code);
+  async stockIn(
+    code: string | undefined,
+    productIds: readonly string[],
+  ): Promise<{ warehouse: Warehouse; levels: Map<string, bigint> }> {
+    const warehouse = await this.pick(code);
     const levels = new Map<string, bigint>();
     for (const balance of await this.stock.balances(productIds)) {
       if (balance.warehouseId === warehouse.id) levels.set(balance.productId, balance.onHand);
     }
-    return levels;
+    return { warehouse, levels };
   }
 
+  /** Totals across warehouses, for planning. */
+  @Transactional()
   async levels(productIds?: readonly string[]): Promise<{ productId: string; onHand: bigint }[]> {
     const totals = new Map<string, bigint>();
     for (const balance of await this.stock.balances(productIds))
@@ -419,6 +459,9 @@ export class StockService {
       const key = balanceKey(entry);
       const current = balances.get(key) ?? { onHand: 0n };
       const next = { onHand: current.onHand + entry.delta };
+      // No movement takes out what a warehouse does not have.
+      if (entry.delta < 0n && next.onHand < 0n)
+        throw await this.insufficient(entry, current.onHand);
       balances.set(key, next);
       if (entry.type && entry.delta !== 0n) {
         movements.push({
@@ -472,6 +515,27 @@ export class StockService {
       }
       return { product, quantity };
     });
+  }
+
+  /** The named warehouse, or the first one (by code) when none is named. */
+  private async pick(code: string | undefined): Promise<Warehouse> {
+    const warehouses = await this.stock.warehouses();
+    if (code) return this.warehouse(warehouses, code);
+    const [first] = warehouses;
+    if (!first) throw new NotFoundError('inventory.no_warehouses', 'No hay bodegas activas.');
+    return first;
+  }
+
+  private async insufficient(entry: Entry, available: bigint): Promise<ValidationError> {
+    const [product] = await this.catalog.findByIds([entry.productId]);
+    const warehouse = (await this.stock.warehouses()).find((w) => w.id === entry.warehouseId);
+    const left = product
+      ? toQuantityDto(available > 0n ? available : 0n, product.stockUnit)
+      : { quantity: '0', unit: '' };
+    return new ValidationError(
+      'inventory.insufficient_stock',
+      `En ${warehouse?.name ?? 'la bodega'} hay ${left.quantity} ${left.unit} de ${product?.code ?? 'ese producto'}: no alcanza.`,
+    );
   }
 
   private warehouse(warehouses: readonly Warehouse[], code: string): Warehouse {

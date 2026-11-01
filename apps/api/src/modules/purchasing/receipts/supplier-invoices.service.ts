@@ -119,6 +119,7 @@ export class SupplierInvoicesService {
     command: {
       documentNumber: string;
       invoiceDate: string;
+      warehouse?: string;
       lines: readonly { productId: string; quantity: string; unitCost?: string }[];
     },
     at?: Date,
@@ -178,6 +179,7 @@ export class SupplierInvoicesService {
     if (!options.historic)
       await this.inventory.receive({
         idempotencyKey: `supplier-invoice:${id}`,
+        ...(command.warehouse ? { warehouseCode: command.warehouse } : {}),
         lines: lines.map((line) => ({
           productId: line.productId,
           quantity: toQuantityDto(line.quantity, line.unit).quantity,

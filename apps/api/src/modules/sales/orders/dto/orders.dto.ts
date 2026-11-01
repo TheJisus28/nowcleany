@@ -68,8 +68,14 @@ class ReadyLineDto {
   quantity!: string;
 }
 
-/** What plant hands over; without lines, everything still to ship. */
+/** What plant separates and where; without lines, everything still to ship. */
 export class PrepareOrderDto {
+  /** Warehouse where the goods are (the first one when empty). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  warehouse?: string;
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(100)

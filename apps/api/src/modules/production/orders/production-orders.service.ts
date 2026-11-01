@@ -143,7 +143,13 @@ export class ProductionOrdersService {
   @Transactional()
   async complete(
     id: string,
-    command: { producedQuantity?: string; unit?: string; bulkWaste?: string },
+    command: {
+      producedQuantity?: string;
+      unit?: string;
+      bulkWaste?: string;
+      fromWarehouse?: string;
+      toWarehouse?: string;
+    },
   ): Promise<ProductionOrderView> {
     const order = await this.load(id);
     if (order.status === 'COMPLETED') return toView(order);
@@ -174,6 +180,8 @@ export class ProductionOrdersService {
         quantity: need.quantity,
       })),
       reference: { type: 'production_order', id: order.id, label: productionLabel(order.number) },
+      ...(command.fromWarehouse ? { fromWarehouseCode: command.fromWarehouse } : {}),
+      ...(command.toWarehouse ? { toWarehouseCode: command.toWarehouse } : {}),
     });
     if (command.bulkWaste && Number(command.bulkWaste) > 0) {
       // Packaging done: what is left of the bulk in the tank is lost.
@@ -190,6 +198,7 @@ export class ProductionOrdersService {
         quantity: command.bulkWaste,
         reference: { type: 'production_order', id: order.id, label: productionLabel(order.number) },
         note: 'Granel sobrante en el tanque al terminar el envasado',
+        ...(command.fromWarehouse ? { warehouseCode: command.fromWarehouse } : {}),
       });
     }
     return this.finish(id, produced);

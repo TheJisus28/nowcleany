@@ -58,8 +58,25 @@ export class StockRepository {
       .selectFrom('warehouses')
       .select(['id', 'code', 'name'])
       .where('active', '=', true)
-      .orderBy('code', 'desc')
+      .orderBy('code')
       .execute();
+  }
+
+  async insertWarehouse(code: string, name: string): Promise<Warehouse> {
+    return this.host.tx
+      .insertInto('warehouses')
+      .values({ code, name })
+      .returning(['id', 'code', 'name'])
+      .executeTakeFirstOrThrow();
+  }
+
+  async renameWarehouse(code: string, name: string): Promise<Warehouse | undefined> {
+    return this.host.tx
+      .updateTable('warehouses')
+      .set({ name })
+      .where('code', '=', code)
+      .returning(['id', 'code', 'name'])
+      .executeTakeFirst();
   }
 
   async claimOperation(key: string, operationId: string, type: string): Promise<boolean> {

@@ -25,9 +25,6 @@ export const MOVEMENT_LABELS: Record<MovementType, string> = {
   WASTE: 'Merma',
 };
 
-export const PLANT_WAREHOUSE = 'PLANTA';
-export const DISPATCH_WAREHOUSE = 'DESPACHO';
-
 export interface Balance {
   readonly onHand: bigint;
 }
