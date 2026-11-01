@@ -8,39 +8,24 @@ import { SearchPalette } from '../components/search-palette';
 import { cn } from '../components/ui';
 import { NAV_GROUPS, navItemFor, ROLE_LABELS } from './nav';
 
-const OPEN_MODULES = 'scip.menu.open';
-
-function readOpen(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(OPEN_MODULES) ?? '[]') as string[];
-  } catch {
-    return [];
-  }
-}
-
 /**
  * The module tree, as in traditional systems: each module unfolds into Documentos, Consultas, Informes and
- * Maestros, only with what the role uses. Open modules are remembered.
+ * Maestros. One module open at a time (the one of the current screen when it changes); any can be closed.
  */
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
   const active = navItemFor(location.pathname);
-  const [open, setOpen] = useState<string[]>(readOpen);
+  const activeGroup = active?.group ?? null;
+  const [open, setOpen] = useState<string | null>(activeGroup);
+  // Opening a screen of another module unfolds that module; the user can still close it.
+  useEffect(() => {
+    if (activeGroup) setOpen(activeGroup);
+  }, [activeGroup]);
   // The whole menu for everyone, as in traditional systems: a screen outside the role says so.
   const groups = NAV_GROUPS;
 
   const toggle = (label: string) => {
-    setOpen((current) => {
-      const next = current.includes(label)
-        ? current.filter((item) => item !== label)
-        : [...current, label];
-      try {
-        localStorage.setItem(OPEN_MODULES, JSON.stringify(next));
-      } catch {
-        // Private mode: the menu forgets.
-      }
-      return next;
-    });
+    setOpen((current) => (current === label ? null : label));
   };
 
   const itemLink = (item: (typeof groups)[number]['sections'][number]['items'][number]) => {
@@ -86,7 +71,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
           );
         }
         const label = group.label;
-        const expanded = open.includes(label) || active?.group === label;
+        const expanded = open === label;
         const Icon = group.icon;
         return (
           <div key={label}>
@@ -216,7 +201,7 @@ export function Shell() {
       <div className="min-h-screen lg:grid lg:grid-cols-[232px_1fr] print:block">
         <aside className="no-print sticky top-0 hidden h-screen flex-col gap-6 bg-rail px-4 py-5 lg:flex">
           <BrandLockup inverted />
-          <div className="-mx-1 flex-1 overflow-y-auto px-1">
+          <div className="rail-scroll -mx-1 flex-1 overflow-y-auto px-1">
             <Navigation />
           </div>
           <UserCard />
@@ -302,7 +287,7 @@ export function Shell() {
                   <X className="size-5" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto">
+              <div className="rail-scroll flex-1 overflow-y-auto">
                 <Navigation
                   onNavigate={() => {
                     setMenuOpen(false);

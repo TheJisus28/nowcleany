@@ -77,6 +77,22 @@
 }
 
 /* Paper: documents, consultations and reports print without the menu, toolbars or filters. */
+/* The menu rail scrolls only when a module does not fit, with a thin bar in the rail's colours. */
+.rail-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+.rail-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.rail-scroll::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.18);
+}
+.rail-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 @media print {
   @page {
     margin: 12mm;
